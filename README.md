@@ -1,62 +1,92 @@
-﻿# TACTICAL RAG DOCUMENT INTELLIGENCE SYSTEM
+﻿# Tactical RAG Document Intelligence System
+
+![CI Pipeline](https://github.com/zhadyz/tactical-rag-system/actions/workflows/ci.yml/badge.svg)
+
+Enterprise RAG document intelligence system with adaptive retrieval strategies.
+
+---
 
 ## Quick Start
 
-**For Operators (End Users):** See `docs/OPERATOR-GUIDE.md`
+**End Users:** See `docs/OPERATOR-GUIDE.md`  
+**Technical Staff:** See `docs/MAINTAINER-GUIDE.md`
 
-**For Maintainers (IT/Technical):** See `docs/MAINTAINER-GUIDE.md`
+### Deployment Commands
 
----
-
-## One-Click Deployment
-
-1. **Start System:** Double-click `deploy.bat`
-2. **Change Documents:** Double-click `swap-mission.bat`
-3. **Stop System:** Double-click `stop.bat`
-
----
-
-## Directory Structure
-
-```
-â”œâ”€â”€ deploy.bat                 â† Double-click to start
-â”œâ”€â”€ swap-mission.bat          â† Double-click to change documents
-â”œâ”€â”€ stop.bat                  â† Double-click to stop
-â”œâ”€â”€ documents/                â† Add your documents here
-â”œâ”€â”€ chroma_db/                â† Database (auto-generated)
-â”œâ”€â”€ docs/                     â† Full documentation
-â”œâ”€â”€ _deployment/              â† Docker images (don't touch)
-â”œâ”€â”€ _config/                  â† Configuration files (don't touch)
-â””â”€â”€ _src/                     â† Source code (don't touch)
-```
+| Action | Command |
+|--------|---------|
+| Start System | `deploy.bat` |
+| Change Documents | `swap-mission.bat` |
+| Stop System | `stop.bat` |
 
 ---
 
-## Requirements
-
-- Windows 10/11
-- Docker Desktop installed and running
-- 8 GB RAM minimum (16 GB recommended)
+## Project Structure
+tactical-rag-system/
+│
+├── deploy.bat              # System startup
+├── swap-mission.bat        # Document swap utility
+├── stop.bat                # System shutdown
+│
+├── documents/              # Place your documents here
+├── chroma_db/              # Vector database (auto-generated)
+├── docs/                   # Documentation
+│
+├── _deployment/            # Docker images
+├── _config/                # System configuration
+└── _src/                   # Application source code
 
 ---
 
-## First Time Setup
+## System Requirements
 
-1. Ensure Docker Desktop is running
-2. Place documents in the `documents/` folder
-3. Double-click `deploy.bat`
-4. Wait 3-5 minutes for initial setup
-5. Browser opens automatically
+- **OS:** Windows 10/11
+- **Software:** Docker Desktop (running)
+- **Memory:** 8 GB minimum, 16 GB recommended
+- **Disk:** 10 GB free space
+
+---
+
+## First-Time Setup
+
+1. Install and start Docker Desktop
+2. Add documents to `documents/` folder
+3. Run `deploy.bat`
+4. Wait 3-5 minutes for initialization
+5. Browser opens automatically at `http://localhost:7860`
+
+---
+
+## Features
+
+- Adaptive retrieval (simple/hybrid/advanced strategies)
+- Multi-format document support (PDF, DOCX, TXT, MD)
+- Real-time settings adjustment
+- Automatic document indexing
+- Source citation with relevance scores
 
 ---
 
 ## Support
 
-- **Operators:** See `docs/OPERATOR-GUIDE.md`
-- **Technical Issues:** See `docs/MAINTAINER-GUIDE.md`
-- **Emergency Reset:** Run `swap-mission.bat` then `deploy.bat`
+**Operational Issues:** `docs/OPERATOR-GUIDE.md`  
+**Technical Issues:** `docs/MAINTAINER-GUIDE.md`  
+**System Reset:** Run `swap-mission.bat` then `deploy.bat`
 
 ---
 
-**WARNING:** This is a U.S. Government Information System. 
-Unauthorized access is prohibited. By using this system, you consent to monitoring.
+## Warning Notice
+
+**This is a U.S. Government Information System (IS) that is provided for USG-authorized use only.**
+
+By using this IS (which includes any device attached to this IS), you consent to the following conditions:
+
+- The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
+
+- At any time, the USG may inspect and seize data stored on this IS.
+
+- Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
+
+- This IS includes security measures (e.g., authentication and access controls) to protect USG interests--not for your personal benefit or privacy.
+
+**Unauthorized or improper use of this system is prohibited and may result in disciplinary action and/or civil and criminal penalties.**
