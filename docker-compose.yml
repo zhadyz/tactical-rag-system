@@ -1,0 +1,98 @@
+# Docker Compose file - defines multiple services (containers) that work together
+
+# Services are the containers we want to run
+services:
+  
+  # ============================================================
+  # SERVICE 1: Ollama (the AI model server)
+  # ============================================================
+  ollama:
+    # Use official Ollama image from Docker Hub
+    image: ollama/ollama:latest
+    
+    # Container name (easier to reference)
+    container_name: ollama-server
+    runtime: nvidia
+    
+    # Port mapping: host_port:container_port
+    # Ollama runs on port 11434
+    ports:
+      - "11434:11434"
+    
+    # Volumes: persist data between container restarts
+    # Maps a folder on your computer to a folder in the container
+    volumes:
+      - ollama-data:/root/.ollama
+    
+    # Always restart if container stops
+    restart: unless-stopped
+
+    # GPU Utilization
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # Simplified health check without curl dependency
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/11434' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    
+    # Add to network
+    networks:
+      - rag-network
+  
+  # ============================================================
+  # SERVICE 2: RAG Application
+  # ============================================================
+  rag-app:
+    # Build from the Dockerfile in current directory
+    build:
+      context: .
+      dockerfile: _config/Dockerfile
+    
+    container_name: rag-tactical-system
+    
+    # Port mapping for Gradio interface
+    ports:
+      - "7860:7860"
+    
+    # Volumes: persist documents and database
+    volumes:
+      # Map local documents folder to container
+      - ./documents:/app/documents
+      # Map local database to container
+      - ./chroma_db:/app/chroma_db
+    
+    # Environment variables
+    environment:
+      # Tell the app where to find Ollama
+      - OLLAMA_HOST=http://ollama:11434
+      - PYTHONUNBUFFERED=1
+    
+    # depends_on: Start ollama before rag-app
+    depends_on:
+      ollama:
+        condition: service_healthy
+    
+    restart: unless-stopped
+    
+    # networks: Both services can talk to each other
+    networks:
+      - rag-network
+
+# Define the network for inter-container communication
+networks:
+  rag-network:
+    driver: bridge
+
+# Define named volumes for data persistence
+volumes:
+  ollama-data:
+    driver: local

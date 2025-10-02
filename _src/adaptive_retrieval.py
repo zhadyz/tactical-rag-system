@@ -1,0 +1,479 @@
+"""
+Adaptive Retrieval Engine - Production Version with Dynamic Settings
+"""
+
+import asyncio
+from typing import List, Dict, Tuple
+from dataclasses import dataclass
+import logging
+import numpy as np
+
+from langchain.docstore.document import Document
+from langchain_chroma import Chroma
+from langchain_community.retrievers import BM25Retriever
+from langchain_ollama import OllamaLLM
+from sentence_transformers import CrossEncoder
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RetrievalResult:
+    """Retrieval result with proper scoring"""
+    documents: List[Document]
+    scores: List[float]
+    strategy_used: str
+    query_type: str
+
+
+class AdaptiveRetriever:
+    """Adaptive retriever with dynamic settings support"""
+    
+    def __init__(
+        self,
+        vectorstore: Chroma,
+        bm25_retriever: BM25Retriever,
+        llm: OllamaLLM,
+        config,
+        runtime_settings: Dict
+    ):
+        self.vectorstore = vectorstore
+        self.bm25_retriever = bm25_retriever
+        self.llm = llm
+        self.config = config
+        self.runtime_settings = runtime_settings  # Reference to shared settings dict
+        
+        # Load reranker
+        self.reranker = None
+        if config.retrieval.rerank_k > 0:
+            try:
+                self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+                logger.info("Reranker loaded")
+            except Exception as e:
+                logger.warning(f"Failed to load reranker: {e}")
+    
+    def _get_setting(self, key: str, default):
+        """Safely get setting with fallback"""
+        try:
+            return self.runtime_settings.get(key, default)
+        except:
+            return default
+    
+    async def retrieve(self, query: str) -> RetrievalResult:
+        """Adaptive retrieval with dynamic settings"""
+        
+        # Classify query
+        query_type = self._classify_query(query)
+        logger.info(f"Query classified as: {query_type}")
+        
+        # Route to appropriate strategy
+        if query_type == "simple":
+            return await self._simple_retrieval(query)
+        elif query_type == "moderate":
+            return await self._hybrid_retrieval(query)
+        else:
+            return await self._advanced_retrieval(query)
+    
+    def _classify_query(self, query: str) -> str:
+        """Multi-factor query classification with dynamic thresholds"""
+        
+        query_lower = query.lower()
+        words = query.split()
+        score = 0
+        
+        # Factor 1: Length
+        if len(words) <= 6:
+            score += 0
+        elif len(words) <= 10:
+            score += 1
+        elif len(words) <= 15:
+            score += 2
+        else:
+            score += 3
+        
+        # Factor 2: Question type
+        simple_starters = ["where", "who", "when", "which", "is there", "does", "can i", "do i"]
+        moderate_starters = ["what", "how many", "how much", "list"]
+        complex_starters = ["why", "how does", "explain", "analyze", "compare", "evaluate"]
+        
+        if any(query_lower.startswith(s) for s in simple_starters):
+            score += 0
+        elif any(query_lower.startswith(s) for s in moderate_starters):
+            score += 1
+        elif any(query_lower.startswith(s) for s in complex_starters):
+            score += 3
+        
+        # Factor 3: Complexity indicators
+        if " and " in query_lower:
+            score += 1
+        if " or " in query_lower:
+            score += 1
+        if "?" in query and query.count("?") > 1:
+            score += 2
+        
+        # Get dynamic thresholds
+        simple_threshold = self._get_setting('simple_threshold', 1)
+        moderate_threshold = self._get_setting('moderate_threshold', 3)
+        
+        # Classify
+        if score <= simple_threshold:
+            return "simple"
+        elif score <= moderate_threshold:
+            return "moderate"
+        else:
+            return "complex"
+    
+    async def _simple_retrieval(self, query: str) -> RetrievalResult:
+        """Simple retrieval with dynamic K"""
+        
+        logger.info(f"SIMPLE retrieval: {query[:60]}...")
+        
+        # Get dynamic K value
+        k = self._get_setting('simple_k', 5)
+        
+        # Get top K results
+        results = await asyncio.to_thread(
+            self.vectorstore.similarity_search_with_score,
+            query,
+            k=k
+        )
+        
+        if not results:
+            return RetrievalResult([], [], "simple_dense", "simple")
+        
+        # Normalize scores properly
+        distances = [dist for _, dist in results]
+        min_dist = min(distances)
+        max_dist = max(distances)
+        dist_range = max_dist - min_dist if max_dist != min_dist else 1.0
+        
+        # Convert to 0-1 similarity (0 = worst, 1 = best)
+        normalized = []
+        for doc, dist in results:
+            # Normalize distance to 0-1
+            norm_dist = (dist - min_dist) / dist_range
+            # Invert: lower distance = higher similarity
+            similarity = 1.0 - norm_dist
+            normalized.append((doc, similarity))
+        
+        # Sort by similarity (highest first)
+        normalized.sort(key=lambda x: x[1], reverse=True)
+        
+        # Take top results (max 3 or all if fewer)
+        top_n = min(3, len(normalized))
+        documents = [doc for doc, _ in normalized[:top_n]]
+        scores = [score for _, score in normalized[:top_n]]
+        
+        return RetrievalResult(
+            documents=documents,
+            scores=scores,
+            strategy_used="simple_dense",
+            query_type="simple"
+        )
+    
+    async def _hybrid_retrieval(self, query: str) -> RetrievalResult:
+        """Hybrid retrieval with RRF fusion and dynamic settings"""
+        
+        logger.info(f"HYBRID retrieval: {query[:60]}...")
+        
+        # Get dynamic K value
+        k = self._get_setting('hybrid_k', 20)
+        rrf_k = self._get_setting('rrf_constant', 60)
+        
+        # Parallel retrieval
+        dense_task = asyncio.to_thread(
+            self.vectorstore.similarity_search_with_score,
+            query,
+            k=k
+        )
+        sparse_task = asyncio.to_thread(
+            self.bm25_retriever.get_relevant_documents,
+            query
+        )
+        
+        dense_results, sparse_results = await asyncio.gather(
+            dense_task, sparse_task, return_exceptions=True
+        )
+        
+        # Handle errors
+        if isinstance(dense_results, Exception):
+            logger.error(f"Dense retrieval failed: {dense_results}")
+            dense_results = []
+        if isinstance(sparse_results, Exception):
+            logger.error(f"Sparse retrieval failed: {sparse_results}")
+            sparse_results = []
+        
+        # RRF fusion
+        doc_scores = {}
+        
+        # Dense results
+        for rank, (doc, _) in enumerate(dense_results):
+            content_hash = hash(doc.page_content)
+            rrf_score = 1.0 / (rrf_k + rank + 1)
+            doc_scores[content_hash] = {
+                'doc': doc,
+                'score': rrf_score,
+                'methods': ['dense']
+            }
+        
+        # Sparse results
+        for rank, doc in enumerate(sparse_results[:k]):
+            content_hash = hash(doc.page_content)
+            rrf_score = 1.0 / (rrf_k + rank + 1)
+            
+            if content_hash in doc_scores:
+                # Sum RRF scores
+                doc_scores[content_hash]['score'] += rrf_score
+                doc_scores[content_hash]['methods'].append('sparse')
+            else:
+                doc_scores[content_hash] = {
+                    'doc': doc,
+                    'score': rrf_score,
+                    'methods': ['sparse']
+                }
+        
+        # Sort by RRF score
+        sorted_docs = sorted(
+            doc_scores.values(),
+            key=lambda x: x['score'],
+            reverse=True
+        )[:15]
+        
+        # Rerank if available
+        if self.reranker and len(sorted_docs) > 3:
+            documents = [item['doc'] for item in sorted_docs]
+            pairs = [[query, doc.page_content[:512]] for doc in documents]
+            
+            try:
+                rerank_scores = await asyncio.to_thread(
+                    self.reranker.predict,
+                    pairs
+                )
+                
+                # Normalize rerank scores to 0-1
+                rerank_scores = list(rerank_scores)
+                min_score = min(rerank_scores)
+                max_score = max(rerank_scores)
+                score_range = max_score - min_score if max_score != min_score else 1.0
+                
+                norm_rerank = [
+                    (s - min_score) / score_range
+                    for s in rerank_scores
+                ]
+                
+                # Get dynamic rerank weight
+                rerank_weight = self._get_setting('rerank_weight', 0.7)
+                fusion_weight = 1.0 - rerank_weight
+                
+                # Combine: dynamic weight between RRF and reranking
+                final_scores = [
+                    (item['doc'], fusion_weight * item['score'] + rerank_weight * norm_rerank[i])
+                    for i, item in enumerate(sorted_docs)
+                ]
+                final_scores.sort(key=lambda x: x[1], reverse=True)
+                
+                documents = [doc for doc, _ in final_scores[:5]]
+                scores = [score for _, score in final_scores[:5]]
+                
+                return RetrievalResult(
+                    documents=documents,
+                    scores=scores,
+                    strategy_used="hybrid_reranked",
+                    query_type="moderate"
+                )
+            except Exception as e:
+                logger.warning(f"Reranking failed: {e}")
+        
+        # Fallback without reranking
+        documents = [item['doc'] for item in sorted_docs[:5]]
+        scores = [item['score'] for item in sorted_docs[:5]]
+        
+        return RetrievalResult(
+            documents=documents,
+            scores=scores,
+            strategy_used="hybrid",
+            query_type="moderate"
+        )
+    
+    async def _advanced_retrieval(self, query: str) -> RetrievalResult:
+        """Advanced retrieval with query expansion and dynamic settings"""
+        
+        logger.info(f"ADVANCED retrieval: {query[:60]}...")
+        
+        # Get dynamic K value
+        k = self._get_setting('advanced_k', 15)
+        
+        # Generate variants
+        variants = await self._generate_variants(query)
+        all_queries = [query] + variants[:2]  # Original + max 2 variants
+        
+        logger.info(f"Searching with {len(all_queries)} query variants")
+        
+        # Multi-query retrieval
+        all_results = {}
+        
+        for q in all_queries:
+            try:
+                results = await asyncio.to_thread(
+                    self.vectorstore.similarity_search_with_score,
+                    q,
+                    k=k
+                )
+                
+                for doc, _ in results:
+                    content_hash = hash(doc.page_content)
+                    if content_hash not in all_results:
+                        all_results[content_hash] = {'doc': doc, 'count': 0}
+                    all_results[content_hash]['count'] += 1
+                    
+            except Exception as e:
+                logger.warning(f"Query variant failed: {e}")
+        
+        # Sort by how many queries found this doc
+        sorted_docs = sorted(
+            all_results.values(),
+            key=lambda x: x['count'],
+            reverse=True
+        )[:15]
+        
+        # Rerank
+        if self.reranker and sorted_docs:
+            documents = [item['doc'] for item in sorted_docs]
+            pairs = [[query, doc.page_content[:512]] for doc in documents]
+            
+            try:
+                rerank_scores = await asyncio.to_thread(
+                    self.reranker.predict,
+                    pairs
+                )
+                
+                # Normalize
+                rerank_scores = list(rerank_scores)
+                min_score = min(rerank_scores)
+                max_score = max(rerank_scores)
+                score_range = max_score - min_score if max_score != min_score else 1.0
+                
+                norm_scores = [
+                    (s - min_score) / score_range
+                    for s in rerank_scores
+                ]
+                
+                # Get dynamic rerank weight
+                rerank_weight = self._get_setting('rerank_weight', 0.7)
+                fusion_weight = 1.0 - rerank_weight
+                
+                # Combine query match count with reranking
+                final_scores = [
+                    (item['doc'], fusion_weight * (item['count'] / len(all_queries)) + rerank_weight * norm_scores[i])
+                    for i, item in enumerate(sorted_docs)
+                ]
+                final_scores.sort(key=lambda x: x[1], reverse=True)
+                
+                documents = [doc for doc, _ in final_scores[:5]]
+                scores = [score for _, score in final_scores[:5]]
+                
+                return RetrievalResult(
+                    documents=documents,
+                    scores=scores,
+                    strategy_used="advanced_expanded",
+                    query_type="complex"
+                )
+            except Exception as e:
+                logger.warning(f"Reranking failed: {e}")
+        
+        # Fallback
+        documents = [item['doc'] for item in sorted_docs[:5]]
+        scores = [item['count'] / len(all_queries) for item in sorted_docs[:5]]
+        
+        return RetrievalResult(
+            documents=documents,
+            scores=scores,
+            strategy_used="advanced_expanded",
+            query_type="complex"
+        )
+    
+    async def _generate_variants(self, query: str) -> List[str]:
+        """Generate query variants"""
+        
+        prompt = f"""Generate 2 alternative phrasings using different words:
+
+Original: {query}
+
+Alternative 1:
+Alternative 2:"""
+        
+        try:
+            response = await asyncio.to_thread(self.llm.invoke, prompt)
+            lines = [
+                line.strip().lstrip('123456789.-) ')
+                for line in response.split('\n')
+                if line.strip() and len(line.strip()) > 10
+            ]
+            # Filter out labels
+            variants = [
+                line.split(':', 1)[1].strip() if ':' in line else line
+                for line in lines
+                if not line.lower().startswith('original')
+            ]
+            return variants[:2]
+        except Exception as e:
+            logger.warning(f"Variant generation failed: {e}")
+            return []
+
+
+class AdaptiveAnswerGenerator:
+    """Answer generator with proper prompting"""
+    
+    def __init__(self, llm: OllamaLLM):
+        self.llm = llm
+    
+    async def generate(
+        self,
+        query: str,
+        retrieval_result: RetrievalResult
+    ) -> str:
+        """Generate answer with proper context"""
+        
+        query_type = retrieval_result.query_type
+        
+        # Build context with source numbers
+        context_parts = []
+        for i, (doc, score) in enumerate(zip(
+            retrieval_result.documents,
+            retrieval_result.scores
+        ), 1):
+            source = doc.metadata.get('file_name', 'Unknown')
+            page = doc.metadata.get('page_number', 'N/A')
+            context_parts.append(
+                f"[Source {i}: {source}, Page {page} | Relevance: {score:.2%}]\n{doc.page_content}"
+            )
+        
+        context = "\n\n".join(context_parts)
+        
+        # Adaptive instructions
+        if query_type == "simple":
+            instruction = "Provide a direct, concise answer in 1-2 sentences."
+        elif query_type == "moderate":
+            instruction = "Provide a clear answer with supporting details. Cite sources by number."
+        else:
+            instruction = "Provide a comprehensive answer addressing all aspects. Cite sources."
+        
+        prompt = f"""Answer based on the provided sources.
+
+{instruction}
+
+RULES:
+- Answer ONLY from the sources provided
+- Cite sources by number when making claims
+- If information is missing, state what's unclear
+- Be precise and factual
+
+SOURCES:
+{context}
+
+QUESTION: {query}
+
+ANSWER:"""
+        
+        answer = await asyncio.to_thread(self.llm.invoke, prompt)
+        return answer.strip()

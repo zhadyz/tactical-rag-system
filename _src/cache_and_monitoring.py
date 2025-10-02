@@ -1,0 +1,451 @@
+"""
+Enterprise RAG System - Caching and Monitoring Infrastructure
+Multi-layer caching, metrics collection, and performance monitoring
+"""
+
+import time
+import hashlib
+import logging
+from typing import Any, Optional, Dict, List, Callable
+from collections import OrderedDict
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+import threading
+import json
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CacheStats:
+    """Cache statistics"""
+    hits: int = 0
+    misses: int = 0
+    evictions: int = 0
+    total_size: int = 0
+    
+    @property
+    def hit_rate(self) -> float:
+        total = self.hits + self.misses
+        return self.hits / total if total > 0 else 0.0
+
+
+class LRUCache:
+    """Thread-safe LRU cache with TTL support"""
+    
+    def __init__(self, max_size: int = 1000, ttl: int = 3600):
+        self.max_size = max_size
+        self.ttl = ttl
+        self.cache = OrderedDict()
+        self.timestamps = {}
+        self.stats = CacheStats()
+        self.lock = threading.RLock()
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get value from cache"""
+        
+        with self.lock:
+            if key not in self.cache:
+                self.stats.misses += 1
+                return None
+            
+            # Check TTL
+            if self._is_expired(key):
+                self._remove(key)
+                self.stats.misses += 1
+                return None
+            
+            # Move to end (most recently used)
+            self.cache.move_to_end(key)
+            self.stats.hits += 1
+            return self.cache[key]
+    
+    def put(self, key: str, value: Any) -> None:
+        """Put value into cache"""
+        
+        with self.lock:
+            # Update existing
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                self.cache[key] = value
+                self.timestamps[key] = time.time()
+                return
+            
+            # Evict if necessary
+            if len(self.cache) >= self.max_size:
+                self._evict_oldest()
+            
+            # Add new
+            self.cache[key] = value
+            self.timestamps[key] = time.time()
+            self.stats.total_size = len(self.cache)
+    
+    def clear(self) -> None:
+        """Clear entire cache"""
+        
+        with self.lock:
+            self.cache.clear()
+            self.timestamps.clear()
+            self.stats.total_size = 0
+    
+    def _is_expired(self, key: str) -> bool:
+        """Check if cache entry is expired"""
+        
+        if key not in self.timestamps:
+            return True
+        
+        age = time.time() - self.timestamps[key]
+        return age > self.ttl
+    
+    def _remove(self, key: str) -> None:
+        """Remove key from cache"""
+        
+        if key in self.cache:
+            del self.cache[key]
+            del self.timestamps[key]
+            self.stats.total_size = len(self.cache)
+    
+    def _evict_oldest(self) -> None:
+        """Evict oldest entry"""
+        
+        if self.cache:
+            oldest_key = next(iter(self.cache))
+            self._remove(oldest_key)
+            self.stats.evictions += 1
+    
+    def get_stats(self) -> Dict:
+        """Get cache statistics"""
+        
+        with self.lock:
+            return {
+                "hits": self.stats.hits,
+                "misses": self.stats.misses,
+                "evictions": self.stats.evictions,
+                "size": self.stats.total_size,
+                "hit_rate": self.stats.hit_rate,
+                "max_size": self.max_size
+            }
+
+
+class CacheManager:
+    """Multi-layer cache manager"""
+    
+    def __init__(self, config):
+        self.config = config
+        
+        # Initialize caches
+        self.embedding_cache = LRUCache(
+            max_size=config.cache.max_cache_size,
+            ttl=config.cache.cache_ttl
+        ) if config.cache.enable_embedding_cache else None
+        
+        self.query_cache = LRUCache(
+            max_size=config.cache.max_cache_size // 10,
+            ttl=config.cache.cache_ttl
+        ) if config.cache.enable_query_cache else None
+        
+        self.result_cache = LRUCache(
+            max_size=config.cache.max_cache_size // 5,
+            ttl=config.cache.cache_ttl
+        ) if config.cache.enable_result_cache else None
+        
+        logger.info("Cache manager initialized")
+    
+    def get_embedding(self, text: str) -> Optional[List[float]]:
+        """Get cached embedding"""
+        
+        if not self.embedding_cache:
+            return None
+        
+        cache_key = self._hash_text(text)
+        return self.embedding_cache.get(cache_key)
+    
+    def put_embedding(self, text: str, embedding: List[float]) -> None:
+        """Cache embedding"""
+        
+        if not self.embedding_cache:
+            return
+        
+        cache_key = self._hash_text(text)
+        self.embedding_cache.put(cache_key, embedding)
+    
+    def get_query_result(self, query: str, params: Dict) -> Optional[Any]:
+        """Get cached query result"""
+        
+        if not self.query_cache:
+            return None
+        
+        cache_key = self._hash_query(query, params)
+        return self.query_cache.get(cache_key)
+    
+    def put_query_result(self, query: str, params: Dict, result: Any) -> None:
+        """Cache query result"""
+        
+        if not self.query_cache:
+            return
+        
+        cache_key = self._hash_query(query, params)
+        self.query_cache.put(cache_key, result)
+    
+    def get_retrieval_result(self, query: str) -> Optional[Any]:
+        """Get cached retrieval result"""
+        
+        if not self.result_cache:
+            return None
+        
+        cache_key = self._hash_text(query)
+        return self.result_cache.get(cache_key)
+    
+    def put_retrieval_result(self, query: str, result: Any) -> None:
+        """Cache retrieval result"""
+        
+        if not self.result_cache:
+            return
+        
+        cache_key = self._hash_text(query)
+        self.result_cache.put(cache_key, result)
+    
+    def clear_all(self) -> None:
+        """Clear all caches"""
+        
+        if self.embedding_cache:
+            self.embedding_cache.clear()
+        if self.query_cache:
+            self.query_cache.clear()
+        if self.result_cache:
+            self.result_cache.clear()
+        
+        logger.info("All caches cleared")
+    
+    def get_stats(self) -> Dict:
+        """Get statistics for all caches"""
+        
+        stats = {}
+        
+        if self.embedding_cache:
+            stats["embedding_cache"] = self.embedding_cache.get_stats()
+        
+        if self.query_cache:
+            stats["query_cache"] = self.query_cache.get_stats()
+        
+        if self.result_cache:
+            stats["result_cache"] = self.result_cache.get_stats()
+        
+        return stats
+    
+    def _hash_text(self, text: str) -> str:
+        """Hash text for cache key"""
+        return hashlib.md5(text.encode()).hexdigest()
+    
+    def _hash_query(self, query: str, params: Dict) -> str:
+        """Hash query with parameters"""
+        combined = f"{query}:{json.dumps(params, sort_keys=True)}"
+        return hashlib.md5(combined.encode()).hexdigest()
+
+
+@dataclass
+class Metric:
+    """Performance metric"""
+    name: str
+    value: float
+    timestamp: datetime
+    labels: Dict[str, str] = field(default_factory=dict)
+
+
+class MetricsCollector:
+    """Collect and aggregate performance metrics"""
+    
+    def __init__(self, config):
+        self.config = config
+        self.metrics: List[Metric] = []
+        self.counters: Dict[str, int] = {}
+        self.timers: Dict[str, List[float]] = {}
+        self.lock = threading.RLock()
+        
+        # Aggregated stats
+        self.query_count = 0
+        self.total_latency = 0.0
+        self.error_count = 0
+        
+        logger.info("Metrics collector initialized")
+    
+    def record_query(self, latency: float, success: bool = True) -> None:
+        """Record query metrics"""
+        
+        with self.lock:
+            self.query_count += 1
+            self.total_latency += latency
+            
+            if not success:
+                self.error_count += 1
+            
+            self.metrics.append(Metric(
+                name="query_latency",
+                value=latency,
+                timestamp=datetime.now(),
+                labels={"success": str(success)}
+            ))
+    
+    def record_retrieval(
+        self,
+        stage: str,
+        latency: float,
+        num_docs: int
+    ) -> None:
+        """Record retrieval metrics"""
+        
+        with self.lock:
+            self.metrics.append(Metric(
+                name=f"retrieval_{stage}_latency",
+                value=latency,
+                timestamp=datetime.now(),
+                labels={"num_docs": str(num_docs)}
+            ))
+    
+    def increment_counter(self, name: str, value: int = 1) -> None:
+        """Increment counter"""
+        
+        with self.lock:
+            self.counters[name] = self.counters.get(name, 0) + value
+    
+    def record_timer(self, name: str, value: float) -> None:
+        """Record timer value"""
+        
+        with self.lock:
+            if name not in self.timers:
+                self.timers[name] = []
+            self.timers[name].append(value)
+    
+    def get_summary(self) -> Dict:
+        """Get metrics summary"""
+        
+        with self.lock:
+            avg_latency = (
+                self.total_latency / self.query_count
+                if self.query_count > 0 else 0
+            )
+            
+            error_rate = (
+                self.error_count / self.query_count
+                if self.query_count > 0 else 0
+            )
+            
+            # Timer statistics
+            timer_stats = {}
+            for name, values in self.timers.items():
+                if values:
+                    timer_stats[name] = {
+                        "count": len(values),
+                        "mean": sum(values) / len(values),
+                        "min": min(values),
+                        "max": max(values),
+                        "p50": self._percentile(values, 50),
+                        "p95": self._percentile(values, 95),
+                        "p99": self._percentile(values, 99)
+                    }
+            
+            return {
+                "query_count": self.query_count,
+                "avg_latency": avg_latency,
+                "error_count": self.error_count,
+                "error_rate": error_rate,
+                "counters": dict(self.counters),
+                "timers": timer_stats
+            }
+    
+    def _percentile(self, values: List[float], percentile: int) -> float:
+        """Calculate percentile"""
+        
+        if not values:
+            return 0.0
+        
+        sorted_values = sorted(values)
+        index = int(len(sorted_values) * percentile / 100)
+        return sorted_values[min(index, len(sorted_values) - 1)]
+    
+    def reset(self) -> None:
+        """Reset all metrics"""
+        
+        with self.lock:
+            self.metrics.clear()
+            self.counters.clear()
+            self.timers.clear()
+            self.query_count = 0
+            self.total_latency = 0.0
+            self.error_count = 0
+
+
+class PerformanceMonitor:
+    """Complete performance monitoring system"""
+    
+    def __init__(self, config, cache_manager: CacheManager):
+        self.config = config
+        self.cache_manager = cache_manager
+        self.metrics = MetricsCollector(config)
+        self.start_time = time.time()
+        
+        logger.info("Performance monitor initialized")
+    
+    def get_system_stats(self) -> Dict:
+        """Get comprehensive system statistics"""
+        
+        uptime = time.time() - self.start_time
+        
+        return {
+            "uptime_seconds": uptime,
+            "uptime_formatted": str(timedelta(seconds=int(uptime))),
+            "metrics": self.metrics.get_summary(),
+            "cache": self.cache_manager.get_stats(),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    def log_stats(self) -> None:
+        """Log current statistics"""
+        
+        stats = self.get_system_stats()
+        
+        logger.info("=" * 60)
+        logger.info("SYSTEM STATISTICS")
+        logger.info("=" * 60)
+        logger.info(f"Uptime: {stats['uptime_formatted']}")
+        logger.info(f"Total Queries: {stats['metrics']['query_count']}")
+        logger.info(f"Avg Latency: {stats['metrics']['avg_latency']:.3f}s")
+        logger.info(f"Error Rate: {stats['metrics']['error_rate']:.2%}")
+        
+        # Cache stats
+        for cache_name, cache_stats in stats['cache'].items():
+            logger.info(f"\n{cache_name}:")
+            logger.info(f"  Hit Rate: {cache_stats['hit_rate']:.2%}")
+            logger.info(f"  Size: {cache_stats['size']}/{cache_stats['max_size']}")
+        
+        logger.info("=" * 60)
+    
+    def save_stats(self, output_file: Path) -> None:
+        """Save statistics to file"""
+        
+        stats = self.get_system_stats()
+        
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w') as f:
+            json.dump(stats, f, indent=2)
+        
+        logger.info(f"Stats saved to {output_file}")
+
+
+class Timer:
+    """Context manager for timing operations"""
+    
+    def __init__(self, metrics: MetricsCollector, name: str):
+        self.metrics = metrics
+        self.name = name
+        self.start_time = None
+    
+    def __enter__(self):
+        self.start_time = time.time()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        elapsed = time.time() - self.start_time
+        self.metrics.record_timer(self.name, elapsed)
+        return False
