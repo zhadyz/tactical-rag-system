@@ -50,8 +50,8 @@ jobs:
     
     - name: Build Docker image
       run: |
-        docker build -t tactical-rag-system:${{ github.sha }} .
-    
+        docker build -f _config/Dockerfile -t tactical-rag-system:${{ github.sha }} .
+        
     - name: Test image was created
       run: |
         docker images | grep tactical-rag-system
