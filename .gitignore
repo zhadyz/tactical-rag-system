@@ -5,6 +5,7 @@ vector_db/
 
 # Deployment artifacts (your Docker images)
 _deployment/
+DEPLOYMENT_PACKAGE/
 *.tar
 *.tar.gz
 
@@ -32,3 +33,5 @@ Thumbs.db
 # Sensitive config
 .env
 secrets/
+build_output.txt
+build_error.txt

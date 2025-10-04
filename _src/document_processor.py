@@ -1,6 +1,7 @@
 """
 Enterprise RAG System - Advanced Document Processing
 Parallel processing, intelligent chunking, and metadata extraction
+WITH CUDA GPU ACCELERATION
 """
 
 import asyncio
@@ -19,6 +20,7 @@ from langchain_community.document_loaders import (
 )
 from sentence_transformers import SentenceTransformer
 import numpy as np
+import torch  # ADDED: For CUDA detection
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,22 @@ class IntelligentChunker:
         
         if config.chunking.strategy in ["semantic", "hybrid"]:
             logger.info("Loading sentence transformer for semantic chunking...")
-            self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # CRITICAL: Detect and use CUDA if available
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"Initializing sentence model on device: {device}")
+            
+            self.sentence_model = SentenceTransformer(
+                'all-MiniLM-L6-v2',
+                device=device  # ADDED: Explicit device setting
+            )
+            
+            # ADDED: Verify device and log GPU info
+            logger.info(f"Sentence model device: {self.sentence_model.device}")
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                logger.info(f"GPU detected: {gpu_name} ({gpu_memory:.1f}GB VRAM)")
     
     def chunk(self, documents: List[Document]) -> List[Document]:
         """Apply intelligent chunking strategy"""
@@ -99,7 +116,7 @@ class IntelligentChunker:
                 chunks.append(doc)
                 continue
             
-            # Get embeddings
+            # Get embeddings - will use GPU if available
             embeddings = self.sentence_model.encode(sentences)
             
             # Find semantic boundaries
@@ -200,6 +217,7 @@ class IntelligentChunker:
                 sentences = self._split_sentences(chunk.page_content)
                 
                 if len(sentences) > 5:
+                    # Get embeddings - will use GPU if available
                     embeddings = self.sentence_model.encode(sentences)
                     boundaries = self._find_semantic_boundaries(embeddings, 0.8)
                     

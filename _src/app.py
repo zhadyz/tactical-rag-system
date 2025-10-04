@@ -1,6 +1,6 @@
 """
 Enterprise RAG System - Main Application
-Production-ready with dynamic settings UI
+Production-ready with dynamic settings UI and GPU acceleration
 """
 
 import asyncio
@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 from datetime import datetime
 import os
+import torch  # ADDED: For CUDA verification
 
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from langchain_community.llms import Ollama as OllamaLLM
+from langchain_community.embeddings import OllamaEmbeddings
 from langchain.docstore.document import Document
 from langchain_community.retrievers import BM25Retriever
 
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnterpriseRAGSystem:
-    """Complete enterprise RAG system with dynamic settings"""
+    """Complete enterprise RAG system with dynamic settings and GPU acceleration"""
     
     # Default settings as class constants for safety
     DEFAULT_SETTINGS = {
@@ -76,6 +78,13 @@ class EnterpriseRAGSystem:
             "What are the standards mentioned?"
         ]
         
+        # ADDED: Track GPU availability
+        self.gpu_available = torch.cuda.is_available()
+        if self.gpu_available:
+            logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
+        else:
+            logger.warning("No GPU detected - will use CPU (slower performance)")
+        
         logger.info("Enterprise RAG System created")
     
     def update_settings(self, **kwargs):
@@ -108,12 +117,23 @@ class EnterpriseRAGSystem:
         return self.runtime_settings
     
     async def initialize(self) -> Tuple[bool, str]:
-        """Initialize the RAG system"""
+        """Initialize the RAG system with GPU acceleration"""
         
         try:
             logger.info("=" * 60)
             logger.info("INITIALIZING ENTERPRISE RAG SYSTEM")
             logger.info("=" * 60)
+            
+            # ADDED: Log GPU status at initialization
+            if self.gpu_available:
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                logger.info(f"\n🎮 GPU Configuration:")
+                logger.info(f"  Device: {gpu_name}")
+                logger.info(f"  VRAM: {gpu_mem:.1f}GB")
+                logger.info(f"  CUDA Version: {torch.version.cuda}")
+            else:
+                logger.warning("\n⚠️  No GPU available - using CPU")
             
             logger.info("\n1. Initializing infrastructure...")
             self.cache_manager = CacheManager(self.config)
@@ -156,21 +176,30 @@ class EnterpriseRAGSystem:
                 self.bm25_retriever.k = self.config.retrieval.initial_k
                 logger.info(f"✓ BM25 retriever ready ({len(texts)} chunks)")
             else:
-                logger.warning("⚠ BM25 metadata not found")
+                logger.warning("⚠  BM25 metadata not found")
                 self.bm25_retriever = BM25Retriever.from_documents([
                     Document(page_content="dummy")
                 ])
             
             logger.info("\n5. Connecting to LLM...")
-            self.llm = OllamaLLM(
-                model=self.config.llm.model_name,
-                temperature=self.config.llm.temperature,
-                top_p=self.config.llm.top_p,
-                top_k=self.config.llm.top_k,
-                num_ctx=self.config.llm.num_ctx,
-                repeat_penalty=self.config.llm.repeat_penalty,
-                base_url=self.config.ollama_host
-            )
+            
+            # ADDED: Configure Ollama with GPU settings
+            llm_params = {
+                'model': self.config.llm.model_name,
+                'temperature': self.config.llm.temperature,
+                'top_p': self.config.llm.top_p,
+                'top_k': self.config.llm.top_k,
+                'num_ctx': self.config.llm.num_ctx,
+                'repeat_penalty': self.config.llm.repeat_penalty,
+                'base_url': self.config.ollama_host
+            }
+            
+            # ADDED: Enable GPU for Ollama if available
+            if self.gpu_available:
+                llm_params['num_gpu'] = 1  # Use 1 GPU
+                logger.info("  Enabling GPU acceleration for Ollama")
+            
+            self.llm = OllamaLLM(**llm_params)
             
             await asyncio.to_thread(self.llm.invoke, "Hello")
             logger.info("✓ LLM ready")
@@ -199,6 +228,11 @@ class EnterpriseRAGSystem:
             logger.info("\n" + "=" * 60)
             logger.info("SYSTEM READY")
             logger.info("=" * 60)
+            
+            # ADDED: Final GPU status
+            if self.gpu_available:
+                gpu_mem_used = torch.cuda.memory_allocated(0) / 1024**2
+                logger.info(f"GPU Memory in use: {gpu_mem_used:.1f}MB")
             
             return True, "System initialized successfully"
             
@@ -324,7 +358,7 @@ class EnterpriseRAGSystem:
         return sources
     
     def get_system_status(self) -> Dict:
-        """Get current system status"""
+        """Get current system status including GPU info"""
         
         if not self.initialized:
             return {
@@ -351,6 +385,13 @@ class EnterpriseRAGSystem:
                 data = json.load(f)
                 chunk_count = len(data.get('texts', []))
         
+        # ADDED: GPU status
+        gpu_status = "Disabled"
+        gpu_memory = 0
+        if self.gpu_available:
+            gpu_status = f"Enabled ({torch.cuda.get_device_name(0)})"
+            gpu_memory = torch.cuda.memory_allocated(0) / 1024**2  # MB
+        
         return {
             "status": "operational",
             "documents": doc_count,
@@ -361,7 +402,9 @@ class EnterpriseRAGSystem:
             "cache_hit_rate": stats['cache'].get('query_cache', {}).get('hit_rate', 0),
             "config": {
                 "model": self.config.llm.model_name,
-                "embedding": self.config.embedding.model_name
+                "embedding": self.config.embedding.model_name,
+                "gpu": gpu_status,  # ADDED
+                "gpu_memory_mb": int(gpu_memory)  # ADDED
             }
         }
 
@@ -429,11 +472,19 @@ def get_status_html() -> str:
         badge = "background:#48bb78"
         text = "ONLINE"
     
+    # ADDED: GPU badge
+    gpu_badge = ""
+    if status['config'].get('gpu', 'Disabled') != 'Disabled':
+        gpu_badge = f"<span style='background:#805ad5;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;margin-left:8px;'>GPU</span>"
+    
     return f"""
     <div style="background:#1a202c;padding:20px;border-radius:8px;color:#e2e8f0;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <h3 style="margin:0;font-size:18px;font-weight:600;">Enterprise RAG System</h3>
-            <span style="{badge};padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;">{text}</span>
+            <div>
+                <span style="{badge};padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;">{text}</span>
+                {gpu_badge}
+            </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;">
             <div style="background:#2d3748;padding:12px;border-radius:6px;">
@@ -450,7 +501,7 @@ def get_status_html() -> str:
             </div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #4a5568;font-size:11px;color:#a0aec0;">
-            Latency: {status['avg_latency']:.2f}s | Cache: {status['cache_hit_rate']:.0%} | {status['config']['model']}
+            Latency: {status['avg_latency']:.2f}s | Cache: {status['cache_hit_rate']:.0%} | {status['config']['model']} | {status['config']['gpu']}
         </div>
     </div>
     """
@@ -587,6 +638,13 @@ def create_interface():
         padding: 16px;
         border-radius: 8px;
         border: 1px solid #4a5568;
+    }
+    /* Fix double scroller during generation */
+    .chatbot {
+        overflow-y: auto !important;
+    }
+    .chatbot > div {
+        overflow: visible !important;
     }
     """
     

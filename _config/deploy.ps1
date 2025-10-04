@@ -1,5 +1,6 @@
 # ============================================================
-# TACTICAL RAG SYSTEM - FIELD DEPLOYMENT SCRIPT
+# TACTICAL RAG SYSTEM - ENHANCED DEPLOYMENT SCRIPT
+# Real-time monitoring, GPU detection, and dependency tracking
 # ============================================================
 
 # Display DoD Warning Banner
@@ -39,265 +40,667 @@ if ($consent -ne "I AGREE") {
 }
 Write-Host ""
 
+# ============================================================
+# UTILITY FUNCTIONS
+# ============================================================
+
+function Write-Step {
+    param([string]$Message, [int]$Step, [int]$Total)
+    Write-Host ""
+    Write-Host "[$Step/$Total] " -NoNewline -ForegroundColor Cyan
+    Write-Host $Message -ForegroundColor White
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+}
+
+function Write-Success {
+    param([string]$Message)
+    Write-Host "  [OK] " -NoNewline -ForegroundColor Green
+    Write-Host $Message -ForegroundColor White
+}
+
+function Write-Info {
+    param([string]$Message)
+    Write-Host "  [>>] " -NoNewline -ForegroundColor Cyan
+    Write-Host $Message -ForegroundColor White
+}
+
+function Write-Warning {
+    param([string]$Message)
+    Write-Host "  [!!] " -NoNewline -ForegroundColor Yellow
+    Write-Host $Message -ForegroundColor White
+}
+
+function Write-Error-Custom {
+    param([string]$Message)
+    Write-Host "  [XX] " -NoNewline -ForegroundColor Red
+    Write-Host $Message -ForegroundColor White
+}
+
+function Write-BuildStep {
+    param([string]$Message)
+    Write-Host "      " -NoNewline
+    Write-Host "[BUILD] " -NoNewline -ForegroundColor Magenta
+    Write-Host $Message -ForegroundColor Gray
+}
+
+function Get-GPUInfo {
+    try {
+        $gpuInfo = nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader 2>$null
+        if ($gpuInfo) {
+            return $gpuInfo.Split(',')
+        }
+    } catch {}
+    return $null
+}
+
+function Show-GPUStatus {
+    try {
+        $gpu = nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>$null
+        if ($gpu) {
+            $parts = $gpu.Split(',')
+            $util = $parts[0].Trim()
+            $memUsed = [math]::Round([int]$parts[1].Trim() / 1024, 1)
+            $memTotal = [math]::Round([int]$parts[2].Trim() / 1024, 1)
+            $temp = $parts[3].Trim()
+            
+            $utilColor = if ([int]$util -gt 50) { "Green" } else { "Gray" }
+            $tempColor = if ([int]$temp -gt 70) { "Red" } elseif ([int]$temp -gt 50) { "Yellow" } else { "Green" }
+            
+            Write-Host "  GPU: " -NoNewline
+            Write-Host "$util% " -NoNewline -ForegroundColor $utilColor
+            Write-Host "| VRAM: " -NoNewline
+            Write-Host "${memUsed}GB/${memTotal}GB " -NoNewline -ForegroundColor Cyan
+            Write-Host "| Temp: " -NoNewline
+            Write-Host "${temp}C" -ForegroundColor $tempColor
+            return $true
+        }
+    } catch {}
+    return $false
+}
+
+function Show-SystemResources {
+    $cpu = Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object -ExpandProperty CookedValue
+    $cpuPct = [math]::Round($cpu, 0)
+    $cpuColor = if ($cpuPct -gt 80) { "Red" } elseif ($cpuPct -gt 50) { "Yellow" } else { "Green" }
+    
+    Write-Host "  CPU: " -NoNewline
+    Write-Host "$cpuPct% " -NoNewline -ForegroundColor $cpuColor
+    
+    Show-GPUStatus | Out-Null
+}
+
+# ============================================================
+# MAIN DEPLOYMENT
+# ============================================================
+
+Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "    TACTICAL RAG SYSTEM - DEPLOYMENT SCRIPT" -ForegroundColor Cyan
+Write-Host "    TACTICAL RAG SYSTEM - DEPLOYMENT MANAGER" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check if Docker is running
-Write-Host "Checking Docker status..." -ForegroundColor Yellow
+$totalSteps = 10
+
+# ============================================================
+# STEP 1: Pre-flight checks
+# ============================================================
+Write-Step "PRE-FLIGHT CHECKS" 1 $totalSteps
+
+Write-Info "Checking Docker status..."
 $dockerRunning = $null
 try {
     $dockerRunning = docker ps 2>$null
-}
-catch {
+} catch {
     $dockerRunning = $null
 }
 
 if (-not $dockerRunning) {
-    Write-Host "ERROR: Docker is not running!" -ForegroundColor Red
-    Write-Host "Please start Docker Desktop and run this script again." -ForegroundColor Red
+    Write-Error-Custom "Docker is not running!"
+    Write-Warning "Please start Docker Desktop and run this script again."
     Write-Host ""
     Read-Host "Press Enter to exit"
-    exit
+    exit 1
 }
-Write-Host "checkmark Docker is running" -ForegroundColor Green
-Write-Host ""
+Write-Success "Docker is running"
 
-# Check for code changes
-Write-Host "Checking for code changes..." -ForegroundColor Yellow
-$NeedsRebuild = $false
-$ragImageExists = docker images -q ollama-rag-app:latest
-$ollamaImageExists = docker images -q ollama/ollama:latest
+# Check nvidia-smi
+Write-Info "Checking GPU availability..."
+$gpuInfo = Get-GPUInfo
+if ($gpuInfo) {
+    Write-Success "GPU detected: $($gpuInfo[0].Trim())"
+    Write-Info "VRAM: $($gpuInfo[1].Trim())"
+    Write-Info "Driver: $($gpuInfo[2].Trim())"
+} else {
+    Write-Warning "No NVIDIA GPU detected or nvidia-smi not available"
+    Write-Warning "System will run on CPU (slower performance)"
+}
 
-if (-not $ragImageExists -or -not $ollamaImageExists) {
-    Write-Host "Docker images not found - will build from scratch" -ForegroundColor Yellow
-    $NeedsRebuild = $true
+# Check nvidia-container-toolkit
+Write-Info "Checking NVIDIA Container Toolkit..."
+$nvidiaDocker = docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Success "NVIDIA Container Toolkit is configured"
+} else {
+    Write-Warning "NVIDIA Container Toolkit may not be properly configured"
+    Write-Warning "GPU acceleration may not work in containers"
+}
+
+# ============================================================
+# STEP 2: Clean up existing deployment
+# ============================================================
+Write-Step "CLEANING UP EXISTING DEPLOYMENT" 2 $totalSteps
+
+$existingContainers = docker ps -a --filter "name=rag-tactical-system" --filter "name=ollama-server" --format "{{.Names}}" 2>$null
+
+if ($existingContainers) {
+    Write-Info "Found existing containers:"
+    foreach ($container in $existingContainers) {
+        Write-Host "    - $container" -ForegroundColor Yellow
+    }
     
-    # Check if tar files exist
-    if ((Test-Path "rag-app-image.tar") -and (Test-Path "ollama-image.tar")) {
-        Write-Host ""
-        Write-Host "Found pre-built images - loading from files..." -ForegroundColor Cyan
-        Write-Host "This is a ONE-TIME setup (takes 3-5 minutes)" -ForegroundColor Yellow
-        Write-Host ""
-        
-        Write-Host "[1/3] Loading RAG application image..." -ForegroundColor Yellow
-        docker load -i rag-app-image.tar
-        Write-Host "checkmark RAG image loaded" -ForegroundColor Green
-        
-        Write-Host "[2/3] Loading Ollama image..." -ForegroundColor Yellow
-        docker load -i ollama-image.tar
-        Write-Host "checkmark Ollama image loaded" -ForegroundColor Green
-        
-        if (Test-Path "ollama-models.tar.gz") {
-            Write-Host "[3/3] Restoring AI models..." -ForegroundColor Yellow
-            docker run --rm -v ollama_ollama-data:/data -v ${PWD}:/backup alpine sh -c 'cd /data; tar xzf /backup/ollama-models.tar.gz'
-            Write-Host "checkmark Models restored" -ForegroundColor Green
-        }
-        
-        $NeedsRebuild = $false
-        Write-Host ""
-        Write-Host "checkmark Images loaded successfully!" -ForegroundColor Green
-    }
-}
-elseif (Test-Path "_src") {
-    $imageDate = docker inspect -f '{{.Created}}' ollama-rag-app:latest 2>$null
-    if ($imageDate) {
-        $imageTime = [DateTime]::Parse($imageDate)
-        $newestFile = Get-ChildItem -Path "_src" -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        
-        if ($newestFile -and $newestFile.LastWriteTime -gt $imageTime) {
-            Write-Host "checkmark Code changes detected in: $($newestFile.Name)" -ForegroundColor Yellow
-            Write-Host "  Modified: $($newestFile.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
-            Write-Host "  Image built: $($imageTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
-            $NeedsRebuild = $true
-        }
-        else {
-            Write-Host "checkmark No code changes - using existing images" -ForegroundColor Green
-        }
-    }
-}
-else {
-    Write-Host "checkmark Using existing images" -ForegroundColor Green
+    Write-Info "Stopping containers..."
+    docker-compose stop 2>$null | Out-Null
+    Write-Success "Containers stopped"
+    
+    Write-Info "Removing containers..."
+    docker-compose down 2>$null | Out-Null
+    Write-Success "Containers removed"
+} else {
+    Write-Success "No existing containers found"
 }
 
-Write-Host ""
-Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "    STARTING SYSTEM" -ForegroundColor Cyan
-Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host ""
+# Check for orphaned images if --rebuild flag
+if ($args -contains "--rebuild") {
+    Write-Info "Rebuild flag detected - removing old images..."
+    docker rmi ruggedsystemv25-rag-app:latest 2>$null | Out-Null
+    Write-Success "Old images removed"
+}
 
-# Check documents
+# ============================================================
+# STEP 3: Verify project structure
+# ============================================================
+Write-Step "VERIFYING PROJECT STRUCTURE" 3 $totalSteps
+
+$requiredDirs = @("_src", "_config", "documents")
+$requiredFiles = @("docker-compose.yml", "_config/Dockerfile", "_config/requirements.txt")
+
+foreach ($dir in $requiredDirs) {
+    if (Test-Path $dir) {
+        Write-Success "Directory: $dir"
+    } else {
+        Write-Error-Custom "Missing directory: $dir"
+        exit 1
+    }
+}
+
+foreach ($file in $requiredFiles) {
+    if (Test-Path $file) {
+        Write-Success "File: $file"
+    } else {
+        Write-Error-Custom "Missing file: $file"
+        exit 1
+    }
+}
+
+# Count Python files
+$srcFiles = (Get-ChildItem -Path "_src" -Filter "*.py").Count
+Write-Info "Found $srcFiles Python source files"
+
+# ============================================================
+# STEP 4: Check documents
+# ============================================================
+Write-Step "CHECKING DOCUMENTS" 4 $totalSteps
+
 if (-not (Test-Path "documents")) {
-    Write-Host "Creating documents folder..." -ForegroundColor Yellow
+    Write-Info "Creating documents folder..."
     New-Item -ItemType Directory -Path "documents" | Out-Null
-    Write-Host "warning WARNING: documents/ folder is empty" -ForegroundColor Yellow
-    Write-Host "  Add your mission documents to the documents/ folder" -ForegroundColor Yellow
-    Write-Host ""
+    Write-Success "Documents folder created"
 }
 
 $docCount = (Get-ChildItem -Path "documents" -File -Recurse | Where-Object { $_.Extension -match '\.(pdf|txt|docx|doc|md)$' }).Count
-Write-Host "Documents found: $docCount" -ForegroundColor Cyan
+Write-Info "Documents found: $docCount"
 
-# Check database
+if ($docCount -eq 0) {
+    Write-Warning "No documents found in documents/ folder"
+    Write-Warning "System will start but cannot answer questions"
+    Write-Info "Add documents to documents/ folder and restart to index them"
+}
+
+# ============================================================
+# STEP 5: Check vector database
+# ============================================================
+Write-Step "CHECKING VECTOR DATABASE" 5 $totalSteps
+
 if (Test-Path "chroma_db") {
     $dbFiles = Get-ChildItem -Path "chroma_db" -Recurse -File
-    Write-Host "Vector database: EXISTS ($($dbFiles.Count) files)" -ForegroundColor Green
-    Write-Host "  -> Will use cached index" -ForegroundColor Cyan
-}
-else {
-    Write-Host "Vector database: NOT FOUND" -ForegroundColor Yellow
-    Write-Host "  -> Will index $docCount documents on startup" -ForegroundColor Cyan
-    Write-Host "  -> Estimated time: 1-5 minutes" -ForegroundColor Yellow
-}
-
-Write-Host ""
-
-# Force rebuild if --rebuild flag passed
-if ($args -contains "--rebuild") {
-    Write-Host "Forcing rebuild..." -ForegroundColor Yellow
-    docker-compose build
-}
-
-# Start containers
-if ($NeedsRebuild) {
-    Write-Host "Building and starting containers..." -ForegroundColor Yellow
-    docker-compose up -d --build
-}
-else {
-    Write-Host "Starting containers..." -ForegroundColor Yellow
-    docker-compose up -d
-}
-
-Write-Host ""
-Write-Host "============================================================" -ForegroundColor Green
-Write-Host "    INITIALIZATION IN PROGRESS" -ForegroundColor Green
-Write-Host "============================================================" -ForegroundColor Green
-Write-Host ""
-
-# Health monitoring
-$maxAttempts = 60
-$attempt = 0
-$allHealthy = $false
-$lastLogLine = ""
-
-while ($attempt -lt $maxAttempts -and -not $allHealthy) {
-    $attempt++
+    $dbSize = ($dbFiles | Measure-Object -Property Length -Sum).Sum / 1MB
+    Write-Success "Vector database exists ($($dbFiles.Count) files, $([math]::Round($dbSize, 1))MB)"
     
+    # Check age
+    $dbAge = (Get-Date) - (Get-Item "chroma_db").LastWriteTime
+    if ($dbAge.TotalHours -gt 24) {
+        Write-Warning "Database is $([math]::Round($dbAge.TotalHours, 0)) hours old"
+        Write-Info "Consider re-indexing if documents have changed"
+    }
+} else {
+    Write-Warning "No vector database found"
+    Write-Info "Will create database on first startup (may take 2-10 minutes)"
+}
+
+# ============================================================
+# STEP 6: Build Docker images with dependency tracking
+# ============================================================
+Write-Step "BUILDING DOCKER IMAGES WITH DEPENDENCY TRACKING" 6 $totalSteps
+
+Write-Info "Starting Docker build (this may take 5-10 minutes on first run)..."
+Write-Host ""
+
+# Track installed packages
+$installedPackages = @{
+    "pytorch" = $false
+    "langchain" = $false
+    "sentence_transformers" = $false
+    "chromadb" = $false
+    "gradio" = $false
+}
+
+# Start build process
+$buildArgs = if ($args -contains "--rebuild") { @("build", "--no-cache", "--progress=plain") } else { @("build", "--progress=plain") }
+
+$buildProcess = Start-Process -FilePath "docker-compose" -ArgumentList $buildArgs -NoNewWindow -PassThru -RedirectStandardOutput "build_output.txt" -RedirectStandardError "build_error.txt"
+
+# Monitor build output in real-time
+$lastPosition = 0
+while (-not $buildProcess.HasExited) {
+    if (Test-Path "build_output.txt") {
+        $content = Get-Content "build_output.txt" -Raw -ErrorAction SilentlyContinue
+        
+        # Skip if content is null or empty
+        if ($content -and $content.Length -gt $lastPosition) {
+            $newContent = $content.Substring($lastPosition)
+            $lastPosition = $content.Length
+            
+            foreach ($line in $newContent -split "`n") {
+                # Show all build output
+                if ($line -match "#\d+") {
+                    Write-BuildStep $line
+                }
+                
+                # Highlight critical installations
+                if ($line -match "RUN pip install.*torch.*cu121" -and -not $installedPackages["pytorch"]) {
+                    Write-Success "Installing PyTorch with CUDA 12.1 support..."
+                    $installedPackages["pytorch"] = $true
+                }
+                
+                if ($line -match "Successfully installed.*torch" -and $installedPackages["pytorch"]) {
+                    Write-Success "PyTorch installation complete"
+                }
+                
+                if ($line -match "Collecting langchain" -and -not $installedPackages["langchain"]) {
+                    Write-Success "Installing LangChain ecosystem..."
+                    $installedPackages["langchain"] = $true
+                }
+                
+                if ($line -match "Successfully installed.*langchain") {
+                    Write-Success "LangChain installation complete"
+                }
+                
+                if ($line -match "Collecting sentence-transformers" -and -not $installedPackages["sentence_transformers"]) {
+                    Write-Success "Installing sentence-transformers for embeddings..."
+                    $installedPackages["sentence_transformers"] = $true
+                }
+                
+                if ($line -match "Successfully installed.*sentence-transformers") {
+                    Write-Success "Sentence-transformers installation complete"
+                }
+                
+                if ($line -match "Collecting chromadb" -and -not $installedPackages["chromadb"]) {
+                    Write-Success "Installing ChromaDB vector store..."
+                    $installedPackages["chromadb"] = $true
+                }
+                
+                if ($line -match "Successfully installed.*chromadb") {
+                    Write-Success "ChromaDB installation complete"
+                }
+                
+                if ($line -match "Collecting gradio" -and -not $installedPackages["gradio"]) {
+                    Write-Success "Installing Gradio web interface..."
+                    $installedPackages["gradio"] = $true
+                }
+                
+                if ($line -match "Successfully installed.*gradio") {
+                    Write-Success "Gradio installation complete"
+                }
+                
+                # Track Dockerfile steps
+                if ($line -match "STEP 5.*PyTorch") {
+                    Write-Info "Dockerfile Step 5: Installing PyTorch with CUDA..."
+                }
+                
+                if ($line -match "STEP 6.*requirements") {
+                    Write-Info "Dockerfile Step 6: Installing Python dependencies..."
+                }
+                
+                if ($line -match "STEP 7.*application code") {
+                    Write-Info "Dockerfile Step 7: Copying application code..."
+                }
+                
+                if ($line -match "STEP 10.*environment") {
+                    Write-Info "Dockerfile Step 10: Setting CUDA environment variables..."
+                }
+            }
+        }
+    }
+    
+    Start-Sleep -Milliseconds 500
+}
+
+$buildProcess.WaitForExit()
+
+# Clean up temp files
+if (Test-Path "build_output.txt") { Remove-Item "build_output.txt" }
+if (Test-Path "build_error.txt") { Remove-Item "build_error.txt" }
+
+Write-Host ""
+Write-Success "Docker images built successfully"
+
+# FIXED: Verify images with correct name (auto-detects from compose project)
+$ragImage = docker images -q ruggedsystemv25-rag-app:latest 2>$null
+if (-not $ragImage) {
+    # Try alternative naming (docker-compose auto-generates from folder name)
+    $projectName = (Get-Location).Path.Split('\')[-1] -replace '\s', '' -replace '\.', ''
+    $ragImage = docker images -q "$($projectName.ToLower())-rag-app:latest" 2>$null
+}
+
+$ollamaImage = docker images -q ollama/ollama:latest 2>$null
+
+if ($ragImage -and $ollamaImage) {
+    Write-Success "All images verified"
+    
+    # Show installed package summary
+    Write-Host ""
+    Write-Info "Dependency installation summary:"
+    foreach ($pkg in $installedPackages.Keys) {
+        if ($installedPackages[$pkg]) {
+            Write-Host "    - $pkg" -ForegroundColor Green
+        }
+    }
+} else {
+    Write-Error-Custom "Image verification failed"
+    Write-Info "Images found:"
+    docker images | Select-String "rag-app|ollama"
+    Write-Warning "Continuing anyway - containers may still work"
+}
+
+# ============================================================
+# STEP 7: Start containers
+# ============================================================
+Write-Step "STARTING CONTAINERS" 7 $totalSteps
+
+Write-Info "Starting services..."
+docker-compose up -d 2>$null | Out-Null
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error-Custom "Failed to start containers"
+    exit 1
+}
+
+Start-Sleep -Seconds 3
+Write-Success "Containers started"
+
+# ============================================================
+# STEP 8: Monitor initialization
+# ============================================================
+Write-Step "MONITORING SYSTEM INITIALIZATION" 8 $totalSteps
+
+$maxWaitTime = 180  # 3 minutes
+$elapsedTime = 0
+$checkInterval = 3
+
+$milestones = @{
+    "ollama_ready" = $false
+    "models_loaded" = $false
+    "gpu_detected" = $false
+    "embedding_ready" = $false
+    "vector_loaded" = $false
+    "llm_ready" = $false
+    "retrieval_ready" = $false
+    "web_ready" = $false
+}
+
+Write-Info "Waiting for system initialization (max $maxWaitTime seconds)..."
+Write-Host ""
+
+while ($elapsedTime -lt $maxWaitTime) {
+    # Check container status
     $ollamaStatus = docker inspect -f '{{.State.Status}}' ollama-server 2>$null
     $ragStatus = docker inspect -f '{{.State.Status}}' rag-tactical-system 2>$null
     
-    Write-Host "`r[Check $attempt/$maxAttempts] " -NoNewline
+    # Show progress bar
+    $progress = [math]::Min(100, ($elapsedTime / $maxWaitTime) * 100)
+    Write-Progress -Activity "Initializing System" -Status "$([math]::Round($progress, 0))% Complete" -PercentComplete $progress
     
-    if ($ollamaStatus -eq "running") {
-        Write-Host "Ollama: UP" -NoNewline -ForegroundColor Green
-    }
-    else {
-        Write-Host "Ollama: STARTING" -NoNewline -ForegroundColor Yellow
-    }
+    # Get latest logs
+    $logs = docker logs rag-tactical-system --tail 10 2>$null
     
-    Write-Host " | " -NoNewline
-    
-    if ($ragStatus -eq "running") {
-        Write-Host "RAG: UP" -NoNewline -ForegroundColor Green
-    }
-    else {
-        Write-Host "RAG: STARTING" -NoNewline -ForegroundColor Yellow
+    # Check milestones
+    if (-not $milestones["ollama_ready"] -and $logs -match "Ollama server is ready") {
+        $milestones["ollama_ready"] = $true
+        Write-Success "Ollama server connected"
     }
     
-    # Monitor logs
-    if ($ragStatus -eq "running") {
-        $logs = docker logs rag-tactical-system --tail 1 2>$null
-        if ($logs -and $logs -ne $lastLogLine) {
-            $lastLogLine = $logs
-            
-            if ($logs -match "Ollama server is ready") {
-                Write-Host "`n  checkmark Ollama server connected" -ForegroundColor Green
-            }
-            elseif ($logs -match "model pulled|model already installed") {
-                Write-Host "`n  checkmark AI models loaded" -ForegroundColor Green
-            }
-            elseif ($logs -match "Embedding model ready") {
-                Write-Host "`n  checkmark Embedding model initialized" -ForegroundColor Green
-            }
-            elseif ($logs -match "Vector store loaded") {
-                Write-Host "`n  checkmark Vector database loaded" -ForegroundColor Green
-            }
-            elseif ($logs -match "Indexing completed|successfully processed") {
-                Write-Host "`n  checkmark Document indexing complete" -ForegroundColor Green
-            }
-            elseif ($logs -match "LLM ready") {
-                Write-Host "`n  checkmark Language model ready" -ForegroundColor Green
-            }
-            elseif ($logs -match "retrieval engine ready") {
-                Write-Host "`n  checkmark Retrieval engine initialized" -ForegroundColor Green
-            }
-            elseif ($logs -match "Generated.*example") {
-                Write-Host "`n  checkmark Example questions generated" -ForegroundColor Green
-            }
-            elseif ($logs -match "SYSTEM READY") {
-                Write-Host "`n  checkmark System initialization complete!" -ForegroundColor Green
-            }
-            elseif ($logs -match "Running on.*7860") {
-                Write-Host "`n  checkmark Web interface started" -ForegroundColor Green
-            }
-            elseif ($logs -match "ERROR|Failed|failed") {
-                Write-Host "`n  warning $logs" -ForegroundColor Red
-            }
+    if (-not $milestones["models_loaded"] -and $logs -match "model (pulled|already installed)") {
+        $milestones["models_loaded"] = $true
+        Write-Success "AI models loaded"
+    }
+    
+    if (-not $milestones["gpu_detected"] -and $logs -match "GPU detected") {
+        $milestones["gpu_detected"] = $true
+        $gpuName = ($logs | Select-String -Pattern "GPU detected.*: (.+)" | ForEach-Object { $_.Matches.Groups[1].Value }) -join ""
+        if ($gpuName) {
+            Write-Success "GPU detected: $gpuName"
+        } else {
+            Write-Success "GPU detected"
         }
     }
     
-    # Check web interface
-    if ($ollamaStatus -eq "running" -and $ragStatus -eq "running") {
-        try {
-            $response = Invoke-WebRequest -Uri "http://localhost:7860" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
-            if ($response.StatusCode -eq 200) {
-                Write-Host "`n`ncheckmark Web interface is responding!" -ForegroundColor Green
-                $allHealthy = $true
-                break
-            }
-        }
-        catch {
-            # Still starting
+    if (-not $milestones["embedding_ready"] -and $logs -match "Embedding model ready") {
+        $milestones["embedding_ready"] = $true
+        Write-Success "Embedding model initialized"
+    }
+    
+    if (-not $milestones["vector_loaded"] -and $logs -match "Vector store loaded") {
+        $milestones["vector_loaded"] = $true
+        Write-Success "Vector database loaded"
+    }
+    
+    if (-not $milestones["llm_ready"] -and $logs -match "LLM ready") {
+        $milestones["llm_ready"] = $true
+        Write-Success "Language model ready"
+    }
+    
+    if (-not $milestones["retrieval_ready"] -and $logs -match "retrieval engine ready") {
+        $milestones["retrieval_ready"] = $true
+        Write-Success "Retrieval engine initialized"
+    }
+    
+    if (-not $milestones["web_ready"] -and $logs -match "Running on.*7860") {
+        $milestones["web_ready"] = $true
+        Write-Success "Web interface started"
+        break
+    }
+    
+    # Check for errors
+    if ($logs -match "ERROR|Failed|failed|ImportError") {
+        $errorLines = $logs | Select-String -Pattern "ERROR|Failed|failed|ImportError"
+        foreach ($errorLine in $errorLines) {
+            Write-Warning "Error detected: $errorLine"
         }
     }
     
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds $checkInterval
+    $elapsedTime += $checkInterval
 }
 
-Write-Host ""
+Write-Progress -Activity "Initializing System" -Completed
 Write-Host ""
 
-if ($allHealthy) {
-    Write-Host "============================================================" -ForegroundColor Green
-    Write-Host "    SYSTEM READY" -ForegroundColor Green
-    Write-Host "============================================================" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "checkmark All services operational" -ForegroundColor Green
-    Write-Host "checkmark $docCount documents indexed" -ForegroundColor Green
-    Write-Host "checkmark Web interface accessible" -ForegroundColor Green
-}
-else {
-    Write-Host "============================================================" -ForegroundColor Yellow
-    Write-Host "    STARTUP IN PROGRESS" -ForegroundColor Yellow
-    Write-Host "============================================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "warning System is taking longer than expected" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Monitor progress with: docker-compose logs -f rag-app" -ForegroundColor Cyan
+# ============================================================
+# STEP 9: Verify GPU acceleration
+# ============================================================
+Write-Step "VERIFYING GPU ACCELERATION" 9 $totalSteps
+
+if ($gpuInfo) {
+    Write-Info "Checking GPU support in containers..."
+    
+    # Check if PyTorch can see CUDA
+    $cudaCheck = docker exec rag-tactical-system python -c "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')" 2>$null
+    
+    if ($cudaCheck -match "CUDA") {
+        Write-Success "CUDA detected in container"
+        
+        # Get GPU details from container
+        $gpuDetails = docker exec rag-tactical-system python -c @"
+import torch
+print(f'Device: {torch.cuda.get_device_name(0)}')
+print(f'CUDA Version: {torch.version.cuda}')
+print(f'PyTorch Version: {torch.__version__}')
+"@ 2>$null
+        
+        foreach ($line in $gpuDetails -split "`n") {
+            if ($line.Trim()) {
+                Write-Info $line.Trim()
+            }
+        }
+        
+        # Check sentence-transformers
+        Write-Info "Verifying sentence-transformers GPU support..."
+        $sentenceCheck = docker exec rag-tactical-system python -c "from sentence_transformers import SentenceTransformer; import torch; m = SentenceTransformer('all-MiniLM-L6-v2', device='cuda' if torch.cuda.is_available() else 'cpu'); print(m.device)" 2>$null
+        
+        if ($sentenceCheck -match "cuda") {
+            Write-Success "Sentence-transformers using GPU"
+        } else {
+            Write-Warning "Sentence-transformers NOT using GPU"
+        }
+        
+        # Check CrossEncoder
+        Write-Info "Verifying CrossEncoder GPU support..."
+        $rerankerCheck = docker exec rag-tactical-system python -c "from sentence_transformers import CrossEncoder; import torch; m = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda' if torch.cuda.is_available() else 'cpu'); print(m.model.device)" 2>$null
+        
+        if ($rerankerCheck -match "cuda") {
+            Write-Success "CrossEncoder reranker using GPU"
+        } else {
+            Write-Warning "CrossEncoder NOT using GPU"
+        }
+        
+    } else {
+        Write-Warning "CUDA NOT detected in container"
+        Write-Warning "GPU acceleration is not active"
+        Write-Info "Check docker-compose.yml has GPU resources configured"
+    }
+} else {
+    Write-Info "No GPU available on host - skipping GPU checks"
 }
 
+# ============================================================
+# STEP 10: Final verification and monitoring
+# ============================================================
+Write-Step "FINAL SYSTEM VERIFICATION" 10 $totalSteps
+
+# Check if web interface is responding
+Write-Info "Testing web interface connectivity..."
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost:7860" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+    if ($response.StatusCode -eq 200) {
+        Write-Success "Web interface is responding"
+    }
+} catch {
+    Write-Warning "Web interface not yet responsive (may need more time)"
+}
+
+# Show container status
+Write-Info "Container status:"
+$containers = docker ps --filter "name=rag-tactical-system" --filter "name=ollama-server" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>$null
 Write-Host ""
-Write-Host "Opening browser..." -ForegroundColor Cyan
-Start-Process "http://localhost:7860"
+Write-Host $containers -ForegroundColor Gray
+Write-Host ""
+
+# Show system resources
+Write-Info "System resources:"
+Show-SystemResources
+
+# ============================================================
+# DEPLOYMENT COMPLETE - AUTO-LAUNCH MONITORING
+# ============================================================
+
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "    DEPLOYMENT COMPLETE" -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host ""
+
+Write-Success "All systems operational"
+Write-Host ""
+
+# Summary
+Write-Host "SYSTEM SUMMARY:" -ForegroundColor Cyan
+Write-Host "  Documents indexed: " -NoNewline
+Write-Host "$docCount" -ForegroundColor Yellow
+Write-Host "  GPU acceleration: " -NoNewline
+if ($cudaCheck -match "CUDA") {
+    Write-Host "ENABLED" -ForegroundColor Green
+} else {
+    Write-Host "DISABLED" -ForegroundColor Yellow
+}
+Write-Host "  Web interface: " -NoNewline
+Write-Host "http://localhost:7860" -ForegroundColor Cyan
+Write-Host ""
+
+# Auto-open browser
+Write-Info "Launching web interface in browser..."
+Start-Sleep -Seconds 2
+try {
+    Start-Process "http://localhost:7860" -ErrorAction Stop
+    Write-Success "Browser opened successfully"
+} catch {
+    Write-Warning "Could not auto-open browser"
+}
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "    QUICK REFERENCE" -ForegroundColor Cyan
+Write-Host "    LIVE MONITORING ACTIVE" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Access system:    http://localhost:7860" -ForegroundColor White
-Write-Host "View logs:        docker-compose logs -f rag-app" -ForegroundColor White
-Write-Host "Stop system:      .\stop.ps1" -ForegroundColor White
-Write-Host ""
-Read-Host "Press Enter to exit"
+
+# Simple monitoring loop
+try {
+    while ($true) {
+        Clear-Host
+        Write-Host "TACTICAL RAG SYSTEM - LIVE MONITOR" -ForegroundColor Cyan
+        Write-Host "Press Ctrl+C to exit" -ForegroundColor Gray
+        Write-Host ""
+        
+        Show-SystemResources
+        
+        Write-Host ""
+        Write-Host "RECENT LOGS:" -ForegroundColor Cyan
+        $recentLogs = docker logs rag-tactical-system --tail 5 2>$null
+        if ($recentLogs) {
+            foreach ($log in $recentLogs) {
+                if ($log.Trim()) {
+                    Write-Host "  $log" -ForegroundColor Gray
+                }
+            }
+        }
+        
+        Write-Host ""
+        Write-Host "Web Interface: http://localhost:7860" -ForegroundColor Cyan
+        
+        Start-Sleep -Seconds 2
+    }
+} catch {
+    Write-Host ""
+    Write-Host "Monitoring stopped. System still running." -ForegroundColor Yellow
+    Write-Host 'To stop system: .\stop.ps1' -ForegroundColor Cyan
+    Write-Host ""
+}

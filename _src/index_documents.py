@@ -53,7 +53,7 @@ class DocumentIndexer:
             return False
         
         # Stage 1: Process documents
-        logger.info("\n📂 STAGE 1: DOCUMENT PROCESSING")
+        logger.info("\nðŸ“‚ STAGE 1: DOCUMENT PROCESSING")
         logger.info("-" * 70)
         
         result = await self.processor.process_documents(self.config.documents_dir)
@@ -63,15 +63,15 @@ class DocumentIndexer:
             return False
         
         if result.errors:
-            logger.warning(f"⚠ {len(result.errors)} files failed to process:")
+            logger.warning(f"âš  {len(result.errors)} files failed to process:")
             for error in result.errors[:5]:  # Show first 5 errors
                 logger.warning(f"  - {error}")
         
-        logger.info(f"\n✓ Successfully processed {len(result.documents)} chunks")
+        logger.info(f"\nâœ“ Successfully processed {len(result.documents)} chunks")
         logger.info(f"  Average chunk size: {result.metadata['avg_chunk_size']:.0f} characters")
         
         # Stage 2: Generate embeddings
-        logger.info("\n🔢 STAGE 2: EMBEDDING GENERATION")
+        logger.info("\nðŸ”¢ STAGE 2: EMBEDDING GENERATION")
         logger.info("-" * 70)
         
         embeddings = OllamaEmbeddings(
@@ -82,10 +82,10 @@ class DocumentIndexer:
         # Test embedding
         logger.info("Testing embedding model...")
         test_embed = await asyncio.to_thread(embeddings.embed_query, "test")
-        logger.info(f"✓ Embedding dimension: {len(test_embed)}")
+        logger.info(f"âœ“ Embedding dimension: {len(test_embed)}")
         
         # Stage 3: Create vector store
-        logger.info("\n💾 STAGE 3: VECTOR DATABASE CREATION")
+        logger.info("\nðŸ’¾ STAGE 3: VECTOR DATABASE CREATION")
         logger.info("-" * 70)
         
         success = await self._create_vector_store(result.documents, embeddings)
@@ -95,22 +95,22 @@ class DocumentIndexer:
             return False
         
         # Stage 4: Save metadata for BM25
-        logger.info("\n📊 STAGE 4: METADATA PERSISTENCE")
+        logger.info("\nðŸ“Š STAGE 4: METADATA PERSISTENCE")
         logger.info("-" * 70)
         
         await self._save_metadata(result.documents)
         
         # Final summary
         logger.info("\n" + "=" * 70)
-        logger.info("✅ INDEXING COMPLETE")
+        logger.info("âœ… INDEXING COMPLETE")
         logger.info("=" * 70)
-        logger.info(f"\n📈 STATISTICS:")
+        logger.info(f"\nðŸ“ˆ STATISTICS:")
         logger.info(f"  Total files processed: {result.metadata['successful']}")
         logger.info(f"  Total chunks indexed: {len(result.documents)}")
         logger.info(f"  Database location: {self.config.vector_db_dir}")
         logger.info(f"  Chunking strategy: {self.config.chunking.strategy}")
         logger.info(f"  Embedding model: {self.config.embedding.model_name}")
-        logger.info("\n🚀 Ready to start querying!")
+        logger.info("\nðŸš€ Ready to start querying!")
         logger.info("=" * 70)
         
         return True
@@ -197,7 +197,7 @@ class DocumentIndexer:
             with open(metadata_file, 'w') as f:
                 json.dump(data, f)
             
-            logger.info(f"✓ Metadata saved: {metadata_file}")
+            logger.info(f"âœ“ Metadata saved: {metadata_file}")
             
         except Exception as e:
             logger.error(f"Metadata save failed: {e}")
@@ -216,11 +216,11 @@ async def main():
     success = await indexer.index_documents()
     
     if success:
-        logger.info("\n✅ Indexing completed successfully!")
+        logger.info("\nâœ… Indexing completed successfully!")
         logger.info("You can now run app_v2.py to start the RAG system.")
         sys.exit(0)
     else:
-        logger.error("\n❌ Indexing failed!")
+        logger.error("\nâŒ Indexing failed!")
         sys.exit(1)
 
 
@@ -228,8 +228,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.warning("\n\n⚠ Indexing cancelled by user")
+        logger.warning("\n\nâš  Indexing cancelled by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"\n\n❌ Fatal error: {e}", exc_info=True)
+        logger.error(f"\n\nâŒ Fatal error: {e}", exc_info=True)
         sys.exit(1)

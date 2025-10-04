@@ -33,22 +33,22 @@ class RAGEvaluator:
         logger.info("=" * 70)
         
         # Test 1: Retrieval Quality
-        logger.info("\n📊 TEST 1: RETRIEVAL QUALITY")
+        logger.info("\nðŸ“Š TEST 1: RETRIEVAL QUALITY")
         logger.info("-" * 70)
         retrieval_results = await self.evaluate_retrieval()
         
         # Test 2: Answer Quality
-        logger.info("\n📝 TEST 2: ANSWER QUALITY")
+        logger.info("\nðŸ“ TEST 2: ANSWER QUALITY")
         logger.info("-" * 70)
         answer_results = await self.evaluate_answers()
         
         # Test 3: Performance
-        logger.info("\n⚡ TEST 3: PERFORMANCE METRICS")
+        logger.info("\nâš¡ TEST 3: PERFORMANCE METRICS")
         logger.info("-" * 70)
         performance_results = await self.evaluate_performance()
         
         # Test 4: Stress Test
-        logger.info("\n🔥 TEST 4: STRESS TEST")
+        logger.info("\nðŸ”¥ TEST 4: STRESS TEST")
         logger.info("-" * 70)
         stress_results = await self.stress_test()
         
@@ -302,7 +302,7 @@ class RAGEvaluator:
         
         # Retrieval Quality
         if self.results["retrieval"].get("avg_precision"):
-            logger.info("\n📊 RETRIEVAL QUALITY:")
+            logger.info("\nðŸ“Š RETRIEVAL QUALITY:")
             logger.info(f"  Precision: {self.results['retrieval']['avg_precision']:.1%}")
             logger.info(f"  Recall: {self.results['retrieval']['avg_recall']:.1%}")
             logger.info(f"  F1 Score: {self.results['retrieval']['f1_score']:.1%}")
@@ -310,18 +310,18 @@ class RAGEvaluator:
         
         # Answer Quality
         if self.results["answers"]:
-            logger.info("\n📝 ANSWER QUALITY:")
+            logger.info("\nðŸ“ ANSWER QUALITY:")
             logger.info(f"  Avg answer length: {self.results['answers']['avg_length']:.0f} chars")
             logger.info(f"  Avg sources cited: {self.results['answers']['avg_sources_cited']:.1f}")
         
         # Performance
-        logger.info("\n⚡ PERFORMANCE:")
+        logger.info("\nâš¡ PERFORMANCE:")
         logger.info(f"  Avg latency: {self.results['performance']['avg_latency']:.3f}s")
         logger.info(f"  P95 latency: {self.results['performance']['p95_latency']:.3f}s")
         logger.info(f"  Cache hit rate: {self.results['performance']['cache_effectiveness']:.1%}")
         
         # Stress Test
-        logger.info("\n🔥 STRESS TEST:")
+        logger.info("\nðŸ”¥ STRESS TEST:")
         logger.info(f"  Throughput: {self.results['stress_test']['throughput_qps']:.1f} QPS")
         logger.info(f"  Success rate: {self.results['stress_test']['successes']/self.results['stress_test']['total_queries']:.1%}")
         
@@ -347,7 +347,7 @@ class RAGEvaluator:
         with open(output_file, 'w') as f:
             json.dump(self.results, f, indent=2)
         
-        logger.info(f"\n✓ Full results saved to {output_file}")
+        logger.info(f"\nâœ“ Full results saved to {output_file}")
     
     def _calculate_grade(self) -> Dict:
         """Calculate overall system grade"""

@@ -7,7 +7,8 @@ vector_db_dir: "./chroma_db"
 cache_dir: "./.cache"
 
 # Service Endpoints
-ollama_host: "http://localhost:11434"
+# FIXED: Use Docker service name instead of localhost
+ollama_host: "http://ollama:11434"
 api_host: "0.0.0.0"
 api_port: 7860
 
@@ -107,8 +108,3 @@ performance:
 enable_evaluation: true
 enable_feedback_loop: true
 enable_auto_optimization: false
-
-# Custom Prompts (optional)
-# prompts:
-#   system_prompt: "You are a helpful assistant..."
-#   answer_prompt: "Based on the context..."

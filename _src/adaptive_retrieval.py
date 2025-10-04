@@ -1,5 +1,6 @@
 """
 Adaptive Retrieval Engine - Production Version with Dynamic Settings
+WITH CUDA GPU ACCELERATION
 """
 
 import asyncio
@@ -7,14 +8,19 @@ from typing import List, Dict, Tuple
 from dataclasses import dataclass
 import logging
 import numpy as np
+import torch  # ADDED: For CUDA detection
+import os  # ADDED: For environment variable setting
 
 from langchain.docstore.document import Document
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
-from langchain_ollama import OllamaLLM
+from langchain_community.llms import Ollama as OllamaLLM
 from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger(__name__)
+
+# CRITICAL: Force rerankers to use CUDA (prevents silent CPU fallback)
+os.environ['DEVICE_TYPE'] = 'cuda'
 
 
 @dataclass
@@ -43,12 +49,27 @@ class AdaptiveRetriever:
         self.config = config
         self.runtime_settings = runtime_settings  # Reference to shared settings dict
         
-        # Load reranker
+        # Load reranker with CUDA support
         self.reranker = None
         if config.retrieval.rerank_k > 0:
             try:
-                self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-                logger.info("Reranker loaded")
+                # CRITICAL: Detect CUDA and set device explicitly
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                logger.info(f"Initializing reranker on device: {device}")
+                
+                self.reranker = CrossEncoder(
+                    'cross-encoder/ms-marco-MiniLM-L-6-v2',
+                    device=device  # ADDED: Explicit device setting
+                )
+                
+                # ADDED: Verify device and log GPU info
+                logger.info(f"Reranker device: {self.reranker.model.device}")
+                if torch.cuda.is_available():
+                    gpu_name = torch.cuda.get_device_name(0)
+                    logger.info(f"Reranker using GPU: {gpu_name}")
+                else:
+                    logger.warning("Reranker using CPU - performance may be slower")
+                    
             except Exception as e:
                 logger.warning(f"Failed to load reranker: {e}")
     
@@ -239,15 +260,19 @@ class AdaptiveRetriever:
             reverse=True
         )[:15]
         
-        # Rerank if available
+        # Rerank if available (will use GPU if configured)
         if self.reranker and len(sorted_docs) > 3:
             documents = [item['doc'] for item in sorted_docs]
             pairs = [[query, doc.page_content[:512]] for doc in documents]
             
             try:
+                # ADDED: Reranking with GPU acceleration
+                logger.info(f"Reranking {len(pairs)} documents on {self.reranker.model.device}")
+                
                 rerank_scores = await asyncio.to_thread(
                     self.reranker.predict,
-                    pairs
+                    pairs,
+                    batch_size=16  # ADDED: Batch processing for GPU efficiency
                 )
                 
                 # Normalize rerank scores to 0-1
@@ -336,15 +361,19 @@ class AdaptiveRetriever:
             reverse=True
         )[:15]
         
-        # Rerank
+        # Rerank (will use GPU if configured)
         if self.reranker and sorted_docs:
             documents = [item['doc'] for item in sorted_docs]
             pairs = [[query, doc.page_content[:512]] for doc in documents]
             
             try:
+                # ADDED: Reranking with GPU acceleration
+                logger.info(f"Reranking {len(pairs)} documents on {self.reranker.model.device}")
+                
                 rerank_scores = await asyncio.to_thread(
                     self.reranker.predict,
-                    pairs
+                    pairs,
+                    batch_size=16  # ADDED: Batch processing for GPU efficiency
                 )
                 
                 # Normalize

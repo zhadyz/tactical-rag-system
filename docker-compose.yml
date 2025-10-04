@@ -12,7 +12,7 @@ services:
     
     # Container name (easier to reference)
     container_name: ollama-server
-    runtime: nvidia
+
     
     # Port mapping: host_port:container_port
     # Ollama runs on port 11434
@@ -49,7 +49,7 @@ services:
       - rag-network
   
   # ============================================================
-  # SERVICE 2: RAG Application
+  # SERVICE 2: RAG Application (NOW WITH GPU SUPPORT)
   # ============================================================
   rag-app:
     # Build from the Dockerfile in current directory
@@ -58,6 +58,9 @@ services:
       dockerfile: _config/Dockerfile
     
     container_name: rag-tactical-system
+    
+    # CRITICAL: Enable NVIDIA runtime for GPU access
+    runtime: nvidia
     
     # Port mapping for Gradio interface
     ports:
@@ -69,12 +72,27 @@ services:
       - ./documents:/app/documents
       # Map local database to container
       - ./chroma_db:/app/chroma_db
+      # Map logs for persistence
+      - ./logs:/app/logs
     
     # Environment variables
     environment:
       # Tell the app where to find Ollama
       - OLLAMA_HOST=http://ollama:11434
       - PYTHONUNBUFFERED=1
+      # CUDA/GPU environment variables
+      - CUDA_VISIBLE_DEVICES=0
+      - DEVICE_TYPE=cuda
+      - USE_CUDA_DOCKER=true
+    
+    # GPU resource allocation
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     
     # depends_on: Start ollama before rag-app
     depends_on:
