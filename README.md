@@ -20,7 +20,7 @@ Enterprise RAG document intelligence system with adaptive retrieval strategies.
 | Stop System | `stop.bat` |
 
 ---
-
+```
 ## Project Structure
 tactical-rag-system/
 │
@@ -35,6 +35,8 @@ tactical-rag-system/
 ├── _deployment/            # Docker images
 ├── _config/                # System configuration
 └── _src/                   # Application source code
+
+```
 
 ---
 
