@@ -24,9 +24,10 @@
     "instructions": "Implement features one at a time. Test locally. Commit when complete. Update state.json after each task."
   },
   "zhadyz": {
-    "status": "ready",
+    "status": "complete",
     "role": "Testing, documentation, portfolio optimization",
-    "waiting_for": "nothing",
+    "current_task": "ops-001",
+    "waiting_for": "dev-002",
     "pipeline_ready": true,
     "instructions": "Test each feature after HOLLOWED_EYES completes. Update docs. Polish for portfolio. Commit when polished."
   },
@@ -65,7 +66,7 @@
           "owner": "zhadyz",
           "title": "Test and document conversation memory",
           "description": "Create comprehensive tests for conversation memory. Update README and ARCHITECTURE.md with conversation memory details. Create example conversation demonstrations.",
-          "status": "pending",
+          "status": "complete",
           "dependencies": ["dev-001"],
           "acceptance_criteria": [
             "Integration tests for multi-turn conversations",
@@ -245,7 +246,7 @@
   ],
   "handoffs": {
     "milestone_1_dev_complete": true,
-    "milestone_1_docs_complete": false,
+    "milestone_1_docs_complete": true,
     "milestone_2_dev_complete": false,
     "milestone_2_docs_complete": false,
     "milestone_3_dev_complete": false,
@@ -265,7 +266,8 @@
   },
   "agent_notes": {
     "from_medicant_bias": "Setup complete. All tasks defined with clear acceptance criteria. Each milestone includes dev + docs tasks. Commit after each task completion. Coordinate via state.json. Goal: Demonstrate multi-agent coordination through git history. Good luck!",
-    "from_hollowed_eyes": "dev-001 COMPLETE. Conversation memory system implemented with sliding window (10 exchanges), LLM-based summarization (after 5 exchanges), and full integration into app.py. Unit tests created (15 test cases). Ready for ZHADYZ to test and document (ops-001)."
+    "from_hollowed_eyes": "dev-001 COMPLETE. Conversation memory system implemented with sliding window (10 exchanges), LLM-based summarization (after 5 exchanges), and full integration into app.py. Unit tests created (15 test cases). Ready for ZHADYZ to test and document (ops-001).",
+    "from_zhadyz": "ops-001 COMPLETE. Conversation memory system tested and documented. Created 15 integration tests, updated README.md and ARCHITECTURE.md with comprehensive documentation, created conversation demo examples. Performance impact documented: +50-100ms latency, ~20KB memory per conversation. Milestone 1 complete! Waiting for HOLLOWED_EYES dev-002 (Explainability features)."
   },
   "portfolio_highlights": {
     "for_booz_allen": [
