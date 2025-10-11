@@ -23,6 +23,7 @@ from adaptive_retrieval import AdaptiveRetriever, AdaptiveAnswerGenerator, Retri
 from document_processor import DocumentProcessor, ProcessingResult
 from cache_and_monitoring import CacheManager, PerformanceMonitor, Timer
 from example_generator import ExampleGenerator
+from conversation_memory import ConversationMemory
 
 os.makedirs('logs', exist_ok=True)
 os.makedirs('.cache', exist_ok=True)
@@ -61,14 +62,11 @@ class EnterpriseRAGSystem:
         self.llm: Optional[OllamaLLM] = None
         self.cache_manager: Optional[CacheManager] = None
         self.monitor: Optional[PerformanceMonitor] = None
+        self.conversation_memory: Optional[ConversationMemory] = None
         self.initialized = False
-        
+
         # Runtime settings that can be changed via UI
         self.runtime_settings = self.DEFAULT_SETTINGS.copy()
-        
-        # Context tracking for follow-up questions
-        self.last_query = None
-        self.last_context = None
         
         # Example questions (will be generated dynamically)
         self.example_questions = [
@@ -200,11 +198,20 @@ class EnterpriseRAGSystem:
                 logger.info("  Enabling GPU acceleration for Ollama")
             
             self.llm = OllamaLLM(**llm_params)
-            
+
             await asyncio.to_thread(self.llm.invoke, "Hello")
             logger.info("✓ LLM ready")
-            
-            logger.info("\n6. Initializing adaptive retrieval engine...")
+
+            logger.info("\n6. Initializing conversation memory...")
+            self.conversation_memory = ConversationMemory(
+                llm=self.llm,
+                max_exchanges=10,
+                summarization_threshold=5,
+                enable_summarization=True
+            )
+            logger.info("✓ Conversation memory ready")
+
+            logger.info("\n7. Initializing adaptive retrieval engine...")
             self.retrieval_engine = AdaptiveRetriever(
                 vectorstore=self.vectorstore,
                 bm25_retriever=self.bm25_retriever,
@@ -214,8 +221,8 @@ class EnterpriseRAGSystem:
             )
             self.answer_generator = AdaptiveAnswerGenerator(self.llm)
             logger.info("✓ Adaptive retrieval engine ready")
-            
-            logger.info("\n7. Generating example questions...")
+
+            logger.info("\n8. Generating example questions...")
             example_gen = ExampleGenerator(self.config, self.llm)
             self.example_questions = await example_gen.generate_examples(
                 self.vectorstore,
@@ -241,39 +248,39 @@ class EnterpriseRAGSystem:
             return False, f"Initialization failed: {str(e)}"
     
     async def query(self, question: str, use_context: bool = True) -> Dict:
-        """Process query with optional context from previous interaction"""
-        
+        """Process query with multi-turn conversation memory"""
+
         if not self.initialized:
             return {
                 "answer": "System not initialized",
                 "sources": [],
                 "error": True
             }
-        
+
         start_time = asyncio.get_event_loop().time()
-        
+
         try:
-            # Enhance query with context for follow-ups
+            # Use conversation memory for context-aware query enhancement
             enhanced_query = question
-            if use_context and self.last_query and self.last_context:
-                # Check if this looks like a follow-up
-                follow_up_indicators = ["those", "these", "that", "this", "what about", "how about"]
-                if any(ind in question.lower() for ind in follow_up_indicators):
-                    enhanced_query = f"Previous question: {self.last_query}\n\nFollow-up: {question}"
-            
+            if use_context and self.conversation_memory:
+                enhanced_query, _ = self.conversation_memory.get_relevant_context_for_query(
+                    question,
+                    max_exchanges=3
+                )
+
             cached_result = self.cache_manager.get_query_result(
                 enhanced_query,
                 {"model": self.config.llm.model_name}
             )
-            
+
             if cached_result:
                 logger.info(f"Cache hit for query: {question[:50]}...")
                 self.monitor.metrics.increment_counter("cache_hits")
                 return cached_result
-            
+
             with Timer(self.monitor.metrics, "retrieval_total"):
                 retrieval_result = await self.retrieval_engine.retrieve(enhanced_query)
-            
+
             if not retrieval_result.documents:
                 return {
                     "answer": "I couldn't find any relevant documents to answer your question.",
@@ -283,13 +290,13 @@ class EnterpriseRAGSystem:
                         "query_type": retrieval_result.query_type
                     }
                 }
-            
+
             with Timer(self.monitor.metrics, "generation"):
                 answer = await self.answer_generator.generate(
                     question,
                     retrieval_result
                 )
-            
+
             result = {
                 "answer": answer,
                 "sources": self._format_sources(retrieval_result),
@@ -299,28 +306,34 @@ class EnterpriseRAGSystem:
                 },
                 "error": False
             }
-            
-            # Store context for follow-ups
-            self.last_query = question
-            self.last_context = retrieval_result.documents
-            
+
+            # Store exchange in conversation memory
+            if self.conversation_memory:
+                self.conversation_memory.add(
+                    query=question,
+                    response=answer,
+                    retrieved_docs=retrieval_result.documents,
+                    query_type=retrieval_result.query_type,
+                    strategy_used=retrieval_result.strategy_used
+                )
+
             self.cache_manager.put_query_result(
                 enhanced_query,
                 {"model": self.config.llm.model_name},
                 result
             )
-            
+
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=True)
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Query processing failed: {e}", exc_info=True)
-            
+
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=False)
-            
+
             return {
                 "answer": f"An error occurred: {str(e)}",
                 "sources": [],
@@ -391,7 +404,12 @@ class EnterpriseRAGSystem:
         if self.gpu_available:
             gpu_status = f"Enabled ({torch.cuda.get_device_name(0)})"
             gpu_memory = torch.cuda.memory_allocated(0) / 1024**2  # MB
-        
+
+        # Conversation memory stats
+        conversation_stats = {}
+        if self.conversation_memory:
+            conversation_stats = self.conversation_memory.get_stats()
+
         return {
             "status": "operational",
             "documents": doc_count,
@@ -400,6 +418,7 @@ class EnterpriseRAGSystem:
             "queries_processed": stats['metrics']['query_count'],
             "avg_latency": stats['metrics']['avg_latency'],
             "cache_hit_rate": stats['cache'].get('query_cache', {}).get('hit_rate', 0),
+            "conversation": conversation_stats,
             "config": {
                 "model": self.config.llm.model_name,
                 "embedding": self.config.embedding.model_name,
@@ -407,6 +426,12 @@ class EnterpriseRAGSystem:
                 "gpu_memory_mb": int(gpu_memory)  # ADDED
             }
         }
+
+    def clear_conversation(self) -> None:
+        """Clear conversation memory"""
+        if self.conversation_memory:
+            self.conversation_memory.clear()
+            logger.info("Conversation memory cleared")
 
 
 rag_system: Optional[EnterpriseRAGSystem] = None
@@ -804,9 +829,16 @@ def create_interface():
             return history, ""
         
         # Chat interactions
+        def clear_chat():
+            """Clear chat and conversation memory"""
+            global rag_system
+            if rag_system:
+                rag_system.clear_conversation()
+            return None
+
         msg.submit(respond, [msg, chatbot], [chatbot, msg])
         submit.click(respond, [msg, chatbot], [chatbot, msg])
-        clear.click(lambda: None, None, chatbot, queue=False)
+        clear.click(clear_chat, None, chatbot, queue=False)
         
         # Settings interactions
         all_sliders = [
