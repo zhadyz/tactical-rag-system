@@ -1,3 +1,7 @@
+# AI Agent Internal Files (not for public repo)
+.ai/
+messages/
+
 # Data and documents
 documents/
 chroma_db/
