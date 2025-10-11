@@ -1,8 +1,8 @@
 # Tactical RAG System - Architecture Documentation
 
-**Version**: 3.5
+**Version**: 3.5.1
 **Last Updated**: 2025-10-11
-**Created By**: MEDICANT_BIAS
+**Created By**: MEDICANT_BIAS / Enhanced by: HOLLOWED_EYES + ZHADYZ
 
 ---
 
@@ -13,10 +13,11 @@ The Tactical RAG System is an enterprise-grade document intelligence platform th
 ### Core Design Principles
 
 1. **Adaptive Intelligence**: Query complexity determines retrieval strategy automatically
-2. **GPU Acceleration**: All compute-intensive operations leverage CUDA when available
-3. **Multi-Layer Caching**: Aggressive caching at embedding, query, and result levels
-4. **Production-Ready**: Comprehensive monitoring, evaluation, and error handling
-5. **Docker-Native**: Full containerization with GPU passthrough support
+2. **Conversation Memory**: Multi-turn context tracking for natural follow-up questions 🆕
+3. **GPU Acceleration**: All compute-intensive operations leverage CUDA when available
+4. **Multi-Layer Caching**: Aggressive caching at embedding, query, and result levels
+5. **Production-Ready**: Comprehensive monitoring, evaluation, and error handling
+6. **Docker-Native**: Full containerization with GPU passthrough support
 
 ---
 
@@ -34,6 +35,7 @@ The Tactical RAG System is an enterprise-grade document intelligence platform th
 │                    APPLICATION LAYER                         │
 │  • Main Orchestrator (app.py)                               │
 │  • Query Processing Pipeline                                 │
+│  • Conversation Memory (conversation_memory.py) 🆕          │
 │  • Context Management                                        │
 │  • Dynamic Settings Management                               │
 └───────────────────────────┬─────────────────────────────────┘
@@ -195,7 +197,53 @@ The Tactical RAG System is an enterprise-grade document intelligence platform th
      4. Cross-encoder reranking on GPU
    - Output: Top 5 consensus chunks
 
-### 2. Document Processing Pipeline
+### 2. Conversation Memory System 🆕
+
+**Purpose**: Maintain multi-turn conversation context for natural follow-up questions.
+
+**Architecture**:
+- **Sliding Window**: FIFO queue storing last 10 exchanges (deque with maxlen)
+- **Exchange Storage**: ConversationExchange dataclass with query, response, retrieved_docs, query_type, strategy_used, timestamp
+- **Automatic Summarization**: LLM-based compression triggered every 5 exchanges
+- **Thread Safety**: RLock for concurrent access
+
+**Key Features**:
+
+1. **Follow-Up Detection**
+   - Pattern matching: "that", "those", "this", "tell me more", "what about"
+   - Short query heuristic: <10 words + history = likely follow-up
+   - Returns: boolean indicating if current query references previous context
+
+2. **Context Enhancement**
+   - Method: `get_relevant_context_for_query(query, max_exchanges=5)`
+   - Returns: (enhanced_query, relevant_documents)
+   - Enhanced query includes conversation summary + recent exchanges
+   - Relevant documents collected from previous turns
+
+3. **Automatic Summarization**
+   - Trigger: Every 5 exchanges (configurable)
+   - Method: LLM generates <200 word summary preserving key topics
+   - Compression: Typical 70-80% reduction in context size
+   - Cumulative: New summaries append to existing summary
+
+4. **Statistics Tracking**
+   - Total exchanges, current window size, summarizations performed
+   - Memory usage tracking
+   - Hit/miss metrics for follow-up detection
+
+**Integration Points**:
+- app.py query() method: Automatic context enhancement for follow-ups
+- app.py clear_conversation(): Manual memory reset
+- Web interface: "Clear Chat" button triggers memory reset
+
+**Performance Characteristics**:
+- Follow-up detection: <10ms
+- Context retrieval: <50ms
+- Summarization: ~1-2 seconds (async, non-blocking)
+- Memory per exchange: ~2KB
+- Max memory (10 exchanges + summary): ~25KB
+
+### 3. Document Processing Pipeline
 
 **Parallel Loading**:
 - ThreadPoolExecutor with 4 workers

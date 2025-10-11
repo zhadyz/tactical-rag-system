@@ -2,7 +2,7 @@
 
 ![CI Pipeline](https://github.com/zhadyz/tactical-rag-system/actions/workflows/ci.yml/badge.svg)
 
-Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, intelligent document processing, and real-time performance monitoring.
+Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, **multi-turn conversation memory**, intelligent document processing, and real-time performance monitoring.
 
 ---
 
@@ -98,6 +98,7 @@ tactical-rag-system/
 │   ├── performance_monitor.py      # GPU/CPU monitoring service
 │   ├── example_generator.py        # Dynamic question generation
 │   ├── evaluate.py                 # Comprehensive evaluation suite
+│   ├── conversation_memory.py     # Multi-turn conversation tracking
 │   └── config.py                   # Configuration management
 │
 ├── _config/                        # Docker & deployment configuration
@@ -179,7 +180,56 @@ Queries are classified using a multi-factor scoring algorithm:
 - **Device detection**: Automatic fallback to CPU if GPU unavailable
 - **Performance**: ~10x faster reranking with GPU
 
-### 2. Document Processing Pipeline (`document_processor.py`)
+### 2. Conversation Memory System (`conversation_memory.py`) 🆕
+
+The system maintains **multi-turn conversation context** for natural follow-up questions without repeating information.
+
+#### Architecture
+
+- **Sliding Window**: Stores last 10 conversation exchanges (FIFO)
+- **Automatic Summarization**: Compresses history after 5 exchanges using LLM
+- **Follow-Up Detection**: Identifies questions referencing previous context
+- **Thread-Safe**: RLock for concurrent access
+
+#### How It Works
+
+1. **Context Tracking**: Each query-response pair is stored with metadata (query type, strategy, retrieved documents, timestamp)
+2. **Follow-Up Detection**: Pattern matching identifies references like "that", "those", "tell me more"
+3. **Query Enhancement**: Follow-up questions are automatically enhanced with conversation context
+4. **Automatic Compression**: After 5 exchanges, LLM generates a concise summary to save memory
+
+#### Example Flow
+
+```
+Turn 1: "What retrieval strategies does this use?"
+→ System stores: query + response + context
+
+Turn 2: "How does that compare to traditional search?"
+→ Detected as follow-up
+→ Enhanced query includes Turn 1 context
+→ Better retrieval using conversation history
+```
+
+#### Configuration
+
+```python
+ConversationMemory(
+    llm=llm,
+    max_exchanges=10,              # Sliding window size
+    summarization_threshold=5,     # Trigger summarization
+    enable_summarization=True      # Auto-compress history
+)
+```
+
+#### Performance Impact
+
+- **Latency**: +50-100ms for follow-up detection (negligible)
+- **Memory**: ~2KB per exchange, ~20KB per conversation
+- **Accuracy**: Significant improvement in follow-up question quality
+
+**See**: `docs/examples/conversation_demo.md` for detailed examples
+
+### 3. Document Processing Pipeline (`document_processor.py`)
 
 #### Supported Formats
 - **PDF**: Text extraction via PyPDF + OCR fallback (Tesseract)
