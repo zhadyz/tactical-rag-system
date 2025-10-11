@@ -1,0 +1,281 @@
+{
+  "version": 1,
+  "project": {
+    "name": "tactical-rag-improvements",
+    "description": "Multi-agent iterative improvement of Tactical RAG system",
+    "phase": "development",
+    "created_by": "medicant_bias",
+    "setup_complete": true,
+    "baseline_commit": "c8dfad8",
+    "portfolio_purpose": "Demonstrate multi-agent coordination (LangGraph/CrewAI patterns) for Booz Allen"
+  },
+  "medicant_bias": {
+    "status": "terminated",
+    "setup_date": "2025-10-11",
+    "architecture_complete": true,
+    "tasks_defined": true,
+    "termination_message": "Setup complete. HOLLOWED_EYES and ZHADYZ: coordinate directly via state.json. Each milestone = git commit."
+  },
+  "hollowed_eyes": {
+    "status": "ready",
+    "role": "Implementation engineer - build features incrementally",
+    "current_task": "",
+    "ready_for_review": false,
+    "instructions": "Implement features one at a time. Test locally. Commit when complete. Update state.json after each task."
+  },
+  "zhadyz": {
+    "status": "ready",
+    "role": "Testing, documentation, portfolio optimization",
+    "waiting_for": "nothing",
+    "pipeline_ready": true,
+    "instructions": "Test each feature after HOLLOWED_EYES completes. Update docs. Polish for portfolio. Commit when polished."
+  },
+  "tasks": [
+    {
+      "id": "milestone-1",
+      "title": "🧠 Milestone 1: Conversation Memory Enhancement",
+      "description": "Implement multi-turn conversation memory for context-aware follow-up questions",
+      "owner": "both",
+      "priority": 1,
+      "status": "pending",
+      "estimated_commits": 2,
+      "subtasks": [
+        {
+          "id": "dev-001",
+          "owner": "hollowed_eyes",
+          "title": "Implement conversation memory system",
+          "description": "Create ConversationMemory class with sliding window and compression. Support multi-turn context tracking beyond single query/response. Store last 10 exchanges with automatic summarization after 5. Integrate with EnterpriseRAGSystem.",
+          "status": "pending",
+          "dependencies": [],
+          "acceptance_criteria": [
+            "ConversationMemory class in new file conversation_memory.py",
+            "Sliding window (10 exchanges)",
+            "Automatic summarization after 5 exchanges using LLM",
+            "Integration with app.py query() method",
+            "Unit tests for memory operations",
+            "Local testing confirms follow-up questions work across 5+ turns"
+          ],
+          "files_to_modify": [
+            "_src/conversation_memory.py (NEW)",
+            "_src/app.py (update query method)"
+          ]
+        },
+        {
+          "id": "ops-001",
+          "owner": "zhadyz",
+          "title": "Test and document conversation memory",
+          "description": "Create comprehensive tests for conversation memory. Update README and ARCHITECTURE.md with conversation memory details. Create example conversation demonstrations.",
+          "status": "pending",
+          "dependencies": ["dev-001"],
+          "acceptance_criteria": [
+            "Integration tests for multi-turn conversations",
+            "README.md updated with conversation memory feature",
+            "ARCHITECTURE.md includes conversation memory component",
+            "Example conversation transcript in docs/examples/",
+            "Performance impact documented (latency, memory usage)"
+          ],
+          "files_to_modify": [
+            "README.md (add conversation memory section)",
+            "docs/ARCHITECTURE.md (add component documentation)",
+            "docs/examples/conversation_demo.md (NEW)"
+          ]
+        }
+      ],
+      "commit_plan": [
+        "feat: HOLLOWED_EYES - Implement conversation memory system",
+        "docs: ZHADYZ - Document conversation memory feature"
+      ]
+    },
+    {
+      "id": "milestone-2",
+      "title": "🔍 Milestone 2: Explainability Features",
+      "description": "Add transparency to query classification and retrieval decisions",
+      "owner": "both",
+      "priority": 2,
+      "status": "pending",
+      "estimated_commits": 2,
+      "subtasks": [
+        {
+          "id": "dev-002",
+          "owner": "hollowed_eyes",
+          "title": "Implement explainability system",
+          "description": "Add QueryExplanation class to capture decision reasoning. Extend query classifier to return explanation (why simple/moderate/complex). Add retrieval strategy explanation (why this approach). Extend RetrievalResult to include explanation. Update web UI to display explanations.",
+          "status": "pending",
+          "dependencies": ["dev-001", "ops-001"],
+          "acceptance_criteria": [
+            "QueryExplanation dataclass with reasoning fields",
+            "Query classification returns explanation (scoring breakdown)",
+            "Retrieval strategy selection explained (threshold values, scores)",
+            "RetrievalResult includes explanation object",
+            "Web UI displays explanations in collapsible section",
+            "Example: 'Query classified as COMPLEX (score: 4) because: length=12 words (+2), question type=why (+2), has 'and' operator (+1). Using Advanced strategy.'",
+            "Local testing confirms explanations are clear and accurate"
+          ],
+          "files_to_modify": [
+            "_src/explainability.py (NEW)",
+            "_src/adaptive_retrieval.py (add explanation generation)",
+            "_src/web_interface.py (display explanations)",
+            "_src/app.py (pass through explanations)"
+          ]
+        },
+        {
+          "id": "ops-002",
+          "owner": "zhadyz",
+          "title": "Test and document explainability",
+          "description": "Create tests for explanation generation. Document explainability features. Create examples of explanations for different query types. Update portfolio README to highlight transparency.",
+          "status": "pending",
+          "dependencies": ["dev-002"],
+          "acceptance_criteria": [
+            "Unit tests for explanation generation",
+            "Integration tests showing explanations in responses",
+            "README.md highlights explainability as key feature",
+            "ARCHITECTURE.md documents explainability component",
+            "docs/examples/ includes explanation examples for each query type",
+            "Portfolio emphasizes 'Transparent AI decisions' for Booz Allen"
+          ],
+          "files_to_modify": [
+            "README.md (add explainability feature)",
+            "docs/ARCHITECTURE.md (add explainability section)",
+            "docs/examples/explanations.md (NEW)"
+          ]
+        }
+      ],
+      "commit_plan": [
+        "feat: HOLLOWED_EYES - Add query and retrieval explainability",
+        "docs: ZHADYZ - Document explainability features"
+      ]
+    },
+    {
+      "id": "milestone-3",
+      "title": "⭐ Milestone 3: User Feedback System",
+      "description": "Implement feedback collection and learning loop",
+      "owner": "both",
+      "priority": 3,
+      "status": "pending",
+      "estimated_commits": 2,
+      "subtasks": [
+        {
+          "id": "dev-003",
+          "owner": "hollowed_eyes",
+          "title": "Implement feedback system",
+          "description": "Create FeedbackManager to collect and store user ratings (thumbs up/down). Add feedback database (JSON for simplicity). Implement feedback tracking per query/answer. Add feedback UI elements (buttons in web interface). Create feedback analysis module to identify problematic queries.",
+          "status": "pending",
+          "dependencies": ["dev-002", "ops-002"],
+          "acceptance_criteria": [
+            "FeedbackManager class in feedback_system.py",
+            "JSON-based feedback storage (feedback.json)",
+            "Feedback tracking: query, answer, rating, timestamp",
+            "Thumbs up/down buttons in web UI after each answer",
+            "Feedback analysis: identify low-rated queries, common failure patterns",
+            "Admin endpoint to view feedback stats",
+            "Local testing confirms feedback is captured and stored"
+          ],
+          "files_to_modify": [
+            "_src/feedback_system.py (NEW)",
+            "_src/web_interface.py (add feedback buttons)",
+            "_src/app.py (integrate FeedbackManager)",
+            "feedback.json (NEW - auto-generated)"
+          ]
+        },
+        {
+          "id": "ops-003",
+          "owner": "zhadyz",
+          "title": "Test and document feedback system",
+          "description": "Create comprehensive tests for feedback system. Document feedback feature and analysis capabilities. Create feedback analysis report example. Update portfolio to highlight 'Learning from user feedback' capability.",
+          "status": "pending",
+          "dependencies": ["dev-003"],
+          "acceptance_criteria": [
+            "Integration tests for feedback collection",
+            "Unit tests for feedback analysis",
+            "README.md documents feedback system",
+            "ARCHITECTURE.md includes feedback component",
+            "docs/examples/ includes feedback analysis report",
+            "Portfolio emphasizes 'Continuous learning' and 'User-driven improvement'"
+          ],
+          "files_to_modify": [
+            "README.md (add feedback system section)",
+            "docs/ARCHITECTURE.md (add feedback component)",
+            "docs/examples/feedback_analysis.md (NEW)"
+          ]
+        }
+      ],
+      "commit_plan": [
+        "feat: HOLLOWED_EYES - Implement user feedback collection",
+        "docs: ZHADYZ - Document feedback system and analysis"
+      ]
+    },
+    {
+      "id": "milestone-4",
+      "title": "📊 Milestone 4: Portfolio Finalization",
+      "description": "Polish documentation, create architecture diagrams, prepare portfolio showcase",
+      "owner": "zhadyz",
+      "priority": 4,
+      "status": "pending",
+      "estimated_commits": 1,
+      "subtasks": [
+        {
+          "id": "ops-004",
+          "owner": "zhadyz",
+          "title": "Final portfolio polish",
+          "description": "Create architecture diagrams (Mermaid/ASCII art). Write comprehensive deployment guide. Create demo script. Update README with all improvements. Create IMPROVEMENTS.md documenting evolution. Polish GitHub repo for maximum impact. Add badges, shields, and portfolio highlights.",
+          "status": "pending",
+          "dependencies": ["dev-003", "ops-003"],
+          "acceptance_criteria": [
+            "Architecture diagrams (visual representations)",
+            "IMPROVEMENTS.md documents all changes with git hashes",
+            "README.md showcases all features prominently",
+            "docs/DEPLOYMENT_GUIDE.md comprehensive",
+            "docs/DEMO_SCRIPT.md for live presentations",
+            "GitHub repo has badges (CI status, tech stack, etc.)",
+            "Portfolio-ready: impresses technical recruiters at Booz Allen"
+          ],
+          "files_to_modify": [
+            "README.md (final polish)",
+            "IMPROVEMENTS.md (NEW)",
+            "docs/DEPLOYMENT_GUIDE.md (NEW or enhance)",
+            "docs/DEMO_SCRIPT.md (NEW)",
+            "docs/diagrams/ (NEW - architecture visuals)"
+          ]
+        }
+      ],
+      "commit_plan": [
+        "docs: ZHADYZ - Final portfolio polish and documentation"
+      ]
+    }
+  ],
+  "handoffs": {
+    "milestone_1_dev_complete": false,
+    "milestone_1_docs_complete": false,
+    "milestone_2_dev_complete": false,
+    "milestone_2_docs_complete": false,
+    "milestone_3_dev_complete": false,
+    "milestone_3_docs_complete": false,
+    "portfolio_final_complete": false
+  },
+  "git_strategy": {
+    "commit_after_each_task": true,
+    "commit_message_format": "type: AGENT_NAME - Description\n\nDetails...\n\n🤖 Multi-agent collaboration: Claude Code",
+    "branch_strategy": "main (direct commits, showcase progression)",
+    "showcase_goal": "Git history demonstrates iterative multi-agent development for portfolio"
+  },
+  "coordination_notes": {
+    "workflow": "HOLLOWED_EYES implements → commits → updates state → ZHADYZ tests/documents → commits → updates state → repeat",
+    "communication": "Update state.json after each task completion. Leave notes in 'agent_notes' section if needed.",
+    "blockers": "If blocked, update status to 'blocked' and add blocker description in task."
+  },
+  "agent_notes": {
+    "from_medicant_bias": "Setup complete. All tasks defined with clear acceptance criteria. Each milestone includes dev + docs tasks. Commit after each task completion. Coordinate via state.json. Goal: Demonstrate multi-agent coordination through git history. Good luck!"
+  },
+  "portfolio_highlights": {
+    "for_booz_allen": [
+      "Multi-agent coordination (MEDICANT_BIAS → HOLLOWED_EYES + ZHADYZ)",
+      "Iterative development visible in git history",
+      "LangGraph/CrewAI patterns without heavy dependencies",
+      "Production-ready RAG system with enterprise features",
+      "Transparent AI (explainability)",
+      "Continuous improvement (feedback loops)",
+      "GPU acceleration (performance optimization)",
+      "Comprehensive testing and documentation"
+    ]
+  }
+}
