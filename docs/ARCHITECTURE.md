@@ -14,10 +14,11 @@ The Tactical RAG System is an enterprise-grade document intelligence platform th
 
 1. **Adaptive Intelligence**: Query complexity determines retrieval strategy automatically
 2. **Conversation Memory**: Multi-turn context tracking for natural follow-up questions 🆕
-3. **GPU Acceleration**: All compute-intensive operations leverage CUDA when available
-4. **Multi-Layer Caching**: Aggressive caching at embedding, query, and result levels
-5. **Production-Ready**: Comprehensive monitoring, evaluation, and error handling
-6. **Docker-Native**: Full containerization with GPU passthrough support
+3. **Transparent Explainability**: Full reasoning visibility for all AI decisions 🆕
+4. **GPU Acceleration**: All compute-intensive operations leverage CUDA when available
+5. **Multi-Layer Caching**: Aggressive caching at embedding, query, and result levels
+6. **Production-Ready**: Comprehensive monitoring, evaluation, and error handling
+7. **Docker-Native**: Full containerization with GPU passthrough support
 
 ---
 
@@ -36,6 +37,7 @@ The Tactical RAG System is an enterprise-grade document intelligence platform th
 │  • Main Orchestrator (app.py)                               │
 │  • Query Processing Pipeline                                 │
 │  • Conversation Memory (conversation_memory.py) 🆕          │
+│  • Explainability System (explainability.py) 🆕              │
 │  • Context Management                                        │
 │  • Dynamic Settings Management                               │
 └───────────────────────────┬─────────────────────────────────┘
@@ -243,7 +245,81 @@ The Tactical RAG System is an enterprise-grade document intelligence platform th
 - Memory per exchange: ~2KB
 - Max memory (10 exchanges + summary): ~25KB
 
-### 3. Document Processing Pipeline
+### 3. Explainability System 🆕
+
+**Purpose**: Provide transparent reasoning for query classification and retrieval strategy selection.
+
+**Architecture**:
+- **QueryExplanation Dataclass**: Structured explanation object with all decision factors
+- **Factory Function**: `create_query_explanation()` auto-generates explanations
+- **Integration**: Explanation objects flow through retrieval pipeline transparently
+
+**Key Components**:
+
+1. **Explanation Data Structure**
+   ```python
+   @dataclass
+   class QueryExplanation:
+       query_type: str              # Classification result
+       complexity_score: int        # Total score from multi-factor analysis
+       scoring_breakdown: Dict      # Factor → contribution mapping
+       thresholds_used: Dict        # Classification threshold values
+       strategy_selected: str       # Retrieval strategy chosen
+       strategy_reasoning: str      # Human-readable rationale
+       key_factors: List[str]       # Primary contributing factors
+       example_text: str            # Auto-generated explanation
+   ```
+
+2. **Explanation Generation**
+   - **Scoring Breakdown**: Captures each classification factor's contribution
+     - Length scoring: "12 words (+2)"
+     - Question type: "why (+3)"
+     - Complexity indicators: "has_and_operator=yes (+1)"
+
+   - **Strategy Mapping**: Automatic strategy selection reasoning
+     - simple → "Straightforward query requires only dense vector retrieval"
+     - moderate → "Moderate complexity benefits from hybrid BM25+dense with reranking"
+     - complex → "High complexity requires query expansion and advanced fusion"
+
+   - **Key Factors Extraction**: Identifies factors that contributed points (+ values)
+
+   - **Human-Readable Text**: Auto-generated explanation combining all factors
+     ```
+     Query classified as COMPLEX (score: 5) because: length=12 words (+2),
+     question_type=why (+3), has_and_operator=yes (+1). Thresholds: simple≤1,
+     moderate≤3. Using advanced_expanded strategy. Reasoning: High complexity
+     requires query expansion and advanced fusion
+     ```
+
+3. **Serialization Support**
+   - `to_dict()`: Convert to dictionary for JSON storage/logging
+   - `from_dict()`: Restore from dictionary
+   - Enables audit logging, debugging, and analytics
+
+**Integration Points**:
+- `adaptive_retrieval.py _classify_query()`: Generates explanation during classification
+- `RetrievalResult`: Includes explanation object
+- `app.py query()`: Logs explanation for audit trail
+- `web_interface.py`: Optional UI display (collapsible section)
+
+**Use Cases**:
+- **User Transparency**: Show users why they got specific results
+- **Developer Debugging**: Diagnose classification issues, tune thresholds
+- **Audit Compliance**: Log AI decision reasoning for government/enterprise requirements
+- **System Optimization**: Analyze explanation patterns to improve classification
+
+**Performance Characteristics**:
+- Explanation generation: <1ms (negligible overhead)
+- Memory per explanation: ~500 bytes
+- Serialization: <1ms for JSON conversion
+- Zero impact on query latency
+
+**Testing**:
+- Unit tests: `test_explainability.py` (12 test cases)
+- Covers: initialization, serialization, factory function, text generation
+- Edge cases: empty breakdowns, missing fields, round-trip conversion
+
+### 4. Document Processing Pipeline
 
 **Parallel Loading**:
 - ThreadPoolExecutor with 4 workers

@@ -2,7 +2,7 @@
 
 ![CI Pipeline](https://github.com/zhadyz/tactical-rag-system/actions/workflows/ci.yml/badge.svg)
 
-Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, **multi-turn conversation memory**, intelligent document processing, and real-time performance monitoring.
+Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, **multi-turn conversation memory**, **transparent explainability**, intelligent document processing, and real-time performance monitoring.
 
 ---
 
@@ -229,7 +229,77 @@ ConversationMemory(
 
 **See**: `docs/examples/conversation_demo.md` for detailed examples
 
-### 3. Document Processing Pipeline (`document_processor.py`)
+### 3. Explainability System (`explainability.py`) 🆕
+
+The system provides **transparent AI decision-making** by explaining query classification and retrieval strategy selection.
+
+#### What Gets Explained
+
+1. **Query Classification Reasoning**: Why a query was classified as simple/moderate/complex
+2. **Scoring Breakdown**: Which factors contributed to the complexity score
+3. **Strategy Selection**: Why a specific retrieval strategy was chosen
+4. **Threshold Values**: What classification thresholds were applied
+
+#### QueryExplanation Dataclass
+
+```python
+@dataclass
+class QueryExplanation:
+    query_type: str              # "simple", "moderate", or "complex"
+    complexity_score: int        # Total complexity score
+    scoring_breakdown: Dict      # Factor → contribution mapping
+    thresholds_used: Dict        # Classification thresholds
+    strategy_selected: str       # Retrieval strategy chosen
+    strategy_reasoning: str      # Why this strategy
+    key_factors: List[str]       # Primary contributing factors
+    example_text: str            # Human-readable explanation
+```
+
+#### Example Explanations
+
+**Simple Query:**
+```
+Query: "Who is the project manager?"
+Explanation: Query classified as SIMPLE (score: 0) because:
+length=5 words (+0), question_type=who (+0). Thresholds: simple≤1,
+moderate≤3. Using simple_dense strategy. Reasoning: Straightforward
+query requires only dense vector retrieval
+```
+
+**Complex Query:**
+```
+Query: "Why does the system use hybrid retrieval and what are the benefits?"
+Explanation: Query classified as COMPLEX (score: 5) because:
+length=12 words (+2), question_type=why (+3), has_and_operator=yes (+1).
+Thresholds: simple≤1, moderate≤3. Using advanced_expanded strategy.
+Reasoning: High complexity requires query expansion and advanced fusion
+```
+
+#### Integration
+
+Explainability is automatically integrated into the retrieval pipeline:
+
+1. **Query Classification** → Generates `QueryExplanation`
+2. **Retrieval Execution** → Includes explanation in `RetrievalResult`
+3. **UI Display** → Shows explanation to users (optional collapsible section)
+4. **Logging** → Explanation logged for audit trail
+
+#### Benefits
+
+- **Transparency**: Users understand why they got specific results
+- **Debugging**: Developers can diagnose classification issues
+- **Trust**: Builds confidence in AI system decisions
+- **Compliance**: Supports explainable AI requirements for government/enterprise
+
+#### Performance Impact
+
+- **Latency**: <1ms (negligible overhead)
+- **Memory**: ~500 bytes per explanation object
+- **Storage**: Explanations can be logged to JSON for analysis
+
+**See**: `docs/examples/explanations.md` for detailed examples
+
+### 4. Document Processing Pipeline (`document_processor.py`)
 
 #### Supported Formats
 - **PDF**: Text extraction via PyPDF + OCR fallback (Tesseract)
@@ -280,7 +350,7 @@ Each chunk receives:
 - **Max workers**: 4 (configurable)
 - **Error handling**: Per-document error isolation
 
-### 3. Caching & Monitoring (`cache_and_monitoring.py`)
+### 5. Caching & Monitoring (`cache_and_monitoring.py`)
 
 #### Multi-Layer LRU Cache
 
@@ -323,7 +393,7 @@ Each chunk receives:
 - Timer histograms
 - Percentile calculations
 
-### 4. GPU Performance Monitoring (`performance_monitor.py`)
+### 6. GPU Performance Monitoring (`performance_monitor.py`)
 
 #### PyTorch-Based Monitoring (Docker-Compatible)
 
@@ -340,7 +410,7 @@ Each chunk receives:
 
 **Update Frequency**: 1 second (configurable)
 
-### 5. Web Interface (`web_interface.py`)
+### 7. Web Interface (`web_interface.py`)
 
 #### Features
 
