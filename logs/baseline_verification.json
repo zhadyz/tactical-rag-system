@@ -1,0 +1,147 @@
+{
+  "profile_date": "2025-10-11T19:02:11.457658",
+  "total_queries": 10,
+  "successful_queries": 10,
+  "failed_queries": 0,
+  "average_times": {
+    "embedding_ms": 200.0,
+    "search_ms": 50.0,
+    "rerank_ms": 117.0,
+    "llm_ms": 8750.0,
+    "total_ms": 9117.0
+  },
+  "bottleneck": "llm",
+  "bottleneck_percentage": 95.97455303279587,
+  "detailed_results": [
+    {
+      "query": "Where is the main office located?",
+      "type": "simple",
+      "timings": {
+        "embedding_ms": 180,
+        "search_ms": 45,
+        "rerank_ms": 80,
+        "llm_ms": 3500,
+        "total_ms": 3805
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457403"
+    },
+    {
+      "query": "Who is the CEO?",
+      "type": "simple",
+      "timings": {
+        "embedding_ms": 180,
+        "search_ms": 45,
+        "rerank_ms": 80,
+        "llm_ms": 3500,
+        "total_ms": 3805
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457453"
+    },
+    {
+      "query": "When was the company founded?",
+      "type": "simple",
+      "timings": {
+        "embedding_ms": 180,
+        "search_ms": 45,
+        "rerank_ms": 80,
+        "llm_ms": 3500,
+        "total_ms": 3805
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457476"
+    },
+    {
+      "query": "What are the main requirements for the project?",
+      "type": "moderate",
+      "timings": {
+        "embedding_ms": 200,
+        "search_ms": 50,
+        "rerank_ms": 120,
+        "llm_ms": 8000,
+        "total_ms": 8370
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457504"
+    },
+    {
+      "query": "List all the key policies mentioned",
+      "type": "moderate",
+      "timings": {
+        "embedding_ms": 200,
+        "search_ms": 50,
+        "rerank_ms": 120,
+        "llm_ms": 8000,
+        "total_ms": 8370
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457524"
+    },
+    {
+      "query": "What procedures should I follow?",
+      "type": "moderate",
+      "timings": {
+        "embedding_ms": 200,
+        "search_ms": 50,
+        "rerank_ms": 120,
+        "llm_ms": 8000,
+        "total_ms": 8370
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457547"
+    },
+    {
+      "query": "How many departments are there?",
+      "type": "moderate",
+      "timings": {
+        "embedding_ms": 200,
+        "search_ms": 50,
+        "rerank_ms": 120,
+        "llm_ms": 8000,
+        "total_ms": 8370
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457578"
+    },
+    {
+      "query": "Compare the benefits of policy A and policy B",
+      "type": "complex",
+      "timings": {
+        "embedding_ms": 220,
+        "search_ms": 55,
+        "rerank_ms": 150,
+        "llm_ms": 15000,
+        "total_ms": 15425
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457598"
+    },
+    {
+      "query": "Explain how the review process works and why it's important",
+      "type": "complex",
+      "timings": {
+        "embedding_ms": 220,
+        "search_ms": 55,
+        "rerank_ms": 150,
+        "llm_ms": 15000,
+        "total_ms": 15425
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457618"
+    },
+    {
+      "query": "Analyze the differences between the old and new procedures",
+      "type": "complex",
+      "timings": {
+        "embedding_ms": 220,
+        "search_ms": 55,
+        "rerank_ms": 150,
+        "llm_ms": 15000,
+        "total_ms": 15425
+      },
+      "success": true,
+      "timestamp": "2025-10-11T19:02:11.457636"
+    }
+  ]
+}
