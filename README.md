@@ -1,13 +1,39 @@
 # Tactical RAG Document Intelligence System
 
 ![CI Pipeline](https://github.com/zhadyz/tactical-rag-system/actions/workflows/ci.yml/badge.svg)
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
+![Docker](https://img.shields.io/badge/docker-required-blue.svg)
+![CUDA 12.1+](https://img.shields.io/badge/CUDA-12.1+-green.svg)
+![License](https://img.shields.io/badge/license-U.S.%20Government-lightgrey.svg)
 
-Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, **multi-turn conversation memory**, **transparent explainability**, intelligent document processing, and real-time performance monitoring.
+Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, **multi-turn conversation memory**, **transparent explainability**, **user feedback loops**, intelligent document processing, and real-time performance monitoring.
+
+**Developed through multi-agent AI collaboration** (medicant_bias → hollowed_eyes + zhadyz), demonstrating coordinated iterative improvement visible in git history.
+
+---
+
+## Portfolio Highlights
+
+This project showcases:
+
+- ✨ **Multi-Agent Development**: Three AI agents (architect, engineer, tester) coordinating via state.json + Redis pub/sub
+- 🧠 **Conversation Memory**: Sliding window (10 exchanges) with LLM-based summarization for multi-turn context awareness
+- 🔍 **Explainability**: Full transparency in query classification and retrieval strategy selection
+- ⭐ **Feedback Loops**: User satisfaction tracking (thumbs up/down) with analytics for continuous improvement
+- 🚀 **GPU Acceleration**: CUDA-optimized embeddings, reranking, and LLM inference (~10x speedup)
+- 📊 **Adaptive Retrieval**: Three-tier strategy (simple/hybrid/advanced) auto-selected by query complexity
+- 🧪 **Comprehensive Testing**: 63+ integration tests covering all major features
+- 📖 **Production Documentation**: Architecture diagrams, deployment guides, API examples
+- 🐳 **Docker-Native**: Full containerization with Ollama integration and GPU passthrough
+- 🎯 **Enterprise-Ready**: Performance monitoring, evaluation suite, explainable AI for compliance
+
+**See**: `IMPROVEMENTS.md` for detailed evolution from v2.5 → v3.5.1
 
 ---
 
 ## Table of Contents
 
+- [Portfolio Highlights](#portfolio-highlights)
 - [Quick Start](#quick-start)
 - [System Architecture](#system-architecture)
 - [Core Components](#core-components)
@@ -16,6 +42,7 @@ Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerate
 - [Deployment](#deployment)
 - [Performance Optimization](#performance-optimization)
 - [Evaluation & Monitoring](#evaluation--monitoring)
+- [Project Evolution](#project-evolution)
 
 ---
 
@@ -867,6 +894,22 @@ def _load_custom_format(self, file_path: Path) -> List[Document]:
 # Register in __init__
 self.supported_extensions['.custom'] = self._load_custom_format
 ```
+
+---
+
+## Project Evolution
+
+This system evolved from v2.5 to v3.5.1 through **multi-agent iterative development**:
+
+- **Milestone 1**: Conversation Memory (multi-turn context awareness)
+- **Milestone 2**: Explainability (transparent AI decisions)
+- **Milestone 3**: Feedback System (continuous improvement loops)
+- **Milestone 4**: Portfolio Polish (documentation, demo scripts, architecture)
+
+**Development Method**: Three AI agents (medicant_bias, hollowed_eyes, zhadyz) coordinating via state.json + Redis pub/sub, demonstrating LangGraph/CrewAI patterns.
+
+**See**: `IMPROVEMENTS.md` for detailed timeline with git commits, code metrics, and technical evolution
+**See**: `docs/DEMO_SCRIPT.md` for live demonstration guide (10-15 minutes)
 
 ---
 

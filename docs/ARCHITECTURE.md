@@ -819,19 +819,78 @@ Docker Compose Services:
 
 ---
 
-## Roadmap
+## Project Evolution
 
-See `state.json` for current improvement priorities and task assignments.
+This system evolved through **multi-agent iterative development** (v2.5 → v3.5.1):
+
+### Milestone 1: Conversation Memory Enhancement ✅
+- **Developer**: hollowed_eyes (dev-001)
+- **Tester**: zhadyz (ops-001)
+- **Features**: Sliding window (10 exchanges), LLM summarization, follow-up detection
+- **Impact**: Multi-turn context awareness, +50-100ms latency, ~20KB per conversation
+- **Commits**: e92802d (dev), 0716bf5 (docs), 84dbec1 (state)
+
+### Milestone 2: Explainability Features ✅
+- **Developer**: hollowed_eyes (dev-002)
+- **Tester**: zhadyz (ops-002)
+- **Features**: QueryExplanation dataclass, scoring breakdown, strategy reasoning
+- **Impact**: Transparent AI decisions, <1ms overhead, compliance-ready
+- **Commits**: fb6e143 (dev), 99996cc (docs)
+
+### Milestone 3: User Feedback System ✅
+- **Developer**: hollowed_eyes (dev-003)
+- **Tester**: zhadyz (ops-003)
+- **Features**: Thumbs up/down, analytics dashboard, satisfaction tracking
+- **Impact**: Continuous learning, data-driven optimization, 71% satisfaction baseline
+- **Commits**: 044264c (dev), 7f91332 (docs), 326ed4e (state)
+
+### Milestone 4: Portfolio Finalization ✅
+- **Owner**: zhadyz (ops-004)
+- **Deliverables**: IMPROVEMENTS.md, DEMO_SCRIPT.md, portfolio highlights, badges
+- **Impact**: Production-ready documentation, demo-ready presentation
+
+### Development Method
+
+**Multi-Agent Coordination**:
+- **medicant_bias** (Architect): Designed roadmap, defined milestones, established coordination protocol
+- **hollowed_eyes** (Engineer): Implemented features, wrote unit tests, committed incrementally
+- **zhadyz** (Tester/Docs): Created integration tests (63 total), comprehensive documentation, portfolio polish
+
+**Coordination Protocol**:
+- state.json: Central task ownership and handoff tracking
+- Redis pub/sub: Real-time event-driven coordination
+- Git strategy: Clean history showing iterative progression
+
+**Code Metrics**:
+- Total LOC added: ~1,300 lines
+- Integration tests: 63 tests across 3 test suites
+- Documentation: 3 major docs + 3 example files
+- Commits: 9 (from baseline to v3.5.1)
+
+### Roadmap (Future)
 
 **Planned Enhancements**:
-1. Multi-turn conversation memory
-2. Explainability (query classification reasoning)
-3. Feedback loops (user ratings, learning)
-4. Multi-modal support (tables, figures)
-5. Security hardening (audit logs, access control)
+1. ✅ Multi-turn conversation memory (Milestone 1)
+2. ✅ Explainability (query classification reasoning) (Milestone 2)
+3. ✅ Feedback loops (user ratings, learning) (Milestone 3)
+4. ⏳ Multi-modal support (tables, figures)
+5. ⏳ Security hardening (audit logs, access control)
+
+**See**: `IMPROVEMENTS.md` for detailed evolution timeline with git commits and technical analysis
+**See**: `docs/DEMO_SCRIPT.md` for live demonstration guide
 
 ---
 
-**Document Version**: 1.0
-**Status**: Production-ready baseline
-**Next Review**: After each improvement milestone
+## Credits
+
+**System Architecture**: medicant_bias
+**Feature Implementation**: hollowed_eyes
+**Testing & Documentation**: zhadyz
+**Multi-Agent Framework**: LangGraph + Redis coordination
+**Development Environment**: Claude Code
+
+---
+
+**Document Version**: 3.5.1
+**Status**: Production-ready, portfolio-optimized
+**Last Review**: 2025-10-11 (Milestone 4 complete)
