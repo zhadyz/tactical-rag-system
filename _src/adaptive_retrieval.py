@@ -1,10 +1,11 @@
 """
 Adaptive Retrieval Engine - Production Version with Dynamic Settings
 WITH CUDA GPU ACCELERATION
+WITH EXPLAINABILITY
 """
 
 import asyncio
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import logging
 import numpy as np
@@ -17,6 +18,8 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_community.llms import Ollama as OllamaLLM
 from sentence_transformers import CrossEncoder
 
+from explainability import QueryExplanation, create_query_explanation
+
 logger = logging.getLogger(__name__)
 
 # CRITICAL: Force rerankers to use CUDA (prevents silent CPU fallback)
@@ -25,11 +28,12 @@ os.environ['DEVICE_TYPE'] = 'cuda'
 
 @dataclass
 class RetrievalResult:
-    """Retrieval result with proper scoring"""
+    """Retrieval result with proper scoring and explainability"""
     documents: List[Document]
     scores: List[float]
     strategy_used: str
     query_type: str
+    explanation: Optional[QueryExplanation] = None
 
 
 class AdaptiveRetriever:
@@ -81,93 +85,129 @@ class AdaptiveRetriever:
             return default
     
     async def retrieve(self, query: str) -> RetrievalResult:
-        """Adaptive retrieval with dynamic settings"""
-        
-        # Classify query
-        query_type = self._classify_query(query)
+        """Adaptive retrieval with dynamic settings and explainability"""
+
+        # Classify query with explanation
+        query_type, explanation = self._classify_query(query)
         logger.info(f"Query classified as: {query_type}")
-        
+        logger.info(f"Explanation: {explanation.example_text}")
+
         # Route to appropriate strategy
         if query_type == "simple":
-            return await self._simple_retrieval(query)
+            return await self._simple_retrieval(query, explanation)
         elif query_type == "moderate":
-            return await self._hybrid_retrieval(query)
+            return await self._hybrid_retrieval(query, explanation)
         else:
-            return await self._advanced_retrieval(query)
+            return await self._advanced_retrieval(query, explanation)
     
-    def _classify_query(self, query: str) -> str:
-        """Multi-factor query classification with dynamic thresholds"""
-        
+    def _classify_query(self, query: str) -> Tuple[str, QueryExplanation]:
+        """Multi-factor query classification with dynamic thresholds and explainability"""
+
         query_lower = query.lower()
         words = query.split()
         score = 0
-        
+        scoring_breakdown = {}
+
         # Factor 1: Length
+        length_score = 0
         if len(words) <= 6:
-            score += 0
+            length_score = 0
+            scoring_breakdown['length'] = f"{len(words)} words (+0)"
         elif len(words) <= 10:
-            score += 1
+            length_score = 1
+            scoring_breakdown['length'] = f"{len(words)} words (+1)"
         elif len(words) <= 15:
-            score += 2
+            length_score = 2
+            scoring_breakdown['length'] = f"{len(words)} words (+2)"
         else:
-            score += 3
-        
+            length_score = 3
+            scoring_breakdown['length'] = f"{len(words)} words (+3)"
+        score += length_score
+
         # Factor 2: Question type
         simple_starters = ["where", "who", "when", "which", "is there", "does", "can i", "do i"]
         moderate_starters = ["what", "how many", "how much", "list"]
         complex_starters = ["why", "how does", "explain", "analyze", "compare", "evaluate"]
-        
+
+        question_score = 0
+        question_type = "other"
         if any(query_lower.startswith(s) for s in simple_starters):
-            score += 0
+            question_score = 0
+            question_type = next(s for s in simple_starters if query_lower.startswith(s))
+            scoring_breakdown['question_type'] = f"{question_type} (+0)"
         elif any(query_lower.startswith(s) for s in moderate_starters):
-            score += 1
+            question_score = 1
+            question_type = next(s for s in moderate_starters if query_lower.startswith(s))
+            scoring_breakdown['question_type'] = f"{question_type} (+1)"
         elif any(query_lower.startswith(s) for s in complex_starters):
-            score += 3
-        
+            question_score = 3
+            question_type = next(s for s in complex_starters if query_lower.startswith(s))
+            scoring_breakdown['question_type'] = f"{question_type} (+3)"
+        else:
+            scoring_breakdown['question_type'] = "other (+0)"
+        score += question_score
+
         # Factor 3: Complexity indicators
         if " and " in query_lower:
             score += 1
+            scoring_breakdown['has_and_operator'] = "yes (+1)"
+
         if " or " in query_lower:
             score += 1
+            scoring_breakdown['has_or_operator'] = "yes (+1)"
+
         if "?" in query and query.count("?") > 1:
             score += 2
-        
+            scoring_breakdown['multiple_questions'] = f"{query.count('?')} questions (+2)"
+
         # Get dynamic thresholds
         simple_threshold = self._get_setting('simple_threshold', 1)
         moderate_threshold = self._get_setting('moderate_threshold', 3)
-        
+
         # Classify
         if score <= simple_threshold:
-            return "simple"
+            query_type = "simple"
         elif score <= moderate_threshold:
-            return "moderate"
+            query_type = "moderate"
         else:
-            return "complex"
+            query_type = "complex"
+
+        # Create explanation
+        explanation = create_query_explanation(
+            query=query,
+            query_type=query_type,
+            complexity_score=score,
+            scoring_breakdown=scoring_breakdown,
+            simple_threshold=simple_threshold,
+            moderate_threshold=moderate_threshold
+        )
+
+        return query_type, explanation
     
-    async def _simple_retrieval(self, query: str) -> RetrievalResult:
+    async def _simple_retrieval(self, query: str, explanation: QueryExplanation) -> RetrievalResult:
         """Simple retrieval with dynamic K"""
-        
+
         logger.info(f"SIMPLE retrieval: {query[:60]}...")
-        
+
         # Get dynamic K value
         k = self._get_setting('simple_k', 5)
-        
+
         # Get top K results
         results = await asyncio.to_thread(
             self.vectorstore.similarity_search_with_score,
             query,
             k=k
         )
-        
+
         if not results:
-            return RetrievalResult([], [], "simple_dense", "simple")
-        
+            return RetrievalResult([], [], "simple_dense", "simple", explanation)
+
         # Normalize scores properly
         distances = [dist for _, dist in results]
         min_dist = min(distances)
         max_dist = max(distances)
         dist_range = max_dist - min_dist if max_dist != min_dist else 1.0
-        
+
         # Convert to 0-1 similarity (0 = worst, 1 = best)
         normalized = []
         for doc, dist in results:
@@ -176,25 +216,26 @@ class AdaptiveRetriever:
             # Invert: lower distance = higher similarity
             similarity = 1.0 - norm_dist
             normalized.append((doc, similarity))
-        
+
         # Sort by similarity (highest first)
         normalized.sort(key=lambda x: x[1], reverse=True)
-        
+
         # Take top results (max 3 or all if fewer)
         top_n = min(3, len(normalized))
         documents = [doc for doc, _ in normalized[:top_n]]
         scores = [score for _, score in normalized[:top_n]]
-        
+
         return RetrievalResult(
             documents=documents,
             scores=scores,
             strategy_used="simple_dense",
-            query_type="simple"
+            query_type="simple",
+            explanation=explanation
         )
     
-    async def _hybrid_retrieval(self, query: str) -> RetrievalResult:
+    async def _hybrid_retrieval(self, query: str, explanation: QueryExplanation) -> RetrievalResult:
         """Hybrid retrieval with RRF fusion and dynamic settings"""
-        
+
         logger.info(f"HYBRID retrieval: {query[:60]}...")
         
         # Get dynamic K value
@@ -299,12 +340,13 @@ class AdaptiveRetriever:
                 
                 documents = [doc for doc, _ in final_scores[:5]]
                 scores = [score for _, score in final_scores[:5]]
-                
+
                 return RetrievalResult(
                     documents=documents,
                     scores=scores,
                     strategy_used="hybrid_reranked",
-                    query_type="moderate"
+                    query_type="moderate",
+                    explanation=explanation
                 )
             except Exception as e:
                 logger.warning(f"Reranking failed: {e}")
@@ -312,17 +354,18 @@ class AdaptiveRetriever:
         # Fallback without reranking
         documents = [item['doc'] for item in sorted_docs[:5]]
         scores = [item['score'] for item in sorted_docs[:5]]
-        
+
         return RetrievalResult(
             documents=documents,
             scores=scores,
             strategy_used="hybrid",
-            query_type="moderate"
+            query_type="moderate",
+            explanation=explanation
         )
     
-    async def _advanced_retrieval(self, query: str) -> RetrievalResult:
+    async def _advanced_retrieval(self, query: str, explanation: QueryExplanation) -> RetrievalResult:
         """Advanced retrieval with query expansion and dynamic settings"""
-        
+
         logger.info(f"ADVANCED retrieval: {query[:60]}...")
         
         # Get dynamic K value
@@ -400,12 +443,13 @@ class AdaptiveRetriever:
                 
                 documents = [doc for doc, _ in final_scores[:5]]
                 scores = [score for _, score in final_scores[:5]]
-                
+
                 return RetrievalResult(
                     documents=documents,
                     scores=scores,
                     strategy_used="advanced_expanded",
-                    query_type="complex"
+                    query_type="complex",
+                    explanation=explanation
                 )
             except Exception as e:
                 logger.warning(f"Reranking failed: {e}")
@@ -413,12 +457,13 @@ class AdaptiveRetriever:
         # Fallback
         documents = [item['doc'] for item in sorted_docs[:5]]
         scores = [item['count'] / len(all_queries) for item in sorted_docs[:5]]
-        
+
         return RetrievalResult(
             documents=documents,
             scores=scores,
             strategy_used="advanced_expanded",
-            query_type="complex"
+            query_type="complex",
+            explanation=explanation
         )
     
     async def _generate_variants(self, query: str) -> List[str]:

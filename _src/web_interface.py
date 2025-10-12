@@ -328,7 +328,27 @@ class RAGWebInterface:
         if result.get("metadata"):
             response += f"\n*Query Type: {result['metadata'].get('query_type', 'unknown').title()} | "
             response += f"Strategy: {result['metadata'].get('strategy_used', 'unknown')}*"
-        
+
+        # Add explanation if available
+        if result.get("explanation"):
+            explanation = result['explanation']
+            response += "\n\n---\n\n<details><summary><b>📊 Explanation</b> (click to expand)</summary>\n\n"
+            response += f"**Classification:** {explanation['query_type'].upper()} (score: {explanation['complexity_score']})\n\n"
+
+            if explanation.get('scoring_breakdown'):
+                response += "**Scoring Breakdown:**\n"
+                for factor, value in explanation['scoring_breakdown'].items():
+                    response += f"- {factor.replace('_', ' ').title()}: {value}\n"
+                response += "\n"
+
+            if explanation.get('strategy_reasoning'):
+                response += f"**Why this strategy?**\n{explanation['strategy_reasoning']}\n\n"
+
+            if explanation.get('example_text'):
+                response += f"**Summary:** {explanation['example_text']}\n"
+
+            response += "</details>"
+
         return response
     
     def _update_settings(self, simple_k, hybrid_k, advanced_k, rerank_weight, rrf_constant, simple_thresh, moderate_thresh):
