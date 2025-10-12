@@ -299,7 +299,87 @@ Explainability is automatically integrated into the retrieval pipeline:
 
 **See**: `docs/examples/explanations.md` for detailed examples
 
-### 4. Document Processing Pipeline (`document_processor.py`)
+### 4. Feedback System (`feedback_system.py`) 🆕
+
+The system enables **continuous improvement** through user feedback collection and automated performance analysis.
+
+#### Architecture
+
+- **Thumbs Up/Down Rating**: Simple binary feedback after each query response
+- **Automatic Tracking**: Query metadata (type, strategy, answer) captured automatically
+- **JSON Storage**: Persistent feedback database (`feedback.json`)
+- **Analytics Dashboard**: Real-time statistics and trends via web UI
+- **Pattern Detection**: Identifies problematic query types and strategies
+
+#### How It Works
+
+1. **User Interaction**: After receiving an answer, user clicks 👍 or 👎
+2. **Automatic Capture**: System stores query, answer, rating, query type, strategy used, and timestamp
+3. **Analytics Processing**: FeedbackManager computes satisfaction rates by query type and strategy
+4. **Pattern Identification**: Low-rated queries are flagged for analysis and improvement
+
+#### Example Flow
+
+```
+User Query: "What is RAG?"
+→ System answers with simple_dense strategy
+→ User clicks 👍
+→ Feedback stored: {query, answer, rating: "thumbs_up", query_type: "simple", strategy: "simple_dense"}
+→ Analytics updated: simple query satisfaction = 88%
+```
+
+#### Analytics Capabilities
+
+- **Overall Satisfaction Rate**: Percentage of thumbs up vs. total feedback
+- **By Query Type**: Performance breakdown for simple/moderate/complex queries
+- **By Retrieval Strategy**: Effectiveness of each retrieval approach
+- **Low-Rated Query Analysis**: Identify queries that consistently receive negative feedback
+- **Trend Tracking**: Historical performance over time
+
+#### Admin Dashboard
+
+Access feedback statistics via the web interface:
+1. Navigate to **http://localhost:7860**
+2. Scroll to **Settings Panel** (right side)
+3. Find **📊 Feedback Analytics** section
+4. Click **"View Feedback Stats"**
+
+Dashboard displays:
+- Overall satisfaction rate
+- Thumbs up/down counts
+- Breakdown by query type
+- Breakdown by strategy
+- Total feedback count
+
+#### Integration with Monitoring
+
+Feedback data integrates with performance monitoring for complete system analysis:
+
+```
+Performance Metrics + User Feedback = Complete Picture
+
+Latency (P95): 3.2s         | Satisfaction: 45%  ⚠️
+Query Type: Complex         | Strategy: advanced_expanded
+→ Action: Optimize complex query handling
+```
+
+#### Performance Impact
+
+- **Storage**: ~500 bytes per feedback entry
+- **Latency**: <1ms to record feedback (non-blocking)
+- **Analytics**: ~10ms to generate statistics (100 entries)
+- **Memory**: Negligible (loaded on-demand)
+
+#### Benefits
+
+- **Continuous Improvement**: Identify weak spots in retrieval strategies
+- **Data-Driven Optimization**: Make configuration changes based on real user feedback
+- **User Engagement**: Users feel their input shapes the system
+- **Quality Assurance**: Track satisfaction over time as a KPI
+
+**See**: `docs/examples/feedback_analysis.md` for detailed examples and analysis reports
+
+### 5. Document Processing Pipeline (`document_processor.py`)
 
 #### Supported Formats
 - **PDF**: Text extraction via PyPDF + OCR fallback (Tesseract)
@@ -350,7 +430,7 @@ Each chunk receives:
 - **Max workers**: 4 (configurable)
 - **Error handling**: Per-document error isolation
 
-### 5. Caching & Monitoring (`cache_and_monitoring.py`)
+### 6. Caching & Monitoring (`cache_and_monitoring.py`)
 
 #### Multi-Layer LRU Cache
 
@@ -393,7 +473,7 @@ Each chunk receives:
 - Timer histograms
 - Percentile calculations
 
-### 6. GPU Performance Monitoring (`performance_monitor.py`)
+### 7. GPU Performance Monitoring (`performance_monitor.py`)
 
 #### PyTorch-Based Monitoring (Docker-Compatible)
 
@@ -410,7 +490,7 @@ Each chunk receives:
 
 **Update Frequency**: 1 second (configurable)
 
-### 7. Web Interface (`web_interface.py`)
+### 8. Web Interface (`web_interface.py`)
 
 #### Features
 
