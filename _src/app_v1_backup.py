@@ -1,6 +1,6 @@
 """
-Enterprise RAG System - Redesigned Interface (v2)
-Simplified UI with Simple and Adaptive modes
+Enterprise RAG System - Main Application
+Production-ready with dynamic settings UI and GPU acceleration
 """
 
 import asyncio
@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 from datetime import datetime
 import os
-import torch
+import torch  # ADDED: For CUDA verification
 
 from langchain_chroma import Chroma
 from langchain_community.llms import Ollama as OllamaLLM
@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 
 
 class EnterpriseRAGSystem:
-    """Complete enterprise RAG system with simple and adaptive modes"""
-
-    # Default settings
+    """Complete enterprise RAG system with dynamic settings and GPU acceleration"""
+    
+    # Default settings as class constants for safety
     DEFAULT_SETTINGS = {
         'simple_k': 5,
         'hybrid_k': 20,
@@ -53,7 +53,7 @@ class EnterpriseRAGSystem:
         'moderate_threshold': 3,
         'rrf_constant': 60
     }
-
+    
     def __init__(self, config: SystemConfig):
         self.config = config
         self.vectorstore: Optional[Chroma] = None
@@ -68,63 +68,55 @@ class EnterpriseRAGSystem:
         self.feedback_manager: Optional[FeedbackManager] = None
         self.initialized = False
 
-        # Runtime settings
+        # Runtime settings that can be changed via UI
         self.runtime_settings = self.DEFAULT_SETTINGS.copy()
 
-        # Current mode: "simple" or "adaptive"
-        self.current_mode = "simple"
-
-        # Track last query for feedback
+        # Track last query/answer for feedback attribution
         self.last_query_metadata = {
             "query": "",
             "answer": "",
             "query_type": None,
             "strategy_used": None
         }
-
+        
+        # Example questions (will be generated dynamically)
         self.example_questions = [
             "What are the main requirements?",
             "Can you summarize the key policies?",
             "What procedures should I follow?",
             "What are the standards mentioned?"
         ]
-
+        
+        # ADDED: Track GPU availability
         self.gpu_available = torch.cuda.is_available()
         if self.gpu_available:
             logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
         else:
-            logger.warning("No GPU detected - will use CPU")
-
+            logger.warning("No GPU detected - will use CPU (slower performance)")
+        
         logger.info("Enterprise RAG System created")
-
-    def set_mode(self, mode: str):
-        """Set retrieval mode: 'simple' or 'adaptive'"""
-        if mode in ["simple", "adaptive"]:
-            self.current_mode = mode
-            logger.info(f"Retrieval mode set to: {mode}")
-        else:
-            logger.warning(f"Invalid mode: {mode}")
-
+    
     def update_settings(self, **kwargs):
         """Update runtime settings with validation"""
         for key, value in kwargs.items():
             if key in self.DEFAULT_SETTINGS:
                 # Validate ranges
                 if key.endswith('_k'):
-                    value = max(1, min(50, int(value)))
+                    value = max(1, min(50, int(value)))  # K between 1-50
                 elif key.endswith('_weight'):
-                    value = max(0.0, min(1.0, float(value)))
+                    value = max(0.0, min(1.0, float(value)))  # Weight 0-1
                 elif key.endswith('_threshold'):
-                    value = max(0, min(10, int(value)))
+                    value = max(0, min(10, int(value)))  # Threshold 0-10
                 elif key == 'rrf_constant':
-                    value = max(1, min(100, int(value)))
-
+                    value = max(1, min(100, int(value)))  # RRF 1-100
+                
                 self.runtime_settings[key] = value
                 logger.info(f"Setting updated: {key} = {value}")
-
+        
+        # Update retrieval engine if it exists
         if self.retrieval_engine:
             self.retrieval_engine.runtime_settings = self.runtime_settings
-
+    
     def reset_settings(self):
         """Reset to default settings"""
         self.runtime_settings = self.DEFAULT_SETTINGS.copy()
@@ -132,20 +124,26 @@ class EnterpriseRAGSystem:
             self.retrieval_engine.runtime_settings = self.runtime_settings
         logger.info("Settings reset to defaults")
         return self.runtime_settings
-
+    
     async def initialize(self) -> Tuple[bool, str]:
-        """Initialize the RAG system"""
-
+        """Initialize the RAG system with GPU acceleration"""
+        
         try:
             logger.info("=" * 60)
             logger.info("INITIALIZING ENTERPRISE RAG SYSTEM")
             logger.info("=" * 60)
-
+            
+            # ADDED: Log GPU status at initialization
             if self.gpu_available:
                 gpu_name = torch.cuda.get_device_name(0)
                 gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1024**3
-                logger.info(f"\n🎮 GPU: {gpu_name} ({gpu_mem:.1f}GB)")
-
+                logger.info(f"\n🎮 GPU Configuration:")
+                logger.info(f"  Device: {gpu_name}")
+                logger.info(f"  VRAM: {gpu_mem:.1f}GB")
+                logger.info(f"  CUDA Version: {torch.version.cuda}")
+            else:
+                logger.warning("\n⚠️  No GPU available - using CPU")
+            
             logger.info("\n1. Initializing embedding model...")
             embeddings = OllamaEmbeddings(
                 model=self.config.embedding.model_name,
@@ -156,33 +154,34 @@ class EnterpriseRAGSystem:
             logger.info(f"✓ Embedding model ready (dim: {len(test_embed)})")
 
             logger.info("\n2. Initializing infrastructure...")
+            # Create embeddings wrapper for semantic cache
             def embed_for_cache(text: str) -> List[float]:
                 return embeddings.embed_query(text)
 
             self.cache_manager = CacheManager(self.config, embeddings_func=embed_for_cache)
             self.monitor = PerformanceMonitor(self.config, self.cache_manager)
             self.profiler = PerformanceProfiler(output_dir=Path("logs"))
-
+            
             logger.info("\n3. Loading vector database...")
             if not self.config.vector_db_dir.exists():
                 return False, "Vector database not found. Please run indexing first."
-
+            
             self.vectorstore = Chroma(
                 persist_directory=str(self.config.vector_db_dir),
                 embedding_function=embeddings
             )
             logger.info("✓ Vector store loaded")
-
+            
             logger.info("\n4. Loading BM25 retriever...")
             metadata_file = self.config.vector_db_dir / "chunk_metadata.json"
-
+            
             if metadata_file.exists():
                 import json
                 with open(metadata_file, 'r') as f:
                     data = json.load(f)
                     texts = data['texts']
                     metadata = data['metadata']
-
+                
                 bm25_docs = [
                     Document(page_content=text, metadata=meta)
                     for text, meta in zip(texts, metadata)
@@ -195,8 +194,10 @@ class EnterpriseRAGSystem:
                 self.bm25_retriever = BM25Retriever.from_documents([
                     Document(page_content="dummy")
                 ])
-
+            
             logger.info("\n5. Connecting to LLM...")
+            
+            # ADDED: Configure Ollama with GPU settings
             llm_params = {
                 'model': self.config.llm.model_name,
                 'temperature': self.config.llm.temperature,
@@ -206,11 +207,14 @@ class EnterpriseRAGSystem:
                 'repeat_penalty': self.config.llm.repeat_penalty,
                 'base_url': self.config.ollama_host
             }
-
+            
+            # ADDED: Enable GPU for Ollama if available
             if self.gpu_available:
-                llm_params['num_gpu'] = 1
-
+                llm_params['num_gpu'] = 1  # Use 1 GPU
+                logger.info("  Enabling GPU acceleration for Ollama")
+            
             self.llm = OllamaLLM(**llm_params)
+
             await asyncio.to_thread(self.llm.invoke, "Hello")
             logger.info("✓ LLM ready")
 
@@ -227,7 +231,7 @@ class EnterpriseRAGSystem:
             self.feedback_manager = FeedbackManager(storage_file="feedback.json")
             logger.info("✓ Feedback system ready")
 
-            logger.info("\n8. Initializing retrieval engines...")
+            logger.info("\n8. Initializing adaptive retrieval engine...")
             self.retrieval_engine = AdaptiveRetriever(
                 vectorstore=self.vectorstore,
                 bm25_retriever=self.bm25_retriever,
@@ -236,7 +240,7 @@ class EnterpriseRAGSystem:
                 runtime_settings=self.runtime_settings
             )
             self.answer_generator = AdaptiveAnswerGenerator(self.llm)
-            logger.info("✓ Retrieval engines ready")
+            logger.info("✓ Adaptive retrieval engine ready")
 
             logger.info("\n9. Generating example questions...")
             example_gen = ExampleGenerator(self.config, self.llm)
@@ -245,25 +249,26 @@ class EnterpriseRAGSystem:
                 num_examples=4
             )
             logger.info(f"✓ Generated {len(self.example_questions)} examples")
-
+            
             self.initialized = True
-
+            
             logger.info("\n" + "=" * 60)
             logger.info("SYSTEM READY")
             logger.info("=" * 60)
-
+            
+            # ADDED: Final GPU status
             if self.gpu_available:
                 gpu_mem_used = torch.cuda.memory_allocated(0) / 1024**2
                 logger.info(f"GPU Memory in use: {gpu_mem_used:.1f}MB")
-
+            
             return True, "System initialized successfully"
-
+            
         except Exception as e:
             logger.error(f"Initialization failed: {e}", exc_info=True)
             return False, f"Initialization failed: {str(e)}"
-
+    
     async def query(self, question: str, use_context: bool = True) -> Dict:
-        """Process query with selected mode"""
+        """Process query with multi-turn conversation memory and comprehensive profiling"""
 
         if not self.initialized:
             return {
@@ -274,25 +279,28 @@ class EnterpriseRAGSystem:
 
         start_time = asyncio.get_event_loop().time()
 
+        # Start profiling
         if self.profiler:
             self.profiler.start_profile(question)
 
         try:
-            # Check cache first
+            # Check cache FIRST using original query (before conversation enhancement)
+            # This ensures semantically similar questions hit the cache regardless of conversation context
             cached_result = self.cache_manager.get_query_result(
-                question,
+                question,  # Use original question, not enhanced
                 {"model": self.config.llm.model_name}
             )
 
             if cached_result:
                 logger.info(f"Cache hit for query: {question[:50]}...")
                 self.monitor.metrics.increment_counter("cache_hits")
+                # Complete profile with cache hit
                 if self.profiler:
                     self.profiler.record_stage("cache_ms", 0)
                     self.profiler.complete_profile(success=True)
                 return cached_result
 
-            # Enhance query with conversation context
+            # Cache miss - enhance query with conversation context
             enhanced_query = question
             if use_context and self.conversation_memory:
                 enhanced_query, _ = self.conversation_memory.get_relevant_context_for_query(
@@ -300,21 +308,17 @@ class EnterpriseRAGSystem:
                     max_exchanges=3
                 )
 
-            # ROUTE BASED ON MODE
+            # Profile retrieval stage
             retrieval_timer = Timer(self.monitor.metrics, "retrieval_total")
             with retrieval_timer:
-                if self.current_mode == "simple":
-                    # Simple mode: direct dense retrieval only
-                    retrieval_result = await self._simple_retrieve(enhanced_query)
-                else:
-                    # Adaptive mode: full adaptive engine
-                    retrieval_result = await self.retrieval_engine.retrieve(enhanced_query)
+                retrieval_result = await self.retrieval_engine.retrieve(enhanced_query)
 
+            # Record retrieval timing
             if self.profiler:
                 self.profiler.record_stage("retrieval_ms", retrieval_timer.elapsed * 1000)
                 self.profiler.set_metadata(
-                    query_type=retrieval_result.query_type if hasattr(retrieval_result, 'query_type') else "simple",
-                    strategy_used=retrieval_result.strategy_used if hasattr(retrieval_result, 'strategy_used') else "simple_dense"
+                    query_type=retrieval_result.query_type,
+                    strategy_used=retrieval_result.strategy_used
                 )
 
             if not retrieval_result.documents:
@@ -324,13 +328,12 @@ class EnterpriseRAGSystem:
                     "answer": "I couldn't find any relevant documents to answer your question.",
                     "sources": [],
                     "metadata": {
-                        "strategy_used": "simple_dense" if self.current_mode == "simple" else retrieval_result.strategy_used,
-                        "query_type": "simple" if self.current_mode == "simple" else retrieval_result.query_type,
-                        "mode": self.current_mode
+                        "strategy_used": retrieval_result.strategy_used,
+                        "query_type": retrieval_result.query_type
                     }
                 }
 
-            # Generate answer
+            # Profile LLM generation stage
             generation_timer = Timer(self.monitor.metrics, "generation")
             with generation_timer:
                 answer = await self.answer_generator.generate(
@@ -338,6 +341,7 @@ class EnterpriseRAGSystem:
                     retrieval_result
                 )
 
+            # Record generation timing
             if self.profiler:
                 self.profiler.record_stage("llm_ms", generation_timer.elapsed * 1000)
 
@@ -345,42 +349,43 @@ class EnterpriseRAGSystem:
                 "answer": answer,
                 "sources": self._format_sources(retrieval_result),
                 "metadata": {
-                    "strategy_used": "simple_dense" if self.current_mode == "simple" else retrieval_result.strategy_used,
-                    "query_type": "simple" if self.current_mode == "simple" else retrieval_result.query_type,
-                    "mode": self.current_mode
+                    "strategy_used": retrieval_result.strategy_used,
+                    "query_type": retrieval_result.query_type
                 },
-                "explanation": retrieval_result.explanation.to_dict() if hasattr(retrieval_result, 'explanation') and retrieval_result.explanation else None,
+                "explanation": retrieval_result.explanation.to_dict() if retrieval_result.explanation else None,
                 "error": False
             }
 
-            # Store in conversation memory
+            # Store exchange in conversation memory
             if self.conversation_memory:
                 self.conversation_memory.add(
                     query=question,
                     response=answer,
                     retrieved_docs=retrieval_result.documents,
-                    query_type="simple" if self.current_mode == "simple" else retrieval_result.query_type,
-                    strategy_used="simple_dense" if self.current_mode == "simple" else retrieval_result.strategy_used
+                    query_type=retrieval_result.query_type,
+                    strategy_used=retrieval_result.strategy_used
                 )
 
-            # Cache result
+            # Store in cache using ORIGINAL query (not enhanced)
+            # This ensures future identical questions hit the cache
             self.cache_manager.put_query_result(
-                question,
+                question,  # Use original question, not enhanced
                 {"model": self.config.llm.model_name},
                 result
             )
 
-            # Store metadata for feedback
+            # Store metadata for feedback attribution
             self.last_query_metadata = {
                 "query": question,
                 "answer": answer,
-                "query_type": "simple" if self.current_mode == "simple" else retrieval_result.query_type,
-                "strategy_used": "simple_dense" if self.current_mode == "simple" else retrieval_result.strategy_used
+                "query_type": retrieval_result.query_type,
+                "strategy_used": retrieval_result.strategy_used
             }
 
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=True)
 
+            # Complete profiling
             if self.profiler:
                 self.profiler.complete_profile(success=True)
 
@@ -392,6 +397,7 @@ class EnterpriseRAGSystem:
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=False)
 
+            # Complete profiling with error
             if self.profiler:
                 self.profiler.complete_profile(success=False, error=str(e))
 
@@ -400,49 +406,24 @@ class EnterpriseRAGSystem:
                 "sources": [],
                 "error": True
             }
-
-    async def _simple_retrieve(self, query: str) -> RetrievalResult:
-        """Simple retrieval: direct dense vector search only"""
-
-        # Just use vectorstore similarity search
-        docs = await asyncio.to_thread(
-            self.vectorstore.similarity_search_with_score,
-            query,
-            k=self.runtime_settings['simple_k']
-        )
-
-        # Unpack documents and scores
-        documents = [doc for doc, score in docs]
-        scores = [1.0 - score for doc, score in docs]  # Convert distance to similarity
-
-        # Create simple retrieval result
-        result = RetrievalResult(
-            documents=documents,
-            scores=scores,
-            query_type="simple",
-            strategy_used="simple_dense",
-            explanation=None
-        )
-
-        return result
-
+    
     def _format_sources(self, retrieval_result: RetrievalResult) -> List[Dict]:
         """Format source information"""
-
+        
         sources = []
         seen_files = set()
-
+        
         for doc, score in zip(
             retrieval_result.documents,
             retrieval_result.scores
         ):
             file_name = doc.metadata.get('file_name', 'Unknown')
-
+            
             if file_name in seen_files:
                 continue
-
+            
             seen_files.add(file_name)
-
+            
             sources.append({
                 "file_name": file_name,
                 "file_type": doc.metadata.get('file_type', 'unknown'),
@@ -453,43 +434,45 @@ class EnterpriseRAGSystem:
                     if k in ['page_number', 'chunk_index']
                 }
             })
-
+        
         return sources
-
+    
     def get_system_status(self) -> Dict:
-        """Get current system status"""
-
+        """Get current system status including GPU info"""
+        
         if not self.initialized:
             return {
                 "status": "offline",
                 "message": "System not initialized"
             }
-
+        
         stats = self.monitor.get_system_stats()
-
+        
         doc_count = 0
         chunk_count = 0
-
+        
         if self.config.documents_dir.exists():
             supported_ext = ['.txt', '.pdf', '.docx', '.doc', '.md']
             doc_count = sum(
                 1 for f in self.config.documents_dir.rglob('*')
                 if f.suffix.lower() in supported_ext
             )
-
+        
         metadata_file = self.config.vector_db_dir / "chunk_metadata.json"
         if metadata_file.exists():
             import json
             with open(metadata_file, 'r') as f:
                 data = json.load(f)
                 chunk_count = len(data.get('texts', []))
-
+        
+        # ADDED: GPU status
         gpu_status = "Disabled"
         gpu_memory = 0
         if self.gpu_available:
             gpu_status = f"Enabled ({torch.cuda.get_device_name(0)})"
-            gpu_memory = torch.cuda.memory_allocated(0) / 1024**2
+            gpu_memory = torch.cuda.memory_allocated(0) / 1024**2  # MB
 
+        # Conversation memory stats
         conversation_stats = {}
         if self.conversation_memory:
             conversation_stats = self.conversation_memory.get_stats()
@@ -503,12 +486,11 @@ class EnterpriseRAGSystem:
             "avg_latency": stats['metrics']['avg_latency'],
             "cache_hit_rate": stats['cache'].get('query_cache', {}).get('hit_rate', 0),
             "conversation": conversation_stats,
-            "mode": self.current_mode,
             "config": {
                 "model": self.config.llm.model_name,
                 "embedding": self.config.embedding.model_name,
-                "gpu": gpu_status,
-                "gpu_memory_mb": int(gpu_memory)
+                "gpu": gpu_status,  # ADDED
+                "gpu_memory_mb": int(gpu_memory)  # ADDED
             }
         }
 
@@ -519,7 +501,15 @@ class EnterpriseRAGSystem:
             logger.info("Conversation memory cleared")
 
     def submit_feedback(self, rating: str) -> Tuple[bool, str]:
-        """Submit feedback for the last query/answer"""
+        """
+        Submit feedback for the last query/answer.
+
+        Args:
+            rating: "thumbs_up" or "thumbs_down"
+
+        Returns:
+            Tuple of (success, message)
+        """
         if not self.feedback_manager:
             return False, "Feedback system not initialized"
 
@@ -554,41 +544,40 @@ async def initialize_system():
 
 async def process_query(message: str, history: List) -> str:
     global rag_system
-
+    
     if not rag_system or not rag_system.initialized:
         return "System not initialized. Please restart."
-
+    
     if not message.strip():
         return "Please enter a question."
-
+    
     result = await rag_system.query(message)
-
+    
     if result.get("error"):
         return f"Error: {result['answer']}"
-
+    
     response = f"{result['answer']}\n\n"
-
+    
     if result.get("sources"):
         response += "---\n\n**Sources:**\n\n"
-
+        
         for i, source in enumerate(result['sources'], 1):
             relevance_pct = source['relevance_score'] * 100
             response += f"{i}. **{source['file_name']}** ({relevance_pct:.0f}% relevant)\n"
-
+            
             if source.get('metadata'):
                 meta_parts = [f"{k}: {v}" for k, v in source['metadata'].items()]
                 if meta_parts:
                     response += f"   *{' | '.join(meta_parts)}*\n"
-
+            
             response += f"   \"{source['excerpt']}\"\n\n"
-
+    
     if result.get("metadata"):
-        mode = result['metadata'].get('mode', 'unknown').upper()
-        response += f"\n*Mode: {mode} | "
+        response += f"\n*Query Type: {result['metadata'].get('query_type', 'unknown').title()} | "
         response += f"Strategy: {result['metadata'].get('strategy_used', 'unknown')}*"
 
-    # Only show explanation in adaptive mode
-    if rag_system.current_mode == "adaptive" and result.get("explanation"):
+    # Add explanation if available
+    if result.get("explanation"):
         explanation = result['explanation']
         response += "\n\n---\n\n<details><summary><b>📊 Explanation</b> (click to expand)</summary>\n\n"
         response += f"**Classification:** {explanation['query_type'].upper()} (score: {explanation['complexity_score']})\n\n"
@@ -612,36 +601,30 @@ async def process_query(message: str, history: List) -> str:
 
 def get_status_html() -> str:
     global rag_system
-
+    
     if not rag_system:
         return "<div style='padding:20px;background:#2d3748;color:#fc8181;border-radius:8px;'>System not initialized</div>"
-
+    
     status = rag_system.get_system_status()
-
+    
     if status['status'] == 'offline':
         badge = "background:#f56565"
         text = "OFFLINE"
     else:
         badge = "background:#48bb78"
         text = "ONLINE"
-
-    # Mode badge
-    mode = status.get('mode', 'simple').upper()
-    mode_color = "#805ad5" if mode == "ADAPTIVE" else "#4299e1"
-    mode_badge = f"<span style='background:{mode_color};padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;margin-left:8px;'>{mode}</span>"
-
-    # GPU badge
+    
+    # ADDED: GPU badge
     gpu_badge = ""
     if status['config'].get('gpu', 'Disabled') != 'Disabled':
-        gpu_badge = f"<span style='background:#f6ad55;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;margin-left:8px;'>GPU</span>"
-
+        gpu_badge = f"<span style='background:#805ad5;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;margin-left:8px;'>GPU</span>"
+    
     return f"""
     <div style="background:#1a202c;padding:20px;border-radius:8px;color:#e2e8f0;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <h3 style="margin:0;font-size:18px;font-weight:600;">Enterprise RAG System</h3>
             <div>
                 <span style="{badge};padding:4px 12px;border-radius:4px;font-size:12px;font-weight:700;color:white;">{text}</span>
-                {mode_badge}
                 {gpu_badge}
             </div>
         </div>
@@ -660,51 +643,21 @@ def get_status_html() -> str:
             </div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #4a5568;font-size:11px;color:#a0aec0;">
-            Latency: {status['avg_latency']:.2f}s | Cache: {status['cache_hit_rate']:.0%} | {status['config']['model']}
+            Latency: {status['avg_latency']:.2f}s | Cache: {status['cache_hit_rate']:.0%} | {status['config']['model']} | {status['config']['gpu']}
         </div>
     </div>
     """
 
 
-def change_mode(mode_selection):
-    """Change retrieval mode and show/hide advanced settings"""
-    global rag_system
-
-    if not rag_system:
-        return "System not initialized", False, gr.update(visible=False)
-
-    # Map user-friendly names to internal names
-    mode_map = {
-        "🚀 Simple (Default)": "simple",
-        "🎯 Adaptive Retrieval": "adaptive"
-    }
-
-    mode = mode_map.get(mode_selection, "simple")
-    rag_system.set_mode(mode)
-
-    # Show advanced settings checkbox only in adaptive mode
-    show_advanced_checkbox = (mode == "adaptive")
-    advanced_settings_visible = False  # Start collapsed
-
-    message = f"✓ Mode set to: {mode.upper()}"
-
-    return message, show_advanced_checkbox, gr.update(visible=advanced_settings_visible)
-
-
-def toggle_advanced_settings(show_advanced):
-    """Show or hide advanced settings accordion"""
-    return gr.update(visible=show_advanced)
-
-
 def get_current_settings() -> str:
     """Display current settings"""
     global rag_system
-
+    
     if not rag_system:
         return "System not initialized"
-
+    
     settings = rag_system.runtime_settings
-
+    
     return f"""**Current Settings:**
 - Simple K: {settings['simple_k']}
 - Hybrid K: {settings['hybrid_k']}
@@ -715,14 +668,14 @@ def get_current_settings() -> str:
 - Moderate Threshold: {settings['moderate_threshold']}"""
 
 
-def update_all_settings(simple_k, hybrid_k, advanced_k, rerank_weight,
+def update_all_settings(simple_k, hybrid_k, advanced_k, rerank_weight, 
                         rrf_constant, simple_thresh, moderate_thresh):
     """Update all settings from sliders"""
     global rag_system
-
+    
     if not rag_system:
         return "System not initialized", get_current_settings()
-
+    
     rag_system.update_settings(
         simple_k=simple_k,
         hybrid_k=hybrid_k,
@@ -732,19 +685,19 @@ def update_all_settings(simple_k, hybrid_k, advanced_k, rerank_weight,
         simple_threshold=simple_thresh,
         moderate_threshold=moderate_thresh
     )
-
+    
     return "✓ Settings updated successfully", get_current_settings()
 
 
 def reset_to_defaults():
     """Reset all settings to defaults"""
     global rag_system
-
+    
     if not rag_system:
         return "System not initialized", get_current_settings(), *[None]*7
-
+    
     defaults = rag_system.reset_settings()
-
+    
     return (
         "✓ Settings reset to defaults",
         get_current_settings(),
@@ -755,6 +708,59 @@ def reset_to_defaults():
         defaults['rrf_constant'],
         defaults['simple_threshold'],
         defaults['moderate_threshold']
+    )
+
+
+def load_preset(preset_name):
+    """Load preset configurations"""
+    global rag_system
+
+    presets = {
+        "⚡ Fast & Simple": {
+            'simple_k': 3,
+            'hybrid_k': 10,
+            'advanced_k': 8,
+            'rerank_weight': 0.5,
+            'rrf_constant': 60,
+            'simple_threshold': 2,
+            'moderate_threshold': 4
+        },
+        "🎯 Balanced (Default)": {
+            'simple_k': 5,
+            'hybrid_k': 20,
+            'advanced_k': 15,
+            'rerank_weight': 0.7,
+            'rrf_constant': 60,
+            'simple_threshold': 1,
+            'moderate_threshold': 3
+        },
+        "🔬 Deep Research": {
+            'simple_k': 7,
+            'hybrid_k': 30,
+            'advanced_k': 20,
+            'rerank_weight': 0.8,
+            'rrf_constant': 60,
+            'simple_threshold': 0,
+            'moderate_threshold': 2
+        }
+    }
+
+    if not rag_system or preset_name not in presets:
+        return "Invalid preset", get_current_settings(), *[None]*7
+
+    preset = presets[preset_name]
+    rag_system.update_settings(**preset)
+
+    return (
+        f"✓ Loaded preset: {preset_name}",
+        get_current_settings(),
+        preset['simple_k'],
+        preset['hybrid_k'],
+        preset['advanced_k'],
+        preset['rerank_weight'],
+        preset['rrf_constant'],
+        preset['simple_threshold'],
+        preset['moderate_threshold']
     )
 
 
@@ -821,6 +827,10 @@ def create_interface():
         max-width: 1400px !important;
         margin: 0 auto !important;
     }
+    .contain {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
     .settings-box {
         background: #2d3748;
         color: #e2e8f0;
@@ -828,30 +838,38 @@ def create_interface():
         border-radius: 8px;
         border: 1px solid #4a5568;
     }
+    /* Fix double scroller during generation */
+    .chatbot {
+        overflow-y: auto !important;
+    }
+    .chatbot > div {
+        overflow: visible !important;
+    }
     """
-
+    
+    # Get example questions
     global rag_system
     example_questions = rag_system.example_questions if rag_system else [
         "What are the main requirements?",
         "Can you summarize the key policies?"
     ]
-
+    
     with gr.Blocks(theme=gr.themes.Soft(), css=custom_css, title="Enterprise RAG") as demo:
-
-        gr.Markdown("# 🚀 Enterprise RAG System\n### Simplified Interface - Choose Your Mode")
-
+        
+        gr.Markdown("# Enterprise RAG System\n### AI-Powered Document Intelligence with Dynamic Settings")
+        
         status_display = gr.HTML(get_status_html())
-
+        
         with gr.Row():
             # Left column - Chat interface
-            with gr.Column(scale=6):
+            with gr.Column(scale=5):
                 chatbot = gr.Chatbot(
                     height=500,
                     show_label=False,
                     type='messages',
                     container=True
                 )
-
+                
                 with gr.Row():
                     msg = gr.Textbox(
                         placeholder="Ask about your documents...",
@@ -862,7 +880,7 @@ def create_interface():
                         max_lines=10
                     )
                     submit = gr.Button("Send", scale=1, variant="primary")
-
+                
                 gr.Examples(
                     examples=example_questions,
                     inputs=msg
@@ -878,121 +896,129 @@ def create_interface():
 
                 clear = gr.Button("Clear Chat", size="sm", variant="secondary")
 
-            # Right column - Simple settings panel
-            with gr.Column(scale=4):
-                gr.Markdown("## ⚙️ Settings")
+                # Current settings and guide in two columns
+                gr.Markdown("---")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        current_settings_display = gr.Markdown(
+                            get_current_settings(),
+                            elem_classes="settings-box"
+                        )
+                    with gr.Column(scale=1):
+                        gr.Markdown("""
+### 📖 Guide
 
-                # Mode selector (main control)
-                mode_selector = gr.Radio(
-                    choices=["🚀 Simple (Default)", "🎯 Adaptive Retrieval"],
-                    value="🚀 Simple (Default)",
-                    label="Retrieval Mode",
-                    info="Simple = Fast & straightforward | Adaptive = Intelligent routing"
-                )
+**Query Types:**
+- **Simple**: Direct facts (who, when, where)
+- **Moderate**: Lists, what/how questions
+- **Complex**: Analysis, comparisons, why
 
-                mode_status = gr.Markdown("✓ Mode: SIMPLE", elem_classes="settings-box")
-
-                gr.Markdown("""
-**🚀 Simple Mode:**
-- Direct vector search
-- Fast and consistent
-- Best for most queries
-- ~8-15 seconds response time
-
-**🎯 Adaptive Mode:**
-- Automatic query classification
-- Strategy routing (simple/hybrid/advanced)
-- Best for complex questions
-- Variable response time based on complexity
+**Tips:**
+- Lower K = faster, fewer sources
+- Higher rerank weight = better accuracy
+- Adjust thresholds to control routing
+""", elem_classes="settings-box")
+            
+            # Right column - Settings panel
+            with gr.Column(scale=3):
+                gr.Markdown("### ⚙️ Retrieval Settings")
+                
+                # Preset selector
+                with gr.Group():
+                    preset_dropdown = gr.Dropdown(
+                        choices=["⚡ Fast & Simple", "🎯 Balanced (Default)", "🔬 Deep Research"],
+                        label="Quick Presets",
+                        value="🎯 Balanced (Default)"
+                    )
+                    preset_info = gr.Markdown("""
+**⚡ Fast:** Quick responses, fewer sources
+**🎯 Balanced:** Good mix of speed & thoroughness  
+**🔬 Deep:** Comprehensive, more sources
 """)
-
+                
                 gr.Markdown("---")
-
-                # Advanced Settings - only visible in adaptive mode
-                advanced_checkbox = gr.Checkbox(
-                    label="Show Advanced Settings",
-                    value=False,
-                    visible=False,  # Hidden by default
-                    info="Configure retrieval parameters"
+                
+                # K values
+                gr.Markdown("**📊 Number of Results (K)**")
+                simple_k_slider = gr.Slider(
+                    minimum=1, maximum=10, value=5, step=1,
+                    label="Simple Queries",
+                    info="Fast lookups for direct questions"
                 )
+                
+                hybrid_k_slider = gr.Slider(
+                    minimum=5, maximum=40, value=20, step=5,
+                    label="Hybrid Queries",
+                    info="Combined dense + sparse retrieval"
+                )
+                
+                advanced_k_slider = gr.Slider(
+                    minimum=5, maximum=30, value=15, step=5,
+                    label="Advanced Queries",
+                    info="Multi-query expansion"
+                )
+                
+                gr.Markdown("---")
+                
+                # Scoring weights
+                gr.Markdown("**⚖️ Scoring Weights**")
+                rerank_weight_slider = gr.Slider(
+                    minimum=0.0, maximum=1.0, value=0.7, step=0.1,
+                    label="Reranker Weight",
+                    info="Higher = trust reranker more (vs RRF)"
+                )
+                
+                rrf_constant_slider = gr.Slider(
+                    minimum=10, maximum=100, value=60, step=10,
+                    label="RRF Constant",
+                    info="Reciprocal Rank Fusion parameter"
+                )
+                
+                gr.Markdown("---")
+                
+                # Classification thresholds
+                gr.Markdown("**🎯 Query Classification**")
+                simple_thresh_slider = gr.Slider(
+                    minimum=0, maximum=5, value=1, step=1,
+                    label="Simple Threshold",
+                    info="Max score for simple queries"
+                )
+                
+                moderate_thresh_slider = gr.Slider(
+                    minimum=1, maximum=8, value=3, step=1,
+                    label="Moderate Threshold",
+                    info="Max score for moderate queries"
+                )
+                
+                gr.Markdown("---")
+                
+                # Action buttons
+                with gr.Row():
+                    apply_btn = gr.Button("✓ Apply Settings", variant="primary")
+                    reset_btn = gr.Button("↺ Reset Defaults", variant="secondary")
 
-                with gr.Accordion("Advanced Settings", visible=False, open=False) as advanced_accordion:
-                    gr.Markdown("### 📊 Number of Results (K)")
-                    simple_k_slider = gr.Slider(
-                        minimum=1, maximum=10, value=5, step=1,
-                        label="Simple Queries K",
-                        info="Results for simple lookups"
-                    )
-
-                    hybrid_k_slider = gr.Slider(
-                        minimum=5, maximum=40, value=20, step=5,
-                        label="Hybrid Queries K",
-                        info="Results for hybrid retrieval"
-                    )
-
-                    advanced_k_slider = gr.Slider(
-                        minimum=5, maximum=30, value=15, step=5,
-                        label="Advanced Queries K",
-                        info="Results for multi-query expansion"
-                    )
-
-                    gr.Markdown("---")
-                    gr.Markdown("### ⚖️ Scoring Weights")
-
-                    rerank_weight_slider = gr.Slider(
-                        minimum=0.0, maximum=1.0, value=0.7, step=0.1,
-                        label="Reranker Weight",
-                        info="Higher = trust reranker more"
-                    )
-
-                    rrf_constant_slider = gr.Slider(
-                        minimum=10, maximum=100, value=60, step=10,
-                        label="RRF Constant",
-                        info="Reciprocal Rank Fusion parameter"
-                    )
-
-                    gr.Markdown("---")
-                    gr.Markdown("### 🎯 Query Classification Thresholds")
-
-                    simple_thresh_slider = gr.Slider(
-                        minimum=0, maximum=5, value=1, step=1,
-                        label="Simple Threshold",
-                        info="Max complexity score for simple"
-                    )
-
-                    moderate_thresh_slider = gr.Slider(
-                        minimum=1, maximum=8, value=3, step=1,
-                        label="Moderate Threshold",
-                        info="Max complexity score for moderate"
-                    )
-
-                    gr.Markdown("---")
-
-                    with gr.Row():
-                        apply_btn = gr.Button("✓ Apply", variant="primary")
-                        reset_btn = gr.Button("↺ Reset", variant="secondary")
-
-                    settings_status = gr.Markdown("Ready", elem_classes="settings-box")
-                    current_settings_display = gr.Markdown(
-                        get_current_settings(),
-                        elem_classes="settings-box"
-                    )
+                # Status message (compact, stays on right)
+                settings_status = gr.Markdown("Ready", elem_classes="settings-box")
 
                 gr.Markdown("---")
-                gr.Markdown("### 📊 Feedback Analytics")
-                view_stats_btn = gr.Button("View Feedback Stats", variant="secondary")
-                feedback_stats_display = gr.Markdown("Click to load stats", elem_classes="settings-box")
 
+                # Admin panel for feedback
+                gr.Markdown("### 📊 Feedback Analytics")
+                with gr.Group():
+                    view_stats_btn = gr.Button("View Feedback Stats", variant="secondary")
+                    feedback_stats_display = gr.Markdown("Click button to load stats", elem_classes="settings-box")
+        
         # Event handlers
         async def respond(message, history):
             if not message.strip():
                 return history, ""
-
+            
             bot_message = await process_query(message, history)
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": bot_message})
             return history, ""
-
+        
+        # Chat interactions
         def clear_chat():
             """Clear chat and conversation memory"""
             global rag_system
@@ -1000,45 +1026,36 @@ def create_interface():
                 rag_system.clear_conversation()
             return None
 
-        # Chat interactions
         msg.submit(respond, [msg, chatbot], [chatbot, msg])
         submit.click(respond, [msg, chatbot], [chatbot, msg])
         clear.click(clear_chat, None, chatbot, queue=False)
-
-        # Mode selector
-        mode_selector.change(
-            change_mode,
-            inputs=[mode_selector],
-            outputs=[mode_status, advanced_checkbox, advanced_accordion]
-        )
-
-        # Advanced settings toggle
-        advanced_checkbox.change(
-            toggle_advanced_settings,
-            inputs=[advanced_checkbox],
-            outputs=[advanced_accordion]
-        )
-
+        
         # Settings interactions
         all_sliders = [
             simple_k_slider, hybrid_k_slider, advanced_k_slider,
             rerank_weight_slider, rrf_constant_slider,
             simple_thresh_slider, moderate_thresh_slider
         ]
-
+        
         apply_btn.click(
             update_all_settings,
             inputs=all_sliders,
             outputs=[settings_status, current_settings_display]
         )
-
+        
         reset_btn.click(
             reset_to_defaults,
             inputs=[],
             outputs=[settings_status, current_settings_display] + all_sliders
         )
+        
+        preset_dropdown.change(
+            load_preset,
+            inputs=[preset_dropdown],
+            outputs=[settings_status, current_settings_display] + all_sliders
+        )
 
-        # Feedback buttons
+        # Feedback button handlers
         thumbs_up_btn.click(
             submit_thumbs_up,
             inputs=[],
@@ -1051,7 +1068,7 @@ def create_interface():
             outputs=[feedback_message]
         )
 
-        # Feedback stats
+        # Feedback stats viewer
         view_stats_btn.click(
             get_feedback_stats,
             inputs=[],
@@ -1066,15 +1083,15 @@ def create_interface():
 
 async def main():
     logger.info("Starting Enterprise RAG System...")
-
+    
     success, message = await initialize_system()
-
+    
     if not success:
         logger.error(f"Initialization failed: {message}")
         return
-
+    
     logger.info("System initialized successfully")
-
+    
     demo = create_interface()
     demo.queue()
     demo.launch(

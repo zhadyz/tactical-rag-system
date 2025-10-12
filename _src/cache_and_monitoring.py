@@ -418,7 +418,7 @@ class CacheManager:
                         self.redis_client,
                         embeddings_func,
                         ttl=config.cache.cache_ttl,
-                        similarity_threshold=0.95
+                        similarity_threshold=0.999  # Very strict - almost exact match only
                     )
 
             except Exception as e:
