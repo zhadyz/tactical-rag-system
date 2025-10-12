@@ -144,19 +144,23 @@ class EnterpriseRAGSystem:
             else:
                 logger.warning("\n⚠️  No GPU available - using CPU")
             
-            logger.info("\n1. Initializing infrastructure...")
-            self.cache_manager = CacheManager(self.config)
-            self.monitor = PerformanceMonitor(self.config, self.cache_manager)
-            self.profiler = PerformanceProfiler(output_dir=Path("logs"))
-            
-            logger.info("\n2. Connecting to embedding model...")
+            logger.info("\n1. Initializing embedding model...")
             embeddings = OllamaEmbeddings(
                 model=self.config.embedding.model_name,
                 base_url=self.config.ollama_host
             )
-            
+
             test_embed = await asyncio.to_thread(embeddings.embed_query, "test")
             logger.info(f"✓ Embedding model ready (dim: {len(test_embed)})")
+
+            logger.info("\n2. Initializing infrastructure...")
+            # Create embeddings wrapper for semantic cache
+            def embed_for_cache(text: str) -> List[float]:
+                return embeddings.embed_query(text)
+
+            self.cache_manager = CacheManager(self.config, embeddings_func=embed_for_cache)
+            self.monitor = PerformanceMonitor(self.config, self.cache_manager)
+            self.profiler = PerformanceProfiler(output_dir=Path("logs"))
             
             logger.info("\n3. Loading vector database...")
             if not self.config.vector_db_dir.exists():

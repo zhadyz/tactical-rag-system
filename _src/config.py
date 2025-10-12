@@ -80,9 +80,9 @@ class CacheConfig(BaseModel):
     
     cache_ttl: int = Field(default=3600, description="Cache TTL in seconds")
     max_cache_size: int = Field(default=10000, description="Maximum cache entries")
-    
+
     # Redis config (optional distributed cache)
-    use_redis: bool = False
+    use_redis: bool = True
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
