@@ -24,6 +24,7 @@ from document_processor import DocumentProcessor, ProcessingResult
 from cache_and_monitoring import CacheManager, PerformanceMonitor, Timer
 from example_generator import ExampleGenerator
 from conversation_memory import ConversationMemory
+from feedback_system import FeedbackManager
 
 os.makedirs('logs', exist_ok=True)
 os.makedirs('.cache', exist_ok=True)
@@ -63,10 +64,19 @@ class EnterpriseRAGSystem:
         self.cache_manager: Optional[CacheManager] = None
         self.monitor: Optional[PerformanceMonitor] = None
         self.conversation_memory: Optional[ConversationMemory] = None
+        self.feedback_manager: Optional[FeedbackManager] = None
         self.initialized = False
 
         # Runtime settings that can be changed via UI
         self.runtime_settings = self.DEFAULT_SETTINGS.copy()
+
+        # Track last query/answer for feedback attribution
+        self.last_query_metadata = {
+            "query": "",
+            "answer": "",
+            "query_type": None,
+            "strategy_used": None
+        }
         
         # Example questions (will be generated dynamically)
         self.example_questions = [
@@ -211,7 +221,11 @@ class EnterpriseRAGSystem:
             )
             logger.info("✓ Conversation memory ready")
 
-            logger.info("\n7. Initializing adaptive retrieval engine...")
+            logger.info("\n7. Initializing feedback system...")
+            self.feedback_manager = FeedbackManager(storage_file="feedback.json")
+            logger.info("✓ Feedback system ready")
+
+            logger.info("\n8. Initializing adaptive retrieval engine...")
             self.retrieval_engine = AdaptiveRetriever(
                 vectorstore=self.vectorstore,
                 bm25_retriever=self.bm25_retriever,
@@ -222,7 +236,7 @@ class EnterpriseRAGSystem:
             self.answer_generator = AdaptiveAnswerGenerator(self.llm)
             logger.info("✓ Adaptive retrieval engine ready")
 
-            logger.info("\n8. Generating example questions...")
+            logger.info("\n9. Generating example questions...")
             example_gen = ExampleGenerator(self.config, self.llm)
             self.example_questions = await example_gen.generate_examples(
                 self.vectorstore,
@@ -323,6 +337,14 @@ class EnterpriseRAGSystem:
                 {"model": self.config.llm.model_name},
                 result
             )
+
+            # Store metadata for feedback attribution
+            self.last_query_metadata = {
+                "query": question,
+                "answer": answer,
+                "query_type": retrieval_result.query_type,
+                "strategy_used": retrieval_result.strategy_used
+            }
 
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=True)
@@ -433,6 +455,36 @@ class EnterpriseRAGSystem:
         if self.conversation_memory:
             self.conversation_memory.clear()
             logger.info("Conversation memory cleared")
+
+    def submit_feedback(self, rating: str) -> Tuple[bool, str]:
+        """
+        Submit feedback for the last query/answer.
+
+        Args:
+            rating: "thumbs_up" or "thumbs_down"
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.feedback_manager:
+            return False, "Feedback system not initialized"
+
+        if not self.last_query_metadata["query"]:
+            return False, "No recent query to provide feedback for"
+
+        success = self.feedback_manager.add_feedback(
+            query=self.last_query_metadata["query"],
+            answer=self.last_query_metadata["answer"],
+            rating=rating,
+            query_type=self.last_query_metadata["query_type"],
+            strategy_used=self.last_query_metadata["strategy_used"]
+        )
+
+        if success:
+            emoji = "👍" if rating == "thumbs_up" else "👎"
+            return True, f"{emoji} Thank you for your feedback!"
+        else:
+            return False, "Failed to submit feedback"
 
 
 rag_system: Optional[EnterpriseRAGSystem] = None
@@ -618,7 +670,7 @@ def reset_to_defaults():
 def load_preset(preset_name):
     """Load preset configurations"""
     global rag_system
-    
+
     presets = {
         "⚡ Fast & Simple": {
             'simple_k': 3,
@@ -648,13 +700,13 @@ def load_preset(preset_name):
             'moderate_threshold': 2
         }
     }
-    
+
     if not rag_system or preset_name not in presets:
         return "Invalid preset", get_current_settings(), *[None]*7
-    
+
     preset = presets[preset_name]
     rag_system.update_settings(**preset)
-    
+
     return (
         f"✓ Loaded preset: {preset_name}",
         get_current_settings(),
@@ -666,6 +718,63 @@ def load_preset(preset_name):
         preset['simple_threshold'],
         preset['moderate_threshold']
     )
+
+
+def submit_thumbs_up():
+    """Submit positive feedback"""
+    global rag_system
+
+    if not rag_system:
+        return "System not initialized"
+
+    success, message = rag_system.submit_feedback("thumbs_up")
+    return message
+
+
+def submit_thumbs_down():
+    """Submit negative feedback"""
+    global rag_system
+
+    if not rag_system:
+        return "System not initialized"
+
+    success, message = rag_system.submit_feedback("thumbs_down")
+    return message
+
+
+def get_feedback_stats():
+    """Get feedback statistics"""
+    global rag_system
+
+    if not rag_system or not rag_system.feedback_manager:
+        return "Feedback system not initialized"
+
+    stats = rag_system.feedback_manager.get_feedback_stats()
+
+    output = f"""## Feedback Statistics
+
+**Overall:**
+- Total Feedback: {stats['total_feedback']}
+- Thumbs Up: {stats['thumbs_up_count']}
+- Thumbs Down: {stats['thumbs_down_count']}
+- Satisfaction Rate: {stats['satisfaction_rate']:.1f}%
+
+**By Query Type:**
+"""
+
+    for query_type, counts in stats['by_query_type'].items():
+        total = counts['thumbs_up'] + counts['thumbs_down']
+        satisfaction = (counts['thumbs_up'] / total * 100) if total > 0 else 0
+        output += f"- {query_type.title()}: {satisfaction:.0f}% ({counts['thumbs_up']}/{total})\n"
+
+    output += "\n**By Strategy:**\n"
+
+    for strategy, counts in stats['by_strategy'].items():
+        total = counts['thumbs_up'] + counts['thumbs_down']
+        satisfaction = (counts['thumbs_up'] / total * 100) if total > 0 else 0
+        output += f"- {strategy}: {satisfaction:.0f}% ({counts['thumbs_up']}/{total})\n"
+
+    return output
 
 
 def create_interface():
@@ -732,9 +841,17 @@ def create_interface():
                     examples=example_questions,
                     inputs=msg
                 )
-                
+
+                # Feedback buttons
+                gr.Markdown("### Rate this answer:")
+                with gr.Row():
+                    thumbs_up_btn = gr.Button("👍 Thumbs Up", size="sm", variant="secondary")
+                    thumbs_down_btn = gr.Button("👎 Thumbs Down", size="sm", variant="secondary")
+
+                feedback_message = gr.Markdown("", visible=True)
+
                 clear = gr.Button("Clear Chat", size="sm", variant="secondary")
-                
+
                 # Current settings and guide in two columns
                 gr.Markdown("---")
                 with gr.Row():
@@ -835,9 +952,17 @@ def create_interface():
                 with gr.Row():
                     apply_btn = gr.Button("✓ Apply Settings", variant="primary")
                     reset_btn = gr.Button("↺ Reset Defaults", variant="secondary")
-                
+
                 # Status message (compact, stays on right)
                 settings_status = gr.Markdown("Ready", elem_classes="settings-box")
+
+                gr.Markdown("---")
+
+                # Admin panel for feedback
+                gr.Markdown("### 📊 Feedback Analytics")
+                with gr.Group():
+                    view_stats_btn = gr.Button("View Feedback Stats", variant="secondary")
+                    feedback_stats_display = gr.Markdown("Click button to load stats", elem_classes="settings-box")
         
         # Event handlers
         async def respond(message, history):
@@ -885,10 +1010,30 @@ def create_interface():
             inputs=[preset_dropdown],
             outputs=[settings_status, current_settings_display] + all_sliders
         )
-        
+
+        # Feedback button handlers
+        thumbs_up_btn.click(
+            submit_thumbs_up,
+            inputs=[],
+            outputs=[feedback_message]
+        )
+
+        thumbs_down_btn.click(
+            submit_thumbs_down,
+            inputs=[],
+            outputs=[feedback_message]
+        )
+
+        # Feedback stats viewer
+        view_stats_btn.click(
+            get_feedback_stats,
+            inputs=[],
+            outputs=[feedback_stats_display]
+        )
+
         # Auto-refresh status on load
         demo.load(get_status_html, None, status_display)
-    
+
     return demo
 
 
