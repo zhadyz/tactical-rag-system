@@ -1,5 +1,6 @@
-# AI Agent Internal Files (not for public repo)
-.ai/
+# AI Agent Internal Files (tracked: .ai/DEVELOPMENT.md only)
+.ai/*
+!.ai/DEVELOPMENT.md
 messages/
 
 # Data and documents
@@ -39,3 +40,17 @@ Thumbs.db
 secrets/
 build_output.txt
 build_error.txt
+
+# Test and research files (local development only)
+test_*.py
+reproduce_*.py
+investigate_*.py
+research_*.py
+
+# State backups
+state.json.backup_*
+
+# Excessive documentation (keep only README and essentials)
+BREAKTHROUGH_SUMMARY_*.md
+IMPLEMENTATION_GUIDE_*.md
+SYSTEMIC_ANALYSIS_*.md

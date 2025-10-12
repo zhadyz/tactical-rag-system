@@ -6,28 +6,19 @@
 ![CUDA 12.1+](https://img.shields.io/badge/CUDA-12.1+-green.svg)
 ![License](https://img.shields.io/badge/license-U.S.%20Government-lightgrey.svg)
 
-Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, **multi-turn conversation memory**, **transparent explainability**, **user feedback loops**, intelligent document processing, and real-time performance monitoring.
+Enterprise-grade Retrieval-Augmented Generation (RAG) system with GPU-accelerated adaptive retrieval, multi-turn conversation memory, transparent explainability, user feedback loops, intelligent document processing, and real-time performance monitoring.
 
-**Developed through multi-agent AI collaboration** (medicant_bias → hollowed_eyes + zhadyz), demonstrating coordinated iterative improvement visible in git history.
+Developed through multi-agent AI collaboration (medicant_bias, hollowed_eyes, zhadyz) coordinating via state.json + Redis pub/sub.
 
----
+## Key Features
 
-## Portfolio Highlights
-
-This project showcases:
-
-- ✨ **Multi-Agent Development**: Three AI agents (architect, engineer, tester) coordinating via state.json + Redis pub/sub
-- 🧠 **Conversation Memory**: Sliding window (10 exchanges) with LLM-based summarization for multi-turn context awareness
-- 🔍 **Explainability**: Full transparency in query classification and retrieval strategy selection
-- ⭐ **Feedback Loops**: User satisfaction tracking (thumbs up/down) with analytics for continuous improvement
-- 🚀 **GPU Acceleration**: CUDA-optimized embeddings, reranking, and LLM inference (~10x speedup)
-- 📊 **Adaptive Retrieval**: Three-tier strategy (simple/hybrid/advanced) auto-selected by query complexity
-- 🧪 **Comprehensive Testing**: 63+ integration tests covering all major features
-- 📖 **Production Documentation**: Architecture diagrams, deployment guides, API examples
-- 🐳 **Docker-Native**: Full containerization with Ollama integration and GPU passthrough
-- 🎯 **Enterprise-Ready**: Performance monitoring, evaluation suite, explainable AI for compliance
-
-**See**: `IMPROVEMENTS.md` for detailed evolution from v2.5 → v3.5.1
+- **Multi-Stage Caching**: Exact → Normalized → Validated semantic matching (2,204x speedup, 0% false matches)
+- **Adaptive Retrieval**: Three-tier strategy (simple/hybrid/advanced) with automatic query classification
+- **Conversation Memory**: Sliding window with LLM-based summarization for context-aware follow-ups
+- **Explainability**: Transparent query classification and strategy selection reasoning
+- **Feedback System**: User satisfaction tracking with automated performance analysis
+- **GPU Acceleration**: CUDA-optimized embeddings, reranking, and LLM inference
+- **Docker Deployment**: Full containerization with Ollama integration and GPU passthrough
 
 ---
 
@@ -55,23 +46,19 @@ This project showcases:
 - **Empirical Research**: Embedding similarity analysis proving semantic threshold issues
 - **Zero False Positives**: User's reported bug scenario tested and verified fixed
 
-### Documentation & Research
-- **Technical Analysis**: `SYSTEMIC_ANALYSIS_semantic_cache.md` - 15-page root cause analysis
-- **Implementation Guide**: `IMPLEMENTATION_GUIDE_v3.8.md` - 20-page deployment guide
-- **Breakthrough Summary**: `BREAKTHROUGH_SUMMARY_v3.8.md` - Portfolio-ready showcase
-
 ### Known Issues & Future Work
 - **Adaptive Retrieval Bug**: Query classification incorrectly counts conversation context (causes 85s delays)
 - **Query Expansion Performance**: 22+ seconds to generate variants (needs optimization)
 - **Next Sprint**: Rework adaptive retrieval engine with fixed classification logic
 
-**See**: `BREAKTHROUGH_SUMMARY_v3.8.md` for detailed technical analysis of the cache breakthrough
+**See**: `.ai/DEVELOPMENT.md` for detailed technical analysis and AI development notes
 
 ---
 
 ## Table of Contents
 
-- [Portfolio Highlights](#portfolio-highlights)
+- [Key Features](#key-features)
+- [Latest Updates - v3.8](#-latest-updates---v38-october-2025)
 - [Quick Start](#quick-start)
 - [System Architecture](#system-architecture)
 - [Core Components](#core-components)
