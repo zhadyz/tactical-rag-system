@@ -216,6 +216,24 @@ if ($args -contains "--rebuild") {
     Write-Success "Old images removed"
 }
 
+
+# ============================================================
+# STEP 2: SURGICAL CLEANUP - Remove containers, keep images
+# ============================================================
+Write-Step "SURGICAL CLEANUP - REMOVING CONFLICTING CONTAINERS" 2 $totalSteps
+
+Write-Info "Stopping ALL rag and ollama containers..."
+docker ps -a --format "{{.Names}}" | Select-String -Pattern "rag|ollama" | ForEach-Object {
+    Write-Host "    Stopping: $_" -ForegroundColor Yellow
+    docker stop $_ 2>$null | Out-Null
+    docker rm $_ 2>$null | Out-Null
+}
+
+Write-Info "Pruning only dangling/unused resources..."
+docker container prune -f 2>$null | Out-Null
+
+Write-Success "Conflicting containers removed (images preserved)"
+
 # ============================================================
 # STEP 3: Verify project structure
 # ============================================================

@@ -93,4 +93,4 @@ ENV USE_CUDA_DOCKER=true
 # ============================================================
 # This runs when the container starts
 # We'll use a shell script to handle both indexing and running the app
-CMD ["/app/startup.sh"]
+CMD ["python", "app.py"]
