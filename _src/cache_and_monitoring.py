@@ -13,8 +13,17 @@ from datetime import datetime, timedelta
 import threading
 import json
 from pathlib import Path
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Optional Redis support
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+    logger.warning("Redis not available - using in-memory cache only")
 
 
 @dataclass
@@ -128,63 +137,370 @@ class LRUCache:
             }
 
 
+class RedisEmbeddingCache:
+    """Redis-backed embedding cache with automatic serialization"""
+
+    def __init__(self, redis_client, ttl: int = 3600, prefix: str = "emb:"):
+        self.redis = redis_client
+        self.ttl = ttl
+        self.prefix = prefix
+        self.stats = CacheStats()
+        self.lock = threading.RLock()
+
+        logger.info(f"Redis embedding cache initialized (TTL: {ttl}s)")
+
+    def get(self, text: str) -> Optional[List[float]]:
+        """Get embedding from Redis"""
+
+        try:
+            key = self.prefix + hashlib.md5(text.encode()).hexdigest()
+
+            value = self.redis.get(key)
+
+            if value is None:
+                with self.lock:
+                    self.stats.misses += 1
+                return None
+
+            # Deserialize numpy array
+            embedding = np.frombuffer(value, dtype=np.float32).tolist()
+
+            with self.lock:
+                self.stats.hits += 1
+
+            return embedding
+
+        except Exception as e:
+            logger.warning(f"Redis get failed: {e}")
+            with self.lock:
+                self.stats.misses += 1
+            return None
+
+    def put(self, text: str, embedding: List[float]) -> None:
+        """Store embedding in Redis"""
+
+        try:
+            key = self.prefix + hashlib.md5(text.encode()).hexdigest()
+
+            # Serialize as numpy array for efficiency
+            value = np.array(embedding, dtype=np.float32).tobytes()
+
+            self.redis.setex(key, self.ttl, value)
+
+            with self.lock:
+                self.stats.total_size += 1
+
+        except Exception as e:
+            logger.warning(f"Redis put failed: {e}")
+
+    def clear(self) -> None:
+        """Clear all embeddings with this prefix"""
+
+        try:
+            pattern = self.prefix + "*"
+            cursor = 0
+
+            while True:
+                cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
+                if keys:
+                    self.redis.delete(*keys)
+                if cursor == 0:
+                    break
+
+            with self.lock:
+                self.stats.total_size = 0
+
+            logger.info("Redis embedding cache cleared")
+
+        except Exception as e:
+            logger.warning(f"Redis clear failed: {e}")
+
+    def get_stats(self) -> Dict:
+        """Get cache statistics"""
+
+        with self.lock:
+            return {
+                "hits": self.stats.hits,
+                "misses": self.stats.misses,
+                "size": self.stats.total_size,
+                "hit_rate": self.stats.hit_rate,
+                "backend": "redis"
+            }
+
+
+class RedisSemanticCache:
+    """
+    Redis-backed semantic cache for query results
+    Uses embedding similarity to match semantically similar queries
+    """
+
+    def __init__(
+        self,
+        redis_client,
+        embeddings_func: Callable,
+        ttl: int = 3600,
+        similarity_threshold: float = 0.95,
+        prefix: str = "semantic:"
+    ):
+        self.redis = redis_client
+        self.embeddings_func = embeddings_func
+        self.ttl = ttl
+        self.similarity_threshold = similarity_threshold
+        self.prefix = prefix
+        self.stats = CacheStats()
+        self.lock = threading.RLock()
+
+        logger.info(f"Redis semantic cache initialized (similarity: {similarity_threshold})")
+
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """Calculate cosine similarity between two vectors"""
+
+        a = np.array(vec1)
+        b = np.array(vec2)
+
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+    def get(self, query: str) -> Optional[Any]:
+        """Get cached result for semantically similar query"""
+
+        try:
+            # Get query embedding
+            query_embedding = self.embeddings_func(query)
+
+            # Search for similar cached queries
+            pattern = self.prefix + "*"
+            cursor = 0
+            best_match = None
+            best_similarity = 0.0
+
+            while True:
+                cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
+
+                for key in keys:
+                    # Get cached embedding and result
+                    data = self.redis.get(key)
+
+                    if data is None:
+                        continue
+
+                    cache_entry = json.loads(data)
+                    cached_embedding = cache_entry.get("embedding")
+
+                    if not cached_embedding:
+                        continue
+
+                    # Calculate similarity
+                    similarity = self._cosine_similarity(query_embedding, cached_embedding)
+
+                    if similarity > best_similarity:
+                        best_similarity = similarity
+                        best_match = cache_entry.get("result")
+
+                if cursor == 0:
+                    break
+
+            # Return if similarity above threshold
+            if best_similarity >= self.similarity_threshold and best_match:
+                with self.lock:
+                    self.stats.hits += 1
+                logger.info(f"Semantic cache hit (similarity: {best_similarity:.3f})")
+                return best_match
+
+            with self.lock:
+                self.stats.misses += 1
+            return None
+
+        except Exception as e:
+            logger.warning(f"Redis semantic cache get failed: {e}")
+            with self.lock:
+                self.stats.misses += 1
+            return None
+
+    def put(self, query: str, result: Any) -> None:
+        """Cache query result with embedding"""
+
+        try:
+            # Get query embedding
+            query_embedding = self.embeddings_func(query)
+
+            # Create cache entry
+            cache_entry = {
+                "query": query,
+                "embedding": query_embedding,
+                "result": result,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Store with query hash as key
+            key = self.prefix + hashlib.md5(query.encode()).hexdigest()
+            value = json.dumps(cache_entry)
+
+            self.redis.setex(key, self.ttl, value)
+
+            with self.lock:
+                self.stats.total_size += 1
+
+        except Exception as e:
+            logger.warning(f"Redis semantic cache put failed: {e}")
+
+    def clear(self) -> None:
+        """Clear all semantic cache entries"""
+
+        try:
+            pattern = self.prefix + "*"
+            cursor = 0
+
+            while True:
+                cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
+                if keys:
+                    self.redis.delete(*keys)
+                if cursor == 0:
+                    break
+
+            with self.lock:
+                self.stats.total_size = 0
+
+            logger.info("Redis semantic cache cleared")
+
+        except Exception as e:
+            logger.warning(f"Redis semantic cache clear failed: {e}")
+
+    def get_stats(self) -> Dict:
+        """Get cache statistics"""
+
+        with self.lock:
+            return {
+                "hits": self.stats.hits,
+                "misses": self.stats.misses,
+                "size": self.stats.total_size,
+                "hit_rate": self.stats.hit_rate,
+                "similarity_threshold": self.similarity_threshold,
+                "backend": "redis"
+            }
+
+
 class CacheManager:
-    """Multi-layer cache manager"""
-    
-    def __init__(self, config):
+    """Multi-layer cache manager with optional Redis support"""
+
+    def __init__(self, config, embeddings_func: Optional[Callable] = None):
         self.config = config
-        
-        # Initialize caches
+        self.embeddings_func = embeddings_func
+        self.redis_client = None
+        self.redis_embedding_cache = None
+        self.redis_semantic_cache = None
+
+        # Try to connect to Redis if enabled
+        if config.cache.use_redis and REDIS_AVAILABLE:
+            try:
+                self.redis_client = redis.Redis(
+                    host=config.cache.redis_host,
+                    port=config.cache.redis_port,
+                    db=config.cache.redis_db,
+                    decode_responses=False,  # Binary for embeddings
+                    socket_connect_timeout=2,
+                    socket_timeout=2
+                )
+
+                # Test connection
+                self.redis_client.ping()
+
+                logger.info(f"Redis connected: {config.cache.redis_host}:{config.cache.redis_port}")
+
+                # Initialize Redis caches
+                if config.cache.enable_embedding_cache:
+                    self.redis_embedding_cache = RedisEmbeddingCache(
+                        self.redis_client,
+                        ttl=config.cache.cache_ttl
+                    )
+
+                if config.cache.enable_query_cache and embeddings_func:
+                    self.redis_semantic_cache = RedisSemanticCache(
+                        self.redis_client,
+                        embeddings_func,
+                        ttl=config.cache.cache_ttl,
+                        similarity_threshold=0.95
+                    )
+
+            except Exception as e:
+                logger.warning(f"Redis connection failed: {e}. Falling back to in-memory cache")
+                self.redis_client = None
+
+        # Initialize local caches (always available as fallback)
         self.embedding_cache = LRUCache(
             max_size=config.cache.max_cache_size,
             ttl=config.cache.cache_ttl
         ) if config.cache.enable_embedding_cache else None
-        
+
         self.query_cache = LRUCache(
             max_size=config.cache.max_cache_size // 10,
             ttl=config.cache.cache_ttl
         ) if config.cache.enable_query_cache else None
-        
+
         self.result_cache = LRUCache(
             max_size=config.cache.max_cache_size // 5,
             ttl=config.cache.cache_ttl
         ) if config.cache.enable_result_cache else None
-        
-        logger.info("Cache manager initialized")
+
+        cache_type = "Redis" if self.redis_client else "In-Memory"
+        logger.info(f"Cache manager initialized ({cache_type})")
     
     def get_embedding(self, text: str) -> Optional[List[float]]:
-        """Get cached embedding"""
-        
+        """Get cached embedding (Redis first, then local)"""
+
+        # Try Redis first if available
+        if self.redis_embedding_cache:
+            result = self.redis_embedding_cache.get(text)
+            if result is not None:
+                return result
+
+        # Fall back to local cache
         if not self.embedding_cache:
             return None
-        
+
         cache_key = self._hash_text(text)
         return self.embedding_cache.get(cache_key)
-    
+
     def put_embedding(self, text: str, embedding: List[float]) -> None:
-        """Cache embedding"""
-        
+        """Cache embedding (both Redis and local)"""
+
+        # Store in Redis if available
+        if self.redis_embedding_cache:
+            self.redis_embedding_cache.put(text, embedding)
+
+        # Store in local cache
         if not self.embedding_cache:
             return
-        
+
         cache_key = self._hash_text(text)
         self.embedding_cache.put(cache_key, embedding)
     
     def get_query_result(self, query: str, params: Dict) -> Optional[Any]:
-        """Get cached query result"""
-        
+        """Get cached query result (semantic cache first, then local)"""
+
+        # Try Redis semantic cache first if available
+        if self.redis_semantic_cache:
+            result = self.redis_semantic_cache.get(query)
+            if result is not None:
+                return result
+
+        # Fall back to local cache (exact match only)
         if not self.query_cache:
             return None
-        
+
         cache_key = self._hash_query(query, params)
         return self.query_cache.get(cache_key)
-    
+
     def put_query_result(self, query: str, params: Dict, result: Any) -> None:
-        """Cache query result"""
-        
+        """Cache query result (both semantic and local)"""
+
+        # Store in Redis semantic cache if available
+        if self.redis_semantic_cache:
+            self.redis_semantic_cache.put(query, result)
+
+        # Store in local cache
         if not self.query_cache:
             return
-        
+
         cache_key = self._hash_query(query, params)
         self.query_cache.put(cache_key, result)
     
@@ -207,31 +523,46 @@ class CacheManager:
         self.result_cache.put(cache_key, result)
     
     def clear_all(self) -> None:
-        """Clear all caches"""
-        
+        """Clear all caches (both Redis and local)"""
+
+        # Clear Redis caches
+        if self.redis_embedding_cache:
+            self.redis_embedding_cache.clear()
+        if self.redis_semantic_cache:
+            self.redis_semantic_cache.clear()
+
+        # Clear local caches
         if self.embedding_cache:
             self.embedding_cache.clear()
         if self.query_cache:
             self.query_cache.clear()
         if self.result_cache:
             self.result_cache.clear()
-        
-        logger.info("All caches cleared")
+
+        logger.info("All caches cleared (Redis + local)")
     
     def get_stats(self) -> Dict:
-        """Get statistics for all caches"""
-        
+        """Get statistics for all caches (Redis + local)"""
+
         stats = {}
-        
+
+        # Redis cache stats
+        if self.redis_embedding_cache:
+            stats["redis_embedding_cache"] = self.redis_embedding_cache.get_stats()
+
+        if self.redis_semantic_cache:
+            stats["redis_semantic_cache"] = self.redis_semantic_cache.get_stats()
+
+        # Local cache stats
         if self.embedding_cache:
-            stats["embedding_cache"] = self.embedding_cache.get_stats()
-        
+            stats["local_embedding_cache"] = self.embedding_cache.get_stats()
+
         if self.query_cache:
-            stats["query_cache"] = self.query_cache.get_stats()
-        
+            stats["local_query_cache"] = self.query_cache.get_stats()
+
         if self.result_cache:
             stats["result_cache"] = self.result_cache.get_stats()
-        
+
         return stats
     
     def _hash_text(self, text: str) -> str:
