@@ -83,7 +83,7 @@ class CacheConfig(BaseModel):
 
     # Redis config (optional distributed cache)
     use_redis: bool = True
-    redis_host: str = "localhost"
+    redis_host: str = "multi-agent-redis"  # Docker service name
     redis_port: int = 6379
     redis_db: int = 0
 

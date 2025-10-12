@@ -27,6 +27,12 @@ services:
     # Always restart if container stops
     restart: unless-stopped
 
+    # Environment variables for Ollama
+    environment:
+      - OLLAMA_NUM_GPU=999
+      - OLLAMA_GPU_LAYERS=999
+      - OLLAMA_KEEP_ALIVE=-1  # Keep model loaded indefinitely (prevents VRAM recovery issues)
+
     # GPU Utilization
     deploy:
       resources:

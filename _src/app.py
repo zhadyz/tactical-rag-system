@@ -284,16 +284,10 @@ class EnterpriseRAGSystem:
             self.profiler.start_profile(question)
 
         try:
-            # Use conversation memory for context-aware query enhancement
-            enhanced_query = question
-            if use_context and self.conversation_memory:
-                enhanced_query, _ = self.conversation_memory.get_relevant_context_for_query(
-                    question,
-                    max_exchanges=3
-                )
-
+            # Check cache FIRST using original query (before conversation enhancement)
+            # This ensures semantically similar questions hit the cache regardless of conversation context
             cached_result = self.cache_manager.get_query_result(
-                enhanced_query,
+                question,  # Use original question, not enhanced
                 {"model": self.config.llm.model_name}
             )
 
@@ -305,6 +299,14 @@ class EnterpriseRAGSystem:
                     self.profiler.record_stage("cache_ms", 0)
                     self.profiler.complete_profile(success=True)
                 return cached_result
+
+            # Cache miss - enhance query with conversation context
+            enhanced_query = question
+            if use_context and self.conversation_memory:
+                enhanced_query, _ = self.conversation_memory.get_relevant_context_for_query(
+                    question,
+                    max_exchanges=3
+                )
 
             # Profile retrieval stage
             retrieval_timer = Timer(self.monitor.metrics, "retrieval_total")
@@ -364,8 +366,10 @@ class EnterpriseRAGSystem:
                     strategy_used=retrieval_result.strategy_used
                 )
 
+            # Store in cache using ORIGINAL query (not enhanced)
+            # This ensures future identical questions hit the cache
             self.cache_manager.put_query_result(
-                enhanced_query,
+                question,  # Use original question, not enhanced
                 {"model": self.config.llm.model_name},
                 result
             )
