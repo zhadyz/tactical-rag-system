@@ -1,0 +1,18 @@
+# Multi-Agent Infrastructure Dependencies
+# Install with: pip install -r requirements-agent.txt
+
+# LangGraph - Agent workflow orchestration
+langgraph>=0.2.28
+
+# LangChain - Required by LangGraph
+langchain>=0.3.0
+langchain-core>=0.3.0
+
+# Redis - Real-time pub/sub coordination
+redis>=5.0.0
+
+# Python standard library extensions
+python-dotenv>=1.0.0
+
+# Type checking
+pydantic>=2.0.0
