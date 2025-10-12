@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(git tag:*)",
+      "Bash(redis-cli:*)",
+      "Bash(ollama list:*)",
+      "Bash(timeout 60 python _src/benchmark_suite.py)",
+      "Bash(where python)",
+      "Bash(timeout:*)",
+      "Bash(time docker exec ollama-server ollama run:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
