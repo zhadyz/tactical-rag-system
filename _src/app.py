@@ -21,7 +21,7 @@ from langchain_community.retrievers import BM25Retriever
 from config import SystemConfig, load_config
 from adaptive_retrieval import AdaptiveRetriever, AdaptiveAnswerGenerator, RetrievalResult
 from document_processor import DocumentProcessor, ProcessingResult
-from cache_and_monitoring import CacheManager, PerformanceMonitor, Timer
+from cache_and_monitoring import CacheManager, PerformanceMonitor, Timer, PerformanceProfiler
 from example_generator import ExampleGenerator
 from conversation_memory import ConversationMemory
 from feedback_system import FeedbackManager
@@ -63,6 +63,7 @@ class EnterpriseRAGSystem:
         self.llm: Optional[OllamaLLM] = None
         self.cache_manager: Optional[CacheManager] = None
         self.monitor: Optional[PerformanceMonitor] = None
+        self.profiler: Optional[PerformanceProfiler] = None
         self.conversation_memory: Optional[ConversationMemory] = None
         self.feedback_manager: Optional[FeedbackManager] = None
         self.initialized = False
@@ -146,6 +147,7 @@ class EnterpriseRAGSystem:
             logger.info("\n1. Initializing infrastructure...")
             self.cache_manager = CacheManager(self.config)
             self.monitor = PerformanceMonitor(self.config, self.cache_manager)
+            self.profiler = PerformanceProfiler(output_dir=Path("logs"))
             
             logger.info("\n2. Connecting to embedding model...")
             embeddings = OllamaEmbeddings(
@@ -262,7 +264,7 @@ class EnterpriseRAGSystem:
             return False, f"Initialization failed: {str(e)}"
     
     async def query(self, question: str, use_context: bool = True) -> Dict:
-        """Process query with multi-turn conversation memory"""
+        """Process query with multi-turn conversation memory and comprehensive profiling"""
 
         if not self.initialized:
             return {
@@ -272,6 +274,10 @@ class EnterpriseRAGSystem:
             }
 
         start_time = asyncio.get_event_loop().time()
+
+        # Start profiling
+        if self.profiler:
+            self.profiler.start_profile(question)
 
         try:
             # Use conversation memory for context-aware query enhancement
@@ -290,12 +296,28 @@ class EnterpriseRAGSystem:
             if cached_result:
                 logger.info(f"Cache hit for query: {question[:50]}...")
                 self.monitor.metrics.increment_counter("cache_hits")
+                # Complete profile with cache hit
+                if self.profiler:
+                    self.profiler.record_stage("cache_ms", 0)
+                    self.profiler.complete_profile(success=True)
                 return cached_result
 
-            with Timer(self.monitor.metrics, "retrieval_total"):
+            # Profile retrieval stage
+            retrieval_timer = Timer(self.monitor.metrics, "retrieval_total")
+            with retrieval_timer:
                 retrieval_result = await self.retrieval_engine.retrieve(enhanced_query)
 
+            # Record retrieval timing
+            if self.profiler:
+                self.profiler.record_stage("retrieval_ms", retrieval_timer.elapsed * 1000)
+                self.profiler.set_metadata(
+                    query_type=retrieval_result.query_type,
+                    strategy_used=retrieval_result.strategy_used
+                )
+
             if not retrieval_result.documents:
+                if self.profiler:
+                    self.profiler.complete_profile(success=True)
                 return {
                     "answer": "I couldn't find any relevant documents to answer your question.",
                     "sources": [],
@@ -305,11 +327,17 @@ class EnterpriseRAGSystem:
                     }
                 }
 
-            with Timer(self.monitor.metrics, "generation"):
+            # Profile LLM generation stage
+            generation_timer = Timer(self.monitor.metrics, "generation")
+            with generation_timer:
                 answer = await self.answer_generator.generate(
                     question,
                     retrieval_result
                 )
+
+            # Record generation timing
+            if self.profiler:
+                self.profiler.record_stage("llm_ms", generation_timer.elapsed * 1000)
 
             result = {
                 "answer": answer,
@@ -349,6 +377,10 @@ class EnterpriseRAGSystem:
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=True)
 
+            # Complete profiling
+            if self.profiler:
+                self.profiler.complete_profile(success=True)
+
             return result
 
         except Exception as e:
@@ -356,6 +388,10 @@ class EnterpriseRAGSystem:
 
             elapsed = asyncio.get_event_loop().time() - start_time
             self.monitor.metrics.record_query(elapsed, success=False)
+
+            # Complete profiling with error
+            if self.profiler:
+                self.profiler.complete_profile(success=False, error=str(e))
 
             return {
                 "answer": f"An error occurred: {str(e)}",

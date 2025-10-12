@@ -435,17 +435,197 @@ class PerformanceMonitor:
 
 class Timer:
     """Context manager for timing operations"""
-    
+
     def __init__(self, metrics: MetricsCollector, name: str):
         self.metrics = metrics
         self.name = name
         self.start_time = None
-    
+        self.elapsed = 0
+
     def __enter__(self):
         self.start_time = time.time()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        elapsed = time.time() - self.start_time
-        self.metrics.record_timer(self.name, elapsed)
+        self.elapsed = time.time() - self.start_time
+        self.metrics.record_timer(self.name, self.elapsed)
         return False
+
+
+@dataclass
+class ProfileData:
+    """Single query profile data"""
+    query: str
+    query_type: str
+    strategy_used: str
+    timings: Dict[str, float]
+    success: bool
+    timestamp: str
+    error: Optional[str] = None
+
+
+class PerformanceProfiler:
+    """
+    Comprehensive performance profiler for RAG pipeline
+    Tracks timing for each stage: embedding, search, rerank, LLM
+    """
+
+    def __init__(self, output_dir: Path = Path("logs")):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
+
+        self.profiles: List[ProfileData] = []
+        self.current_profile: Dict[str, Any] = {}
+        self.lock = threading.RLock()
+
+        logger.info("Performance profiler initialized")
+
+    def start_profile(self, query: str) -> None:
+        """Start profiling a new query"""
+
+        with self.lock:
+            self.current_profile = {
+                "query": query,
+                "query_type": None,
+                "strategy_used": None,
+                "timings": {},
+                "success": False,
+                "start_time": time.time(),
+                "timestamp": datetime.now().isoformat(),
+                "error": None
+            }
+
+    def record_stage(self, stage: str, duration_ms: float) -> None:
+        """Record timing for a specific stage"""
+
+        with self.lock:
+            if self.current_profile:
+                self.current_profile["timings"][stage] = duration_ms
+
+    def set_metadata(self, query_type: str = None, strategy_used: str = None) -> None:
+        """Set query metadata"""
+
+        with self.lock:
+            if self.current_profile:
+                if query_type:
+                    self.current_profile["query_type"] = query_type
+                if strategy_used:
+                    self.current_profile["strategy_used"] = strategy_used
+
+    def complete_profile(self, success: bool = True, error: str = None) -> None:
+        """Complete current profile"""
+
+        with self.lock:
+            if not self.current_profile:
+                return
+
+            self.current_profile["success"] = success
+            self.current_profile["error"] = error
+
+            # Calculate total time
+            total_time = (time.time() - self.current_profile["start_time"]) * 1000
+            self.current_profile["timings"]["total_ms"] = total_time
+
+            # Remove start_time (not JSON serializable context)
+            self.current_profile.pop("start_time", None)
+
+            # Create ProfileData
+            profile = ProfileData(
+                query=self.current_profile["query"],
+                query_type=self.current_profile.get("query_type", "unknown"),
+                strategy_used=self.current_profile.get("strategy_used", "unknown"),
+                timings=self.current_profile["timings"],
+                success=success,
+                timestamp=self.current_profile["timestamp"],
+                error=error
+            )
+
+            self.profiles.append(profile)
+            self.current_profile = {}
+
+    def get_summary(self) -> Dict:
+        """Get profiling summary statistics"""
+
+        with self.lock:
+            if not self.profiles:
+                return {
+                    "total_queries": 0,
+                    "successful_queries": 0,
+                    "failed_queries": 0,
+                    "average_times": {}
+                }
+
+            successful = [p for p in self.profiles if p.success]
+
+            if not successful:
+                return {
+                    "total_queries": len(self.profiles),
+                    "successful_queries": 0,
+                    "failed_queries": len(self.profiles),
+                    "average_times": {}
+                }
+
+            # Calculate averages
+            avg_timings = {}
+
+            # Get all timing keys
+            all_keys = set()
+            for profile in successful:
+                all_keys.update(profile.timings.keys())
+
+            # Calculate average for each key
+            for key in all_keys:
+                values = [
+                    p.timings.get(key, 0)
+                    for p in successful
+                    if key in p.timings
+                ]
+                if values:
+                    avg_timings[key] = sum(values) / len(values)
+
+            return {
+                "total_queries": len(self.profiles),
+                "successful_queries": len(successful),
+                "failed_queries": len(self.profiles) - len(successful),
+                "average_times": avg_timings,
+                "timestamp": datetime.now().isoformat()
+            }
+
+    def save_profiles(self, filename: str = "performance_profiles.json") -> Path:
+        """Save all profiles to JSON file"""
+
+        with self.lock:
+            output_file = self.output_dir / filename
+
+            # Convert dataclasses to dict
+            profiles_dict = [
+                {
+                    "query": p.query,
+                    "query_type": p.query_type,
+                    "strategy_used": p.strategy_used,
+                    "timings": p.timings,
+                    "success": p.success,
+                    "timestamp": p.timestamp,
+                    "error": p.error
+                }
+                for p in self.profiles
+            ]
+
+            data = {
+                "profiles": profiles_dict,
+                "summary": self.get_summary()
+            }
+
+            with open(output_file, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            logger.info(f"Profiles saved to {output_file}")
+            return output_file
+
+    def reset(self) -> None:
+        """Clear all profiles"""
+
+        with self.lock:
+            self.profiles.clear()
+            self.current_profile = {}
+            logger.info("Profiler reset")
