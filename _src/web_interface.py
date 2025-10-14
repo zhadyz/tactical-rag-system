@@ -1,3 +1,15 @@
+"""
+⚠️ LEGACY FILE - DEPRECATED
+============================
+
+This Gradio interface has been replaced by React + FastAPI architecture.
+
+Production stack:
+- Frontend: React + TypeScript (frontend/src/)
+- Backend: FastAPI (backend/app/)
+
+This file is kept for reference only and will be removed in a future version.
+"""
 
 import gradio as gr
 import asyncio

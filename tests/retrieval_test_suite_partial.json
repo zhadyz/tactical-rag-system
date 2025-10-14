@@ -1,0 +1,184 @@
+{
+  "metadata": {
+    "document": "AFI 34-1201 Protocol",
+    "total_chunks": 1008,
+    "created_by": "Agent 1: Test Suite Creator",
+    "created_date": "2025-10-12",
+    "purpose": "Phase 0 Retrieval Quality Baseline Assessment"
+  },
+  "test_queries": [
+    {
+      "test_id": "001",
+      "category": "military_terminology",
+      "difficulty": "hard",
+      "query": "What about to the colors?",
+      "query_variants": [
+        "the colors",
+        "salute to the colors",
+        "what do I do for the colors"
+      ],
+      "ground_truth": {
+        "answer": "To The Color is a Service or Formation Call sounded as a salute to the National Colors (flag), the President, Vice-President, former Presidents and foreign chief magistrates. Military members render a hand salute and face the flag or face the direction of the music if the flag is not in view. It is sounded in place of The Star-Spangled Banner when a bugler is used instead of a live band or taped recording.",
+        "source_sections": [
+          "2.19"
+        ],
+        "key_excerpts": [
+          "To The Color, a Service or Formation Call, is sounded as a salute to the National Colors",
+          "Military members render a hand salute and face the flag or face the direction of the music if the flag is not in view"
+        ],
+        "correct_chunk_ids": [
+          "chunk_111",
+          "chunk_112"
+        ]
+      },
+      "tags": [
+        "ceremony",
+        "flag",
+        "salute",
+        "military_terminology",
+        "bugle_call"
+      ],
+      "expected_retrieval": {
+        "must_retrieve": [
+          "chunk_111",
+          "chunk_112"
+        ],
+        "should_not_retrieve": [
+          "beard_chunks",
+          "grooming_chunks",
+          "uniform_chunks"
+        ],
+        "difficulty_note": "The term 'the colors' is military jargon for 'the flag' which requires semantic understanding"
+      }
+    },
+    {
+      "test_id": "002",
+      "category": "direct_fact",
+      "difficulty": "easy",
+      "query": "What song is authorized for playing at Air Force ceremonies when colors are presented?",
+      "ground_truth": {
+        "answer": "The national anthem, first verse, is the only song authorized for playing at Air Force ceremonies when colors are presented. 'God Bless America' or other patriotic songs will not be substituted for the national anthem.",
+        "source_sections": [
+          "2.17"
+        ],
+        "key_excerpts": [
+          "The national anthem, first verse, is the only song authorized for playing at Air Force ceremonies when colors are presented",
+          "God Bless America or other patriotic songs will not be substituted for the national anthem"
+        ],
+        "correct_chunk_ids": [
+          "chunk_106"
+        ]
+      },
+      "tags": [
+        "ceremony",
+        "national_anthem",
+        "music",
+        "protocol"
+      ],
+      "expected_retrieval": {
+        "must_retrieve": [
+          "chunk_106"
+        ],
+        "should_retrieve": [
+          "chunk_105",
+          "chunk_107"
+        ]
+      }
+    },
+    {
+      "test_id": "003",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "When should the United States flag be flown at half-staff?",
+      "ground_truth": {
+        "answer": "The United States flag is flown at half-staff according to Department of Defense Instruction (DoDI) 1005.06, Display of the National Flag at Half-staff. The document provides specific guidance on authorized occasions for half-staff display.",
+        "source_sections": [
+          "2.13",
+          "cover page"
+        ],
+        "key_excerpts": [
+          "Department of Defense Instruction (DoDI) 1005.06, Display of the National Flag at Half-staff"
+        ],
+        "correct_chunk_ids": [
+          "chunk_0",
+          "chunk_1"
+        ]
+      },
+      "tags": [
+        "flag",
+        "half-staff",
+        "protocol",
+        "mourning"
+      ],
+      "expected_retrieval": {
+        "must_retrieve": [
+          "chunk_0",
+          "chunk_1"
+        ],
+        "should_retrieve": [
+          "half-staff related chunks"
+        ]
+      }
+    },
+    {
+      "test_id": "004",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "How should military members in uniform render the Pledge of Allegiance?",
+      "ground_truth": {
+        "answer": "Military members in uniform should remain silent, face the flag, and render the military salute if outdoors and indoors if in formation and wearing appropriate headdress. If indoors and without headdress, military members should stand at attention, remain silent, and face the flag. Military members in uniform do not recite the Pledge of Allegiance to the flag.",
+        "source_sections": [
+          "2.18"
+        ],
+        "key_excerpts": [
+          "Persons in uniform should remain silent, face the flag, and render the military salute if out doors and indoors if in formation and wearing appropriate headdress",
+          "Military members in uniform do not recite the Pledge of Allegiance to the flag"
+        ],
+        "correct_chunk_ids": [
+          "chunk_111"
+        ]
+      },
+      "tags": [
+        "pledge",
+        "salute",
+        "protocol",
+        "uniform"
+      ],
+      "expected_retrieval": {
+        "must_retrieve": [
+          "chunk_111"
+        ]
+      }
+    },
+    {
+      "test_id": "005",
+      "category": "military_terminology",
+      "difficulty": "medium",
+      "query": "What is the order of precedence for flags?",
+      "ground_truth": {
+        "answer": "Section 2.11 of AFI 34-1201 provides the order of precedence of flags. The United States flag always has the highest precedence among flags displayed.",
+        "source_sections": [
+          "2.11"
+        ],
+        "key_excerpts": [
+          "Order of Precedence of Flags"
+        ],
+        "correct_chunk_ids": [
+          "chunk_14",
+          "chunk_93"
+        ]
+      },
+      "tags": [
+        "flag",
+        "precedence",
+        "protocol",
+        "display"
+      ],
+      "expected_retrieval": {
+        "must_retrieve": [
+          "chunks containing 2.11 Order of Precedence"
+        ]
+      }
+    }
+  ]
+}

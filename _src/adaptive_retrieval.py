@@ -25,6 +25,40 @@ logger = logging.getLogger(__name__)
 # CRITICAL: Force rerankers to use CUDA (prevents silent CPU fallback)
 os.environ['DEVICE_TYPE'] = 'cuda'
 
+# Military terminology synonym dictionary for vague query handling
+MILITARY_SYNONYMS = {
+    # Songs and music
+    "song": ["national anthem", "anthem", "To The Color", "music"],
+    "music": ["anthem", "national anthem", "song"],
+
+    # Headgear
+    "hat": ["headgear", "cover", "cap", "hat"],
+    "cap": ["headgear", "cover", "cap"],
+
+    # Facial hair
+    "beard": ["beard", "facial hair", "grooming", "shaving"],
+    "shave": ["shaving", "facial hair", "beard", "grooming"],
+    "shaving": ["shave", "facial hair", "beard", "grooming"],
+    "facial hair": ["beard", "grooming", "shaving"],
+
+    # Clothing
+    "clothes": ["uniform", "attire", "dress"],
+    "clothing": ["uniform", "attire", "dress"],
+
+    # Body modifications
+    "tattoo": ["tattoo", "body art", "ink"],
+    "tattoos": ["tattoo", "body art", "ink"],
+
+    # Jewelry
+    "earring": ["earring", "jewelry", "accessory"],
+    "earrings": ["earring", "jewelry", "accessories"],
+    "jewelry": ["accessory", "earring", "ornament"],
+
+    # Ceremonies
+    "salute": ["saluting", "render honors", "courtesy", "respect"],
+    "saluting": ["salute", "render honors", "courtesy"],
+}
+
 
 @dataclass
 class RetrievalResult:
@@ -83,7 +117,31 @@ class AdaptiveRetriever:
             return self.runtime_settings.get(key, default)
         except:
             return default
-    
+
+    def _expand_with_synonyms(self, query: str) -> str:
+        """
+        Expand query with domain-specific military synonyms.
+        Handles vague casual language → formal military terminology mapping.
+        Zero latency cost.
+        """
+        words = query.lower().split()
+        expanded_terms = set(words)  # Start with original words
+
+        for word in words:
+            # Remove punctuation for matching
+            clean_word = word.strip('.,!?')
+            if clean_word in MILITARY_SYNONYMS:
+                # Add top 2 synonyms for this word
+                synonyms = MILITARY_SYNONYMS[clean_word][:2]
+                expanded_terms.update(synonyms)
+                logger.debug(f"Synonym expansion: '{clean_word}' → {synonyms}")
+
+        expanded_query = " ".join(expanded_terms)
+        if expanded_query != query.lower():
+            logger.info(f"Query expanded: '{query}' → includes terms: {expanded_terms - set(words)}")
+
+        return expanded_query
+
     async def retrieve(self, query: str) -> RetrievalResult:
         """Adaptive retrieval with dynamic settings and explainability"""
 
@@ -185,17 +243,20 @@ class AdaptiveRetriever:
         return query_type, explanation
     
     async def _simple_retrieval(self, query: str, explanation: QueryExplanation) -> RetrievalResult:
-        """Simple retrieval with dynamic K"""
+        """Simple retrieval with synonym expansion for vague queries"""
 
         logger.info(f"SIMPLE retrieval: {query[:60]}...")
+
+        # Expand query with military synonyms (zero latency cost)
+        expanded_query = self._expand_with_synonyms(query)
 
         # Get dynamic K value
         k = self._get_setting('simple_k', 5)
 
-        # Get top K results
+        # Get top K results using expanded query
         results = await asyncio.to_thread(
             self.vectorstore.similarity_search_with_score,
-            query,
+            expanded_query,
             k=k
         )
 
@@ -234,23 +295,26 @@ class AdaptiveRetriever:
         )
     
     async def _hybrid_retrieval(self, query: str, explanation: QueryExplanation) -> RetrievalResult:
-        """Hybrid retrieval with RRF fusion and dynamic settings"""
+        """Hybrid retrieval with RRF fusion, synonym expansion, and dynamic settings"""
 
         logger.info(f"HYBRID retrieval: {query[:60]}...")
-        
+
+        # Expand query with military synonyms
+        expanded_query = self._expand_with_synonyms(query)
+
         # Get dynamic K value
         k = self._get_setting('hybrid_k', 20)
         rrf_k = self._get_setting('rrf_constant', 60)
-        
-        # Parallel retrieval
+
+        # Parallel retrieval with expanded query
         dense_task = asyncio.to_thread(
             self.vectorstore.similarity_search_with_score,
-            query,
+            expanded_query,
             k=k
         )
         sparse_task = asyncio.to_thread(
             self.bm25_retriever.get_relevant_documents,
-            query
+            expanded_query
         )
         
         dense_results, sparse_results = await asyncio.gather(
@@ -497,9 +561,12 @@ Alternative 2:"""
 
 class AdaptiveAnswerGenerator:
     """Answer generator with proper prompting"""
-    
-    def __init__(self, llm: OllamaLLM):
+
+    def __init__(self, llm: OllamaLLM, embeddings=None, collection_metadata=None, scope_config=None):
         self.llm = llm
+        self.embeddings = embeddings
+        self.collection_metadata = collection_metadata
+        self.scope_config = scope_config
     
     async def generate(
         self,

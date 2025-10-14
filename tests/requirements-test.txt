@@ -1,0 +1,54 @@
+# Test Requirements for Tactical RAG Test Suite
+# Install with: pip install -r requirements-test.txt
+
+# Core Testing Framework
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-timeout>=2.2.0
+pytest-xdist>=3.5.0  # Parallel test execution
+
+# Performance Testing
+pytest-benchmark>=4.0.0
+memory-profiler>=0.61.0
+psutil>=5.9.0
+
+# HTTP Testing
+requests>=2.31.0
+httpx>=0.25.0  # Async HTTP client
+
+# Data Generation & Validation
+faker>=22.0.0
+hypothesis>=6.98.0  # Property-based testing
+
+# Mocking & Fixtures
+pytest-mock>=3.12.0
+responses>=0.24.0  # HTTP request mocking
+
+# Reporting & Visualization
+pytest-html>=4.1.1
+pytest-json-report>=1.5.0
+
+# Required for test infrastructure
+numpy>=1.24.0
+redis>=5.0.1
+
+# For ChromaDB/Qdrant testing
+chromadb>=0.4.0  # If testing ChromaDB
+qdrant-client>=1.7.0  # If testing Qdrant
+sentence-transformers>=2.2.0  # For reranker testing
+
+# LangChain (for integration tests)
+langchain>=0.1.0
+langchain-community>=0.0.20
+langchain-chroma>=0.1.0
+
+# Optional: Load testing
+locust>=2.20.0  # Web-based load testing
+
+# Optional: Profiling
+py-spy>=0.3.14  # Sampling profiler
+scalene>=1.5.0  # CPU/GPU/memory profiler
+
+# Documentation
+markdown>=3.5.0

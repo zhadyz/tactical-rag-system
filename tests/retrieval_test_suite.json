@@ -1,0 +1,609 @@
+{
+  "metadata": {
+    "document": "AFI 34-1201 Air Force Protocol",
+    "document_type": "Air Force Instruction",
+    "total_chunks_indexed": 1008,
+    "created_by": "Agent 1: Test Suite Creator",
+    "created_date": "2025-10-12",
+    "version": "1.0",
+    "purpose": "Phase 0 Retrieval Quality Baseline Assessment",
+    "note": "CRITICAL: The indexed document is AFI 34-1201 (Protocol), NOT AFI 36-2903 (Dress and Appearance). All queries are based on the actual indexed content."
+  },
+  "test_queries": [
+    {
+      "test_id": "001",
+      "category": "military_terminology",
+      "difficulty": "hard",
+      "query": "What about to the colors?",
+      "query_variants": [
+        "the colors",
+        "salute to the colors",
+        "what do I do for the colors",
+        "to the color"
+      ],
+      "ground_truth": {
+        "answer": "To The Color is a Service or Formation Call sounded as a salute to the National Colors (flag), the President, Vice-President, former Presidents and foreign chief magistrates. Military members render a hand salute and face the flag or face the direction of the music if the flag is not in view. It is sounded in place of The Star-Spangled Banner when a bugler is used instead of a live band or taped recording.",
+        "source_sections": ["2.19"],
+        "key_excerpts": [
+          "To The Color, a Service or Formation Call, is sounded as a salute to the National Colors",
+          "Military members render a hand salute and face the flag or face the direction of the music if the flag is not in view",
+          "To The Color is sounded in place of The Star-Spangeld Banner when a bugler is used in lieu of a live band"
+        ],
+        "expected_chunk_keywords": ["To The Color", "Service or Formation Call", "National Colors", "hand salute"]
+      },
+      "tags": ["ceremony", "flag", "salute", "military_terminology", "bugle_call", "KNOWN_FAILURE"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["To The Color ceremony", "flag salute procedures"],
+        "must_not_retrieve_topics": ["beard regulations", "grooming standards", "uniform dress"],
+        "difficulty_note": "The term 'the colors' is military jargon for 'the flag' which requires semantic understanding"
+      },
+      "baseline_expected_result": "FAIL - System likely returns wrong content (e.g., beard/grooming info)"
+    },
+    {
+      "test_id": "002",
+      "category": "direct_fact",
+      "difficulty": "easy",
+      "query": "What song is authorized for playing at Air Force ceremonies when colors are presented?",
+      "ground_truth": {
+        "answer": "The national anthem, first verse, is the only song authorized for playing at Air Force ceremonies when colors are presented. 'God Bless America' or other patriotic songs will not be substituted for the national anthem.",
+        "source_sections": ["2.17"],
+        "key_excerpts": [
+          "The national anthem, first verse, is the only song authorized for playing at Air Force ceremonies when colors are presented",
+          "God Bless America or other patriotic songs will not be substituted for the national anthem"
+        ]
+      },
+      "tags": ["ceremony", "national_anthem", "music", "protocol"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["national anthem", "ceremony music", "Air Force ceremonies"]
+      },
+      "baseline_expected_result": "PASS - Clear keywords should work"
+    },
+    {
+      "test_id": "003",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "When should the United States flag be flown at half-staff?",
+      "ground_truth": {
+        "answer": "The United States flag is flown at half-staff according to Department of Defense Instruction (DoDI) 1005.06, Display of the National Flag at Half-staff. AFI 34-1201 implements this DoD instruction and provides specific guidance on authorized occasions for half-staff display.",
+        "source_sections": ["2.13", "cover page"],
+        "key_excerpts": [
+          "Department of Defense Instruction (DoDI) 1005.06, Display of the National Flag at Half-staff",
+          "Display of the United States Flag at Half-Staff"
+        ]
+      },
+      "tags": ["flag", "half-staff", "protocol", "mourning"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["half-staff", "flag display", "mourning protocols"]
+      },
+      "baseline_expected_result": "LIKELY_PASS - Good keyword match"
+    },
+    {
+      "test_id": "004",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "How should military members in uniform render the Pledge of Allegiance?",
+      "ground_truth": {
+        "answer": "Military members in uniform should remain silent, face the flag, and render the military salute if outdoors and indoors if in formation and wearing appropriate headdress. If indoors and without headdress, military members should stand at attention, remain silent, and face the flag. Military members in uniform do not recite the Pledge of Allegiance to the flag.",
+        "source_sections": ["2.18"],
+        "key_excerpts": [
+          "Persons in uniform should remain silent, face the flag, and render the military salute if out doors and indoors if in formation",
+          "Military members in uniform do not recite the Pledge of Allegiance to the flag"
+        ]
+      },
+      "tags": ["pledge", "salute", "protocol", "uniform"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["Pledge of Allegiance", "uniform protocol", "salute"]
+      },
+      "baseline_expected_result": "PASS - Clear keywords"
+    },
+    {
+      "test_id": "005",
+      "category": "military_terminology",
+      "difficulty": "medium",
+      "query": "What is the order of precedence for flags?",
+      "ground_truth": {
+        "answer": "Section 2.11 of AFI 34-1201 provides the order of precedence of flags. The United States flag always has the highest precedence and takes the position of honor. Regimental colors, state flags, and organizational or institutional flags are always dipped as a mark of respect to the United States Flag.",
+        "source_sections": ["2.11"],
+        "key_excerpts": [
+          "Order of Precedence of Flags",
+          "Regimental colors, state flags and organizat ional or institutional flags are always dipped as a mark of respect to the United States Flag"
+        ]
+      },
+      "tags": ["flag", "precedence", "protocol", "display"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["flag precedence", "order of flags"]
+      },
+      "baseline_expected_result": "PASS - Good keyword match"
+    },
+    {
+      "test_id": "006",
+      "category": "direct_fact",
+      "difficulty": "easy",
+      "query": "What does Taps signify?",
+      "ground_truth": {
+        "answer": "Taps began as a signal to extinguish lights (lights out) at the end of the day. It is now used at military funerals and memorial services.",
+        "source_sections": ["2.20"],
+        "key_excerpts": [
+          "Taps began as a signal to extinguish lights (lights out) at the end of the day"
+        ]
+      },
+      "tags": ["bugle_call", "taps", "ceremony", "military_tradition"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["Taps", "bugle calls"]
+      },
+      "baseline_expected_result": "PASS - Direct keyword match"
+    },
+    {
+      "test_id": "007",
+      "category": "military_terminology",
+      "difficulty": "hard",
+      "query": "What are reveille and retreat?",
+      "ground_truth": {
+        "answer": "Reveille and Retreat are military bugle calls. Section 2.21 of AFI 34-1201 covers these ceremonial calls and proper protocol during their playing.",
+        "source_sections": ["2.21"],
+        "key_excerpts": [
+          "Reveille and Retreat"
+        ]
+      },
+      "tags": ["bugle_call", "reveille", "retreat", "military_terminology", "ceremony"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["reveille", "retreat", "bugle calls"]
+      },
+      "baseline_expected_result": "PASS - Clear military terms"
+    },
+    {
+      "test_id": "008",
+      "category": "complex_query",
+      "difficulty": "hard",
+      "query": "What is the proper way to fold the United States flag?",
+      "ground_truth": {
+        "answer": "AFI 34-1201 Section 2.15 addresses the Flag Folding Ceremony. The instruction previously included a flag folding script (Figure A.3.2) but notes that the official flag folding script is not required and has been deleted. Attachment 4 provides the proper method for folding the United States Flag.",
+        "source_sections": ["2.15", "Summary of Changes"],
+        "key_excerpts": [
+          "Flag Folding Ceremony",
+          "See Attachment 4 for the proper method for folding the United States Flag",
+          "The official flag folding script (Figure A.3.2.) is not required and has been deleted"
+        ]
+      },
+      "tags": ["flag", "ceremony", "folding", "protocol"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["flag folding", "ceremony", "Attachment 4"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Depends on chunk boundaries"
+    },
+    {
+      "test_id": "009",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "What is the Air Force Departmental Flag?",
+      "ground_truth": {
+        "answer": "The United States Air Force Departmental Flag is described in Section 2.22 of AFI 34-1201, with an illustration provided in Figure 2.16.",
+        "source_sections": ["2.22"],
+        "key_excerpts": [
+          "United States Air Force Departmental Flag"
+        ]
+      },
+      "tags": ["flag", "air_force", "departmental_flag"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["Air Force Departmental Flag", "official flags"]
+      },
+      "baseline_expected_result": "PASS - Direct terminology"
+    },
+    {
+      "test_id": "010",
+      "category": "military_terminology",
+      "difficulty": "medium",
+      "query": "What are positional flags?",
+      "ground_truth": {
+        "answer": "Positional flags are flags that represent specific positions of authority. Section 2.25 covers positional flags including those for the President of the United States, Vice President, Secretary of Defense, Secretary of the Air Force, Chairman of the Joint Chiefs of Staff, and other senior leaders.",
+        "source_sections": ["2.25"],
+        "key_excerpts": [
+          "Positional Flags"
+        ]
+      },
+      "tags": ["flags", "positional_flags", "military_terminology", "leadership"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["positional flags", "official flags", "senior leaders"]
+      },
+      "baseline_expected_result": "PASS - Clear terminology"
+    },
+    {
+      "test_id": "011",
+      "category": "military_terminology",
+      "difficulty": "hard",
+      "query": "What are personal colors?",
+      "ground_truth": {
+        "answer": "Personal colors are individual flags for general officers. Section 2.26 describes 'Individual Flags or Personal Colors' with illustrations in Figure 2.33 showing General Officer Flags (Personal Colors).",
+        "source_sections": ["2.26"],
+        "key_excerpts": [
+          "Individual Flags or Personal Colors",
+          "General Officer Flags (Personal Colors)"
+        ]
+      },
+      "tags": ["flags", "personal_colors", "general_officers", "military_terminology"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["personal colors", "general officer flags"]
+      },
+      "baseline_expected_result": "UNCERTAIN - 'colors' has multiple meanings"
+    },
+    {
+      "test_id": "012",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "What are guidons?",
+      "ground_truth": {
+        "answer": "Guidons are unit identification flags. Section 2.27 covers guidons with illustrations provided in Figure 2.35.",
+        "source_sections": ["2.27"],
+        "key_excerpts": [
+          "Guidons"
+        ]
+      },
+      "tags": ["flags", "guidons", "unit_identification"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["guidons", "unit flags"]
+      },
+      "baseline_expected_result": "PASS - Direct term"
+    },
+    {
+      "test_id": "013",
+      "category": "complex_query",
+      "difficulty": "hard",
+      "query": "How should the flag be displayed during a ceremonial review?",
+      "ground_truth": {
+        "answer": "During ceremonial reviews, proper courtesies to the flag must be rendered during parades or passes in review. When in a moving column, the salute should be rendered six paces before passing the flag and held until six paces past the flag. When attending ceremonial reviews, personnel in uniform should render a salute as the flag passes their position.",
+        "source_sections": ["2.16"],
+        "key_excerpts": [
+          "Ceremonial Reviews. Render proper courtesies to the flag during parades or passes in review",
+          "When in a moving column, the salute should be rendered six paces before passing the flag and held until six paces past the flag"
+        ]
+      },
+      "tags": ["ceremony", "flag", "salute", "review", "parade"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["ceremonial reviews", "flag protocol", "salute"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Multi-concept query"
+    },
+    {
+      "test_id": "014",
+      "category": "complex_query",
+      "difficulty": "hard",
+      "query": "What is the difference between official and unofficial ceremonies?",
+      "ground_truth": {
+        "answer": "AFI 34-1201 clarifies that official versus unofficial ceremonies and social events have different protocols. Receptions tied to an official ceremony should be considered official events that permit the use of government resources and personnel to plan and execute. Unofficial social events should be planned and executed by volunteers.",
+        "source_sections": ["Summary of Changes"],
+        "key_excerpts": [
+          "This revision clarifies official versus unoffi cial ceremonies and social events",
+          "Receptions tied to an official ceremony should be considered official events that permit the use of government resources",
+          "Unofficial social events should be planned and executed by volu nteers"
+        ]
+      },
+      "tags": ["ceremony", "protocol", "official", "unofficial", "government_resources"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["official ceremonies", "unofficial ceremonies", "protocol differences"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Abstract concept"
+    },
+    {
+      "test_id": "015",
+      "category": "edge_case",
+      "difficulty": "medium",
+      "query": "Can appropriated funds be used for protocol activities?",
+      "ground_truth": {
+        "answer": "Chapter 3 of AFI 34-1201 covers FUNDING for protocol activities. Section 3.2 addresses Appropriated Funds (APF), Section 3.3 covers Nonappropriated Funds, and Section 3.4 discusses when government funds are not authorized or available.",
+        "source_sections": ["Chapter 3", "3.2", "3.3", "3.4"],
+        "key_excerpts": [
+          "Appropriated Funds",
+          "Nonappropriated Funds",
+          "When Government Funds Are Not Authorized or Available"
+        ]
+      },
+      "tags": ["funding", "appropriated_funds", "budget", "protocol"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["funding", "appropriated funds", "Chapter 3"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Financial topic"
+    },
+    {
+      "test_id": "016",
+      "category": "direct_fact",
+      "difficulty": "easy",
+      "query": "What chapter covers mementos?",
+      "ground_truth": {
+        "answer": "Chapter 4 covers MEMENTOS, including sections on stewardship (4.2), inventories (4.3), honoraria (4.4), and accepting gifts (4.5).",
+        "source_sections": ["Chapter 4"],
+        "key_excerpts": [
+          "Chapter 4— MEMENTOS"
+        ]
+      },
+      "tags": ["mementos", "gifts", "protocol"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["Chapter 4", "mementos"]
+      },
+      "baseline_expected_result": "PASS - Direct chapter reference"
+    },
+    {
+      "test_id": "017",
+      "category": "direct_fact",
+      "difficulty": "medium",
+      "query": "What chapter covers transportation protocol?",
+      "ground_truth": {
+        "answer": "Chapter 5 covers TRANSPORTATION protocol.",
+        "source_sections": ["Chapter 5"],
+        "key_excerpts": [
+          "Chapter 5— TRANSPORTATION"
+        ]
+      },
+      "tags": ["transportation", "protocol", "vehicles"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["Chapter 5", "transportation"]
+      },
+      "baseline_expected_result": "PASS - Direct chapter reference"
+    },
+    {
+      "test_id": "018",
+      "category": "military_terminology",
+      "difficulty": "medium",
+      "query": "What is a CMSAF?",
+      "ground_truth": {
+        "answer": "CMSAF stands for Chief Master Sergeant of the Air Force. The Summary of Changes identifies new guidance on precedence for former Chief Master Sergeants of the Air Force (CMSAFs) at Air Force functions, and includes the description of the CMSAF positional colors.",
+        "source_sections": ["Summary of Changes", "2.32"],
+        "key_excerpts": [
+          "Chief Master Sergeants of the Air Force (CMSAFs)",
+          "CMSAF positional co lors",
+          "Chief Master Sergeant of the Air Force Flag"
+        ]
+      },
+      "tags": ["acronym", "CMSAF", "enlisted", "leadership"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["CMSAF", "Chief Master Sergeant of the Air Force"]
+      },
+      "baseline_expected_result": "PASS - Acronym appears in document"
+    },
+    {
+      "test_id": "019",
+      "category": "edge_case",
+      "difficulty": "hard",
+      "query": "What are streamers and how are they arranged?",
+      "ground_truth": {
+        "answer": "Streamers are ceremonial ribbons attached to flags. Section 2.28 covers streamers with illustrations in Figures 2.36 (Streamers) and 2.37 (Streamer Arrangement).",
+        "source_sections": ["2.28"],
+        "key_excerpts": [
+          "Streamers",
+          "Streamer Arrangement"
+        ]
+      },
+      "tags": ["flags", "streamers", "ceremony", "display"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["streamers", "streamer arrangement"]
+      },
+      "baseline_expected_result": "PASS - Direct terminology"
+    },
+    {
+      "test_id": "020",
+      "category": "complex_query",
+      "difficulty": "hard",
+      "query": "What are the proper dimensions and ratios for flagstaffs?",
+      "ground_truth": {
+        "answer": "Section 2.34 covers Accessories for flags, and Figure 2.42 provides Flagstaff Ratios showing the proper relationship between flag size and flagpole dimensions.",
+        "source_sections": ["2.34"],
+        "key_excerpts": [
+          "Accessories",
+          "Flagstaff Ratios"
+        ]
+      },
+      "tags": ["flags", "accessories", "dimensions", "specifications"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["flagstaff", "ratios", "accessories"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Technical specification"
+    },
+    {
+      "test_id": "021",
+      "category": "negative_case",
+      "difficulty": "easy",
+      "query": "What are the beard grooming standards for Air Force members?",
+      "ground_truth": {
+        "answer": "This information is NOT in AFI 34-1201. Beard grooming standards would be found in AFI 36-2903 (Dress and Appearance), not in AFI 34-1201 (Protocol).",
+        "source_sections": ["N/A - Out of scope"],
+        "key_excerpts": []
+      },
+      "tags": ["negative_case", "out_of_scope", "grooming", "AFI_36-2903"],
+      "expected_retrieval": {
+        "must_retrieve_topics": [],
+        "must_not_retrieve_topics": ["should NOT retrieve any chunks - this is out of scope"],
+        "expected_behavior": "System should indicate this information is not in the document"
+      },
+      "baseline_expected_result": "LIKELY_FAIL - System may hallucinate or retrieve irrelevant chunks"
+    },
+    {
+      "test_id": "022",
+      "category": "negative_case",
+      "difficulty": "easy",
+      "query": "What uniform should I wear to a formal dinner?",
+      "ground_truth": {
+        "answer": "AFI 34-1201 covers protocol for ceremonies and official functions, but uniform regulations and dress codes are found in AFI 36-2903 (Dress and Appearance), not AFI 34-1201.",
+        "source_sections": ["N/A - Partial scope"],
+        "key_excerpts": []
+      },
+      "tags": ["negative_case", "partial_scope", "uniform", "dress_code"],
+      "expected_retrieval": {
+        "must_retrieve_topics": [],
+        "expected_behavior": "System should indicate uniform specifications are not in this protocol document"
+      },
+      "baseline_expected_result": "UNCERTAIN - May retrieve ceremony info instead of uniform info"
+    },
+    {
+      "test_id": "023",
+      "category": "negative_case",
+      "difficulty": "medium",
+      "query": "What are the tattoo regulations?",
+      "ground_truth": {
+        "answer": "This information is NOT in AFI 34-1201 (Protocol). Tattoo regulations are found in AFI 36-2903 (Dress and Appearance).",
+        "source_sections": ["N/A - Out of scope"],
+        "key_excerpts": []
+      },
+      "tags": ["negative_case", "out_of_scope", "tattoos", "AFI_36-2903"],
+      "expected_retrieval": {
+        "must_retrieve_topics": [],
+        "expected_behavior": "System should indicate this information is not available in the protocol document"
+      },
+      "baseline_expected_result": "LIKELY_FAIL - System may retrieve irrelevant content"
+    },
+    {
+      "test_id": "024",
+      "category": "military_terminology",
+      "difficulty": "medium",
+      "query": "What is MAJCOM?",
+      "ground_truth": {
+        "answer": "MAJCOM stands for Major Command. The document mentions that MAJCOM-level supplements must be approved prior to certification and approval. It also references MAJCOM command chiefs and their seating arrangements.",
+        "source_sections": ["Cover page", "Summary of Changes"],
+        "key_excerpts": [
+          "MAJCOM -level supplements must be approved",
+          "MAJCOM, NAF and Wing Command Chief seating arrangements"
+        ]
+      },
+      "tags": ["acronym", "MAJCOM", "command_structure"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["MAJCOM", "Major Command"]
+      },
+      "baseline_expected_result": "PASS - Acronym used in document"
+    },
+    {
+      "test_id": "025",
+      "category": "complex_query",
+      "difficulty": "hard",
+      "query": "What is the protocol for displaying the flag with other flags from different organizations?",
+      "ground_truth": {
+        "answer": "AFI 34-1201 Section 2.10 covers Position and Manner of Display, with multiple figures showing proper arrangements: Figure 2.1 (Flag Carried in Procession), Figure 2.3 (Flags Radiating from Central Point), Figure 2.4 (Flags in Line at Equal Height), and Figure 2.5 (Flags in Line at Lower Level). The United States flag always takes the position of honor.",
+        "source_sections": ["2.10"],
+        "key_excerpts": [
+          "Position and Manner of Display",
+          "United States Flag Displayed with Other Flags"
+        ]
+      },
+      "tags": ["flags", "display", "protocol", "multi-flag"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["flag display", "position", "manner of display"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Complex multi-part query"
+    },
+    {
+      "test_id": "026",
+      "category": "direct_fact",
+      "difficulty": "easy",
+      "query": "Which Air Force Manual is referenced for flag protocol?",
+      "ground_truth": {
+        "answer": "AFMAN 35-106 is referenced in the Summary of Changes, specifically noting that the description of 'To The Color' has been changed to match AFMAN 35-106.",
+        "source_sections": ["Summary of Changes"],
+        "key_excerpts": [
+          "The description of \"To The Color\" has been changed to match AFMAN 35-106"
+        ]
+      },
+      "tags": ["references", "AFMAN", "cross-reference"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["AFMAN 35-106", "references"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Depends on chunk boundaries"
+    },
+    {
+      "test_id": "027",
+      "category": "edge_case",
+      "difficulty": "hard",
+      "query": "How should religious flags be displayed?",
+      "ground_truth": {
+        "answer": "Section 2.24 of AFI 34-1201 covers Religious Flags and their display protocols.",
+        "source_sections": ["2.24"],
+        "key_excerpts": [
+          "Religious Flags"
+        ]
+      },
+      "tags": ["flags", "religious", "protocol", "edge_case"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["religious flags", "Section 2.24"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Specific topic"
+    },
+    {
+      "test_id": "028",
+      "category": "complex_query",
+      "difficulty": "hard",
+      "query": "What is the proper procedure for procuring and disposing of flags?",
+      "ground_truth": {
+        "answer": "Sections 2.35 and 2.36 cover flag procurement and disposition. Section 2.35 addresses Procurement and Disposition of Flags and Accoutrements, while Section 2.36 specifically covers Disposition of Flags and Related Items.",
+        "source_sections": ["2.35", "2.36"],
+        "key_excerpts": [
+          "Procurement and Disposition of Flags and Accoutrements",
+          "Disposition of Flags and Related Items"
+        ]
+      },
+      "tags": ["flags", "procurement", "disposal", "logistics"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["procurement", "disposition", "flag disposal"]
+      },
+      "baseline_expected_result": "UNCERTAIN - Multi-concept logistics query"
+    },
+    {
+      "test_id": "029",
+      "category": "military_terminology",
+      "difficulty": "hard",
+      "query": "What does AFI stand for and what is this publication about?",
+      "ground_truth": {
+        "answer": "AFI stands for Air Force Instruction. This publication is AIR FORCE INSTRUCTION 34-1201, dated 9 JUNE 2017, covering PROTOCOL. It implements Department of Defense Instruction (DoDI) 1005.06 on Display of the National Flag at Half-staff and Air Force Policy Directive (AFPD) 34-12, Air Force Protocol.",
+        "source_sections": ["Cover page"],
+        "key_excerpts": [
+          "AIR FORCE INSTRUCTION 34-1201",
+          "PROTOCOL",
+          "This instruction implements Department of Defense Instruction (DoDI) 1005.06"
+        ]
+      },
+      "tags": ["acronym", "AFI", "meta", "document_purpose"],
+      "expected_retrieval": {
+        "must_retrieve_topics": ["AFI 34-1201", "Air Force Instruction", "Protocol"]
+      },
+      "baseline_expected_result": "PASS - Cover page information"
+    },
+    {
+      "test_id": "030",
+      "category": "negative_case",
+      "difficulty": "medium",
+      "query": "How do I submit a leave request?",
+      "ground_truth": {
+        "answer": "This information is NOT in AFI 34-1201 (Protocol). Leave policies would be found in AFI 36-3003 (Military Leave Program) or similar personnel regulations, not in a protocol instruction.",
+        "source_sections": ["N/A - Out of scope"],
+        "key_excerpts": []
+      },
+      "tags": ["negative_case", "out_of_scope", "leave", "personnel"],
+      "expected_retrieval": {
+        "must_retrieve_topics": [],
+        "expected_behavior": "System should indicate this is outside the scope of the protocol document"
+      },
+      "baseline_expected_result": "LIKELY_FAIL - Completely unrelated topic"
+    }
+  ],
+  "category_distribution": {
+    "direct_fact": 9,
+    "military_terminology": 8,
+    "complex_query": 7,
+    "edge_case": 3,
+    "negative_case": 3
+  },
+  "difficulty_distribution": {
+    "easy": 6,
+    "medium": 12,
+    "hard": 12
+  },
+  "expected_baseline_performance": {
+    "overall_accuracy": "60-75%",
+    "direct_fact_accuracy": "80-90%",
+    "military_terminology_accuracy": "40-60%",
+    "complex_query_accuracy": "50-70%",
+    "edge_case_accuracy": "50-70%",
+    "negative_case_accuracy": "20-40%",
+    "known_failures": [
+      "001: 'the colors' query",
+      "011: 'personal colors' (ambiguous term)",
+      "021-023: Negative cases (out of scope)",
+      "030: Completely unrelated topic"
+    ]
+  }
+}

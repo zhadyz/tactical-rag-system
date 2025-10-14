@@ -1,4 +1,22 @@
 """
+LEGACY GRADIO INTERFACE - DEPRECATED
+======================================
+
+⚠️ This file is DEPRECATED and will be removed in a future version.
+
+The Gradio UI has been replaced by a modern React + FastAPI architecture:
+- Frontend: React with TypeScript (frontend/src/)
+- Backend: FastAPI REST API (backend/app/)
+- Docs: See docs/ARCHITECTURE.md for new stack
+
+This file is kept temporarily for reference only. It is NOT used in production.
+
+For the production RAG engine, see:
+- backend/app/core/rag_engine.py (RAG logic, Gradio-free)
+- backend/app/api/query.py (Query endpoints)
+- frontend/src/components/Chat/ (Chat UI)
+
+Original Description:
 Enterprise RAG System - Redesigned Interface (v2)
 Simplified UI with Simple and Adaptive modes
 """
@@ -13,7 +31,7 @@ import os
 import torch
 
 from langchain_chroma import Chroma
-from langchain_community.llms import Ollama as OllamaLLM
+from langchain_ollama import OllamaLLM  # Updated to use new langchain-ollama package (18-64x faster!)
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain.docstore.document import Document
 from langchain_community.retrievers import BM25Retriever
@@ -25,6 +43,16 @@ from cache_and_monitoring import CacheManager, PerformanceMonitor, Timer, Perfor
 from example_generator import ExampleGenerator
 from conversation_memory import ConversationMemory
 from feedback_system import FeedbackManager
+from collection_metadata import CollectionMetadata
+from llm_factory import create_llm, get_llm_type
+
+# Import Qdrant store (only if use_qdrant is enabled)
+try:
+    from qdrant_store import QdrantVectorStore
+    QDRANT_AVAILABLE = True
+except ImportError:
+    QDRANT_AVAILABLE = False
+    logger.warning("Qdrant dependencies not installed. Install with: pip install qdrant-client")
 
 os.makedirs('logs', exist_ok=True)
 os.makedirs('.cache', exist_ok=True)
@@ -38,6 +66,70 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+class VectorStoreAdapter:
+    """
+    Unified adapter for both ChromaDB and Qdrant
+    Provides consistent interface regardless of backend
+    """
+
+    def __init__(self, vectorstore, store_type: str = "chroma"):
+        self.vectorstore = vectorstore
+        self.store_type = store_type
+
+    async def similarity_search_with_score(self, query: str, k: int = 5) -> List[Tuple[Document, float]]:
+        """
+        Search for similar documents with scores
+        Returns: List of (Document, score) tuples
+        """
+        if self.store_type == "chroma":
+            # ChromaDB returns list of (doc, distance) - lower is better
+            results = await asyncio.to_thread(
+                self.vectorstore.similarity_search_with_score,
+                query,
+                k=k
+            )
+            # Convert distance to similarity (1 - distance)
+            return [(doc, 1.0 - score) for doc, score in results]
+
+        elif self.store_type == "qdrant":
+            # Get query embedding first
+            from langchain_community.embeddings import OllamaEmbeddings
+            # Qdrant needs raw embeddings
+            # Assumption: embeddings are available via vectorstore
+            # This will be set during initialization
+            if not hasattr(self, 'embeddings'):
+                raise RuntimeError("Embeddings not set for Qdrant adapter")
+
+            query_vector = await asyncio.to_thread(
+                self.embeddings.embed_query,
+                query
+            )
+
+            # Search in Qdrant
+            search_results = await self.vectorstore.search(
+                query_vector=query_vector,
+                top_k=k
+            )
+
+            # Convert to LangChain Document format
+            documents = []
+            for result in search_results:
+                doc = Document(
+                    page_content=result.text,
+                    metadata=result.metadata
+                )
+                documents.append((doc, result.score))
+
+            return documents
+
+        else:
+            raise ValueError(f"Unknown store type: {self.store_type}")
+
+    def set_embeddings(self, embeddings):
+        """Set embeddings function for Qdrant"""
+        self.embeddings = embeddings
 
 
 class EnterpriseRAGSystem:
@@ -56,17 +148,21 @@ class EnterpriseRAGSystem:
 
     def __init__(self, config: SystemConfig):
         self.config = config
-        self.vectorstore: Optional[Chroma] = None
+        self.vectorstore = None  # Will be VectorStoreAdapter (supports both ChromaDB and Qdrant)
+        self.vectorstore_backend = None  # The actual backend (Chroma or QdrantVectorStore)
         self.bm25_retriever: Optional[BM25Retriever] = None
         self.retrieval_engine: Optional[AdaptiveRetriever] = None
         self.answer_generator: Optional[AdaptiveAnswerGenerator] = None
         self.llm: Optional[OllamaLLM] = None
+        self.embeddings = None  # Store embeddings for collection metadata
+        self.collection_metadata: Optional[CollectionMetadata] = None
         self.cache_manager: Optional[CacheManager] = None
         self.monitor: Optional[PerformanceMonitor] = None
         self.profiler: Optional[PerformanceProfiler] = None
         self.conversation_memory: Optional[ConversationMemory] = None
         self.feedback_manager: Optional[FeedbackManager] = None
         self.initialized = False
+        self.using_qdrant = False  # Track which backend is in use
 
         # Runtime settings
         self.runtime_settings = self.DEFAULT_SETTINGS.copy()
@@ -147,31 +243,93 @@ class EnterpriseRAGSystem:
                 logger.info(f"\n🎮 GPU: {gpu_name} ({gpu_mem:.1f}GB)")
 
             logger.info("\n1. Initializing embedding model...")
-            embeddings = OllamaEmbeddings(
+            self.embeddings = OllamaEmbeddings(
                 model=self.config.embedding.model_name,
                 base_url=self.config.ollama_host
             )
 
-            test_embed = await asyncio.to_thread(embeddings.embed_query, "test")
+            test_embed = await asyncio.to_thread(self.embeddings.embed_query, "test")
             logger.info(f"✓ Embedding model ready (dim: {len(test_embed)})")
 
             logger.info("\n2. Initializing infrastructure...")
             def embed_for_cache(text: str) -> List[float]:
-                return embeddings.embed_query(text)
+                return self.embeddings.embed_query(text)
 
             self.cache_manager = CacheManager(self.config, embeddings_func=embed_for_cache)
             self.monitor = PerformanceMonitor(self.config, self.cache_manager)
             self.profiler = PerformanceProfiler(output_dir=Path("logs"))
 
             logger.info("\n3. Loading vector database...")
-            if not self.config.vector_db_dir.exists():
-                return False, "Vector database not found. Please run indexing first."
 
-            self.vectorstore = Chroma(
-                persist_directory=str(self.config.vector_db_dir),
-                embedding_function=embeddings
-            )
-            logger.info("✓ Vector store loaded")
+            # FEATURE FLAG: Choose between ChromaDB and Qdrant
+            if self.config.use_qdrant:
+                logger.info("🔷 Using Qdrant vector store")
+
+                if not QDRANT_AVAILABLE:
+                    return False, "Qdrant not available. Install with: pip install qdrant-client"
+
+                # Initialize Qdrant client
+                try:
+                    self.vectorstore_backend = QdrantVectorStore(
+                        host=self.config.qdrant.host,
+                        port=self.config.qdrant.port,
+                        collection_name=self.config.qdrant.collection_name,
+                        vector_size=self.config.embedding.dimension
+                    )
+
+                    # Check if collection exists
+                    if not self.vectorstore_backend.client.collection_exists(
+                        self.config.qdrant.collection_name
+                    ):
+                        return False, f"Qdrant collection '{self.config.qdrant.collection_name}' not found. Please run migration first."
+
+                    # Get collection info
+                    info = self.vectorstore_backend.get_collection_info()
+                    logger.info(f"✓ Qdrant connected: {info['points_count']} vectors in collection")
+
+                    # Wrap in adapter
+                    self.vectorstore = VectorStoreAdapter(self.vectorstore_backend, store_type="qdrant")
+                    self.vectorstore.set_embeddings(self.embeddings)
+                    self.using_qdrant = True
+
+                except Exception as e:
+                    logger.error(f"Failed to connect to Qdrant: {e}")
+                    return False, f"Qdrant connection failed: {str(e)}"
+
+            else:
+                logger.info("🔶 Using ChromaDB vector store (default)")
+
+                if not self.config.vector_db_dir.exists():
+                    return False, "ChromaDB not found. Please run indexing first."
+
+                self.vectorstore_backend = Chroma(
+                    persist_directory=str(self.config.vector_db_dir),
+                    embedding_function=self.embeddings
+                )
+
+                # Wrap in adapter
+                self.vectorstore = VectorStoreAdapter(self.vectorstore_backend, store_type="chroma")
+                logger.info("✓ ChromaDB loaded")
+                self.using_qdrant = False
+
+            # Initialize collection metadata for semantic scope detection
+            logger.info("\n3.5. Initializing collection metadata...")
+            try:
+                from pathlib import Path as PathLib
+                metadata_path = PathLib(self.config.scope_detection.metadata_path)
+
+                self.collection_metadata = CollectionMetadata.load_or_compute(
+                    vectorstore=self.vectorstore,
+                    embeddings=self.embeddings,
+                    llm=self.llm if hasattr(self, 'llm') and self.llm else None,  # May not be initialized yet
+                    metadata_path=metadata_path,
+                    force_recompute=self.config.scope_detection.force_recompute
+                )
+                logger.info(f"✓ Collection metadata ready: {self.collection_metadata.scope_summary[:60]}...")
+            except Exception as e:
+                logger.warning(f"⚠ Collection metadata initialization skipped: {e}")
+                logger.warning("  Out-of-scope detection will be disabled")
+                self.collection_metadata = None
 
             logger.info("\n4. Loading BM25 retriever...")
             metadata_file = self.config.vector_db_dir / "chunk_metadata.json"
@@ -197,22 +355,18 @@ class EnterpriseRAGSystem:
                 ])
 
             logger.info("\n5. Connecting to LLM...")
-            llm_params = {
-                'model': self.config.llm.model_name,
-                'temperature': self.config.llm.temperature,
-                'top_p': self.config.llm.top_p,
-                'top_k': self.config.llm.top_k,
-                'num_ctx': self.config.llm.num_ctx,
-                'repeat_penalty': self.config.llm.repeat_penalty,
-                'base_url': self.config.ollama_host
-            }
 
-            if self.gpu_available:
-                llm_params['num_gpu'] = 1
+            # FEATURE FLAG: Use vLLM for 10-20x speedup or Ollama for compatibility
+            self.llm = create_llm(self.config, test_connection=False)
 
-            self.llm = OllamaLLM(**llm_params)
+            # Test LLM connection
             await asyncio.to_thread(self.llm.invoke, "Hello")
-            logger.info("✓ LLM ready")
+
+            llm_type = get_llm_type(self.llm)
+            if llm_type == "vllm":
+                logger.info("✓ LLM ready (vLLM - 10-20x faster)")
+            else:
+                logger.info("✓ LLM ready (Ollama - baseline)")
 
             logger.info("\n6. Initializing conversation memory...")
             self.conversation_memory = ConversationMemory(
@@ -235,7 +389,14 @@ class EnterpriseRAGSystem:
                 config=self.config,
                 runtime_settings=self.runtime_settings
             )
-            self.answer_generator = AdaptiveAnswerGenerator(self.llm)
+
+            # Initialize answer generator with semantic scope detection
+            self.answer_generator = AdaptiveAnswerGenerator(
+                llm=self.llm,
+                embeddings=self.embeddings,
+                collection_metadata=self.collection_metadata,
+                scope_config=self.config.scope_detection
+            )
             logger.info("✓ Retrieval engines ready")
 
             logger.info("\n9. Generating example questions...")
@@ -308,7 +469,11 @@ class EnterpriseRAGSystem:
                     retrieval_result = await self._simple_retrieve(enhanced_query)
                 else:
                     # Adaptive mode: full adaptive engine
-                    retrieval_result = await self.retrieval_engine.retrieve(enhanced_query)
+                    # CRITICAL FIX: Pass original query for classification, enhanced for retrieval
+                    retrieval_result = await self.retrieval_engine.retrieve(
+                        query=enhanced_query,
+                        original_query=question  # Use original query for classification
+                    )
 
             if self.profiler:
                 self.profiler.record_stage("retrieval_ms", retrieval_timer.elapsed * 1000)
@@ -404,16 +569,15 @@ class EnterpriseRAGSystem:
     async def _simple_retrieve(self, query: str) -> RetrievalResult:
         """Simple retrieval: direct dense vector search only"""
 
-        # Just use vectorstore similarity search
-        docs = await asyncio.to_thread(
-            self.vectorstore.similarity_search_with_score,
+        # Use vectorstore adapter (works with both ChromaDB and Qdrant)
+        docs = await self.vectorstore.similarity_search_with_score(
             query,
             k=self.runtime_settings['simple_k']
         )
 
-        # Unpack documents and scores
+        # Unpack documents and scores (adapter already returns similarity scores)
         documents = [doc for doc, score in docs]
-        scores = [1.0 - score for doc, score in docs]  # Convert distance to similarity
+        scores = [score for doc, score in docs]
 
         # Create simple retrieval result
         result = RetrievalResult(
@@ -508,7 +672,8 @@ class EnterpriseRAGSystem:
                 "model": self.config.llm.model_name,
                 "embedding": self.config.embedding.model_name,
                 "gpu": gpu_status,
-                "gpu_memory_mb": int(gpu_memory)
+                "gpu_memory_mb": int(gpu_memory),
+                "vector_store": "Qdrant" if self.using_qdrant else "ChromaDB"
             }
         }
 
@@ -828,6 +993,23 @@ def create_interface():
         border-radius: 8px;
         border: 1px solid #4a5568;
     }
+    /* Fix double scrollbar bug during query processing - Gradio specific */
+    .chatbot {
+        overflow: hidden !important;
+        height: 500px !important;
+    }
+    .chatbot > .wrap {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        max-height: 500px !important;
+    }
+    .chatbot .message-row {
+        overflow: visible !important;
+    }
+    /* Prevent body scroll when chatbot is scrolling */
+    .chatbot:hover {
+        overflow-y: hidden !important;
+    }
     """
 
     global rag_system
@@ -849,7 +1031,10 @@ def create_interface():
                     height=500,
                     show_label=False,
                     type='messages',
-                    container=True
+                    container=True,
+                    autoscroll=True,
+                    render_markdown=True,
+                    bubble_full_width=False
                 )
 
                 with gr.Row():

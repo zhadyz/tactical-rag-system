@@ -1,0 +1,387 @@
+{
+  "metadata": {
+    "name": "Comprehensive Real-World Test Suite",
+    "document": "AFI 34-1201 Air Force Protocol",
+    "purpose": "Thorough validation with diverse real questions",
+    "total_queries": 60,
+    "created_date": "2025-10-12",
+    "categories": [
+      "basic_facts",
+      "terminology",
+      "procedures",
+      "regulations",
+      "ceremonies",
+      "flags",
+      "funding",
+      "mementos",
+      "transportation",
+      "edge_cases",
+      "negative_cases",
+      "multi_part",
+      "comparison",
+      "historical"
+    ]
+  },
+  "test_queries": [
+    {
+      "id": "C001",
+      "category": "basic_facts",
+      "difficulty": "easy",
+      "query": "What is the primary purpose of AFI 34-1201?"
+    },
+    {
+      "id": "C002",
+      "category": "basic_facts",
+      "difficulty": "easy",
+      "query": "Who must comply with AFI 34-1201?"
+    },
+    {
+      "id": "C003",
+      "category": "basic_facts",
+      "difficulty": "easy",
+      "query": "What date was AFI 34-1201 published?"
+    },
+    {
+      "id": "C004",
+      "category": "basic_facts",
+      "difficulty": "medium",
+      "query": "Which Department of Defense instruction does this AFI implement?"
+    },
+    {
+      "id": "C005",
+      "category": "terminology",
+      "difficulty": "medium",
+      "query": "What is the difference between regimental colors and personal colors?"
+    },
+    {
+      "id": "C006",
+      "category": "terminology",
+      "difficulty": "hard",
+      "query": "Explain the term 'positional flags' and give examples"
+    },
+    {
+      "id": "C007",
+      "category": "terminology",
+      "difficulty": "medium",
+      "query": "What is the meaning of 'To The Color'?"
+    },
+    {
+      "id": "C008",
+      "category": "terminology",
+      "difficulty": "easy",
+      "query": "What does MAJCOM stand for?"
+    },
+    {
+      "id": "C009",
+      "category": "terminology",
+      "difficulty": "easy",
+      "query": "What does CMSAF stand for?"
+    },
+    {
+      "id": "C010",
+      "category": "flags",
+      "difficulty": "medium",
+      "query": "When should the United States flag be displayed at half-staff?"
+    },
+    {
+      "id": "C011",
+      "category": "flags",
+      "difficulty": "hard",
+      "query": "What is the order of precedence when displaying multiple flags?"
+    },
+    {
+      "id": "C012",
+      "category": "flags",
+      "difficulty": "medium",
+      "query": "How should the flag be displayed during inclement weather?"
+    },
+    {
+      "id": "C013",
+      "category": "flags",
+      "difficulty": "medium",
+      "query": "What are the proper dimensions for indoor flags?"
+    },
+    {
+      "id": "C014",
+      "category": "flags",
+      "difficulty": "hard",
+      "query": "How should the flag be positioned when carried in a procession?"
+    },
+    {
+      "id": "C015",
+      "category": "flags",
+      "difficulty": "easy",
+      "query": "Can the United States flag be displayed at night?"
+    },
+    {
+      "id": "C016",
+      "category": "ceremonies",
+      "difficulty": "medium",
+      "query": "What is the protocol for rendering honors during reveille?"
+    },
+    {
+      "id": "C017",
+      "category": "ceremonies",
+      "difficulty": "medium",
+      "query": "What is the protocol for rendering honors during retreat?"
+    },
+    {
+      "id": "C018",
+      "category": "ceremonies",
+      "difficulty": "hard",
+      "query": "What is the difference between a ruffles and flourishes and a salute battery?"
+    },
+    {
+      "id": "C019",
+      "category": "ceremonies",
+      "difficulty": "medium",
+      "query": "What music is authorized for Air Force ceremonies when colors are presented?"
+    },
+    {
+      "id": "C020",
+      "category": "ceremonies",
+      "difficulty": "hard",
+      "query": "What is the proper protocol for a flag folding ceremony?"
+    },
+    {
+      "id": "C021",
+      "category": "procedures",
+      "difficulty": "medium",
+      "query": "How should individuals in civilian clothes render honors to the flag?"
+    },
+    {
+      "id": "C022",
+      "category": "procedures",
+      "difficulty": "medium",
+      "query": "How should military members in uniform salute during the national anthem?"
+    },
+    {
+      "id": "C023",
+      "category": "procedures",
+      "difficulty": "hard",
+      "query": "What is the proper way to dispose of a worn United States flag?"
+    },
+    {
+      "id": "C024",
+      "category": "procedures",
+      "difficulty": "medium",
+      "query": "Who is responsible for flag protocol at Air Force installations?"
+    },
+    {
+      "id": "C025",
+      "category": "procedures",
+      "difficulty": "hard",
+      "query": "What are the procedures for procuring organizational flags?"
+    },
+    {
+      "id": "C026",
+      "category": "regulations",
+      "difficulty": "medium",
+      "query": "What chapters of AFI 34-1201 cover funding for protocol activities?"
+    },
+    {
+      "id": "C027",
+      "category": "regulations",
+      "difficulty": "hard",
+      "query": "When are appropriated funds authorized for protocol activities?"
+    },
+    {
+      "id": "C028",
+      "category": "regulations",
+      "difficulty": "hard",
+      "query": "What are the restrictions on using government resources for unofficial events?"
+    },
+    {
+      "id": "C029",
+      "category": "mementos",
+      "difficulty": "medium",
+      "query": "What chapter covers guidance on mementos and gifts?"
+    },
+    {
+      "id": "C030",
+      "category": "mementos",
+      "difficulty": "hard",
+      "query": "What are the requirements for inventorying mementos?"
+    },
+    {
+      "id": "C031",
+      "category": "mementos",
+      "difficulty": "medium",
+      "query": "What is the policy on accepting gifts from foreign governments?"
+    },
+    {
+      "id": "C032",
+      "category": "transportation",
+      "difficulty": "medium",
+      "query": "What chapter covers transportation protocol?"
+    },
+    {
+      "id": "C033",
+      "category": "transportation",
+      "difficulty": "hard",
+      "query": "What is the order of precedence for seating in official vehicles?"
+    },
+    {
+      "id": "C034",
+      "category": "flags",
+      "difficulty": "medium",
+      "query": "What are guidons and how are they used?"
+    },
+    {
+      "id": "C035",
+      "category": "flags",
+      "difficulty": "medium",
+      "query": "What are streamers and how are they arranged?"
+    },
+    {
+      "id": "C036",
+      "category": "flags",
+      "difficulty": "hard",
+      "query": "How should religious flags be displayed in relation to the United States flag?"
+    },
+    {
+      "id": "C037",
+      "category": "terminology",
+      "difficulty": "hard",
+      "query": "What is the Air Force Departmental Flag and when is it displayed?"
+    },
+    {
+      "id": "C038",
+      "category": "ceremonies",
+      "difficulty": "medium",
+      "query": "What does Taps signify and when is it played?"
+    },
+    {
+      "id": "C039",
+      "category": "ceremonies",
+      "difficulty": "hard",
+      "query": "What is the protocol for ceremonial reviews and parades?"
+    },
+    {
+      "id": "C040",
+      "category": "procedures",
+      "difficulty": "hard",
+      "query": "How many paces before the flag should a salute be rendered in a moving column?"
+    },
+    {
+      "id": "C041",
+      "category": "multi_part",
+      "difficulty": "hard",
+      "query": "What are the key changes mentioned in the Summary of Changes for this instruction?"
+    },
+    {
+      "id": "C042",
+      "category": "comparison",
+      "difficulty": "hard",
+      "query": "What is the difference between official and unofficial ceremonies?"
+    },
+    {
+      "id": "C043",
+      "category": "comparison",
+      "difficulty": "hard",
+      "query": "How do the protocols differ for indoor versus outdoor flag ceremonies?"
+    },
+    {
+      "id": "C044",
+      "category": "edge_cases",
+      "difficulty": "hard",
+      "query": "What guidance is provided for displaying flags with other organizations?"
+    },
+    {
+      "id": "C045",
+      "category": "edge_cases",
+      "difficulty": "medium",
+      "query": "What are the flagstaff ratios and why are they important?"
+    },
+    {
+      "id": "C046",
+      "category": "edge_cases",
+      "difficulty": "hard",
+      "query": "What accessories are authorized for flags and what are their specifications?"
+    },
+    {
+      "id": "C047",
+      "category": "historical",
+      "difficulty": "medium",
+      "query": "When did the flag folding script become optional?"
+    },
+    {
+      "id": "C048",
+      "category": "regulations",
+      "difficulty": "hard",
+      "query": "What are the responsibilities of MAJCOM supplements to this instruction?"
+    },
+    {
+      "id": "C049",
+      "category": "procedures",
+      "difficulty": "medium",
+      "query": "Who certifies and approves MAJCOM supplements?"
+    },
+    {
+      "id": "C050",
+      "category": "regulations",
+      "difficulty": "medium",
+      "query": "What forms are prescribed by AFI 34-1201?"
+    },
+    {
+      "id": "C051",
+      "category": "negative_cases",
+      "difficulty": "easy",
+      "query": "What are the tattoo policies for Air Force personnel?"
+    },
+    {
+      "id": "C052",
+      "category": "negative_cases",
+      "difficulty": "easy",
+      "query": "What are the beard grooming standards?"
+    },
+    {
+      "id": "C053",
+      "category": "negative_cases",
+      "difficulty": "easy",
+      "query": "How do I request leave?"
+    },
+    {
+      "id": "C054",
+      "category": "negative_cases",
+      "difficulty": "medium",
+      "query": "What uniform should I wear to a change of command ceremony?"
+    },
+    {
+      "id": "C055",
+      "category": "negative_cases",
+      "difficulty": "medium",
+      "query": "What are the hair length requirements for women?"
+    },
+    {
+      "id": "C056",
+      "category": "multi_part",
+      "difficulty": "hard",
+      "query": "What are the roles and responsibilities of protocol personnel at different levels?"
+    },
+    {
+      "id": "C057",
+      "category": "procedures",
+      "difficulty": "hard",
+      "query": "What is the proper procedure for requesting a ceremonial flag?"
+    },
+    {
+      "id": "C058",
+      "category": "edge_cases",
+      "difficulty": "hard",
+      "query": "What happens if flag protocol conflicts with local customs in overseas locations?"
+    },
+    {
+      "id": "C059",
+      "category": "terminology",
+      "difficulty": "medium",
+      "query": "What is the difference between a standard and a color?"
+    },
+    {
+      "id": "C060",
+      "category": "procedures",
+      "difficulty": "medium",
+      "query": "How often should flags be inspected for serviceability?"
+    }
+  ]
+}

@@ -1,29 +1,30 @@
 # Docker Compose file - defines multiple services (containers) that work together
+# Updated for React + FastAPI migration (Week 1)
 
 # Services are the containers we want to run
 services:
-  
+
   # ============================================================
   # SERVICE 1: Ollama (the AI model server)
   # ============================================================
   ollama:
     # Use official Ollama image from Docker Hub
     image: ollama/ollama:latest
-    
+
     # Container name (easier to reference)
     container_name: ollama-server
 
-    
+
     # Port mapping: host_port:container_port
     # Ollama runs on port 11434
     ports:
       - "11434:11434"
-    
+
     # Volumes: persist data between container restarts
     # Maps a folder on your computer to a folder in the container
     volumes:
       - ollama-data:/root/.ollama
-    
+
     # Always restart if container stops
     restart: unless-stopped
 
@@ -32,6 +33,9 @@ services:
       - OLLAMA_NUM_GPU=999
       - OLLAMA_GPU_LAYERS=999
       - OLLAMA_KEEP_ALIVE=-1  # Keep model loaded indefinitely (prevents VRAM recovery issues)
+      - OLLAMA_FLASH_ATTENTION=1  # Enable flash attention for faster inference
+      - OLLAMA_NUM_PARALLEL=1  # Process one request at a time (optimal for single-user)
+      - OLLAMA_MAX_LOADED_MODELS=1  # Only load one model at a time (optimal for VRAM)
 
     # GPU Utilization
     deploy:
@@ -41,7 +45,7 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    
+
     # Simplified health check without curl dependency
     healthcheck:
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/11434' || exit 1"]
@@ -49,29 +53,77 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    
+
     # Add to network
     networks:
       - rag-network
-  
+
   # ============================================================
-  # SERVICE 2: RAG Application (NOW WITH GPU SUPPORT)
+  # SERVICE 2: Redis Cache (for performance optimization)
   # ============================================================
-  rag-app:
-    # Build from the Dockerfile in current directory
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - rag-network
+
+  # ============================================================
+  # SERVICE 2.5: Qdrant Vector Database (OPTIONAL - for scale)
+  # ============================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant-vectordb
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - rag-network
+    # Make this service optional (only starts when needed)
+    # Remove 'profiles' to start automatically
+    profiles:
+      - qdrant
+
+  # ============================================================
+  # SERVICE 3: FastAPI Backend (NEW - replaces Gradio)
+  # ============================================================
+  backend:
+    # Build from the backend Dockerfile
     build:
       context: .
-      dockerfile: _config/Dockerfile
-    
-    container_name: rag-tactical-system
-    
+      dockerfile: backend/Dockerfile
+
+    container_name: rag-backend-api
+
     # CRITICAL: Enable NVIDIA runtime for GPU access
     runtime: nvidia
-    
-    # Port mapping for Gradio interface
+
+    # Port mapping for FastAPI
     ports:
-      - "7860:7860"
-    
+      - "8000:8000"
+
     # Volumes: persist documents and database
     volumes:
       # Map local documents folder to container
@@ -80,17 +132,43 @@ services:
       - ./chroma_db:/app/chroma_db
       # Map logs for persistence
       - ./logs:/app/logs
-    
+      # Mount source code for development (hot reload)
+      - ./_src:/app/_src
+
     # Environment variables
     environment:
-      # Tell the app where to find Ollama
+      # Service endpoints
       - OLLAMA_HOST=http://ollama:11434
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CHROMA_PERSIST_DIRECTORY=/app/chroma_db
+      - VLLM_HOST=http://vllm-server:8000
+      - VLLM_MODEL=mistralai/Mistral-7B-Instruct-v0.3
+
+      # Qdrant configuration (optional - enable with USE_QDRANT=true)
+      - USE_QDRANT=false
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=air_force_docs
+
+      # Python settings
       - PYTHONUNBUFFERED=1
+
       # CUDA/GPU environment variables
       - CUDA_VISIBLE_DEVICES=0
       - DEVICE_TYPE=cuda
       - USE_CUDA_DOCKER=true
-    
+
+      # API settings
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+      # Performance feature flags
+      # PERFORMANCE FIX: Enable vLLM for 10-20x speedup and better concurrency
+      - USE_VLLM=true  # ENABLED - using vLLM for production performance
+      - USE_EMBEDDING_CACHE=true
+
     # GPU resource allocation
     deploy:
       resources:
@@ -99,17 +177,79 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    
-    # depends_on: Start ollama before rag-app
+
+    # depends_on: Start dependencies before backend
     depends_on:
       ollama:
         condition: service_healthy
-    
+      redis:
+        condition: service_healthy
+
     restart: unless-stopped
-    
-    # networks: Both services can talk to each other
+
+    # networks: All services can talk to each other
     networks:
       - rag-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================
+  # SERVICE 4: React Frontend (NEW)
+  # ============================================================
+  frontend:
+    # Build from the frontend Dockerfile
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000
+
+    container_name: rag-frontend-ui
+
+    # Port mapping for frontend
+    ports:
+      - "3000:3000"
+
+    # Volumes: mount source for hot reload in development
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      # Prevent node_modules from being overwritten
+      - /app/node_modules
+
+    # Environment variables
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+
+    # depends_on: Start backend before frontend
+    depends_on:
+      - backend
+
+    restart: unless-stopped
+
+    # networks: Connect to same network
+    networks:
+      - rag-network
+
+  # ============================================================
+  # Legacy Gradio Interface - REMOVED
+  # ============================================================
+  # The Gradio UI has been fully replaced by the React + FastAPI architecture.
+  # If you need the old Gradio interface, it's available in git history:
+  #   git show HEAD~5:docker-compose.yml
+  #
+  # Current production stack:
+  #   Frontend: React (port 3000)
+  #   Backend: FastAPI (port 8000)
+  #   Vector DB: ChromaDB (default) or Qdrant (optional, use --profile qdrant)
+  #   LLM: Ollama (default) or vLLM (optional, configure in docker-compose.production.yml)
 
 # Define the network for inter-container communication
 networks:
@@ -119,4 +259,8 @@ networks:
 # Define named volumes for data persistence
 volumes:
   ollama-data:
+    driver: local
+  redis-data:
+    driver: local
+  qdrant-data:
     driver: local

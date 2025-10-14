@@ -1,0 +1,114 @@
+version: '3.8'
+
+# Tactical RAG Backend - Docker Compose Configuration
+# This sets up the FastAPI backend with all required services
+
+services:
+  # Redis - Caching layer
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rag-network
+
+  # Ollama - LLM and Embeddings (optional - can use external)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - rag-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: rag-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Ollama connection
+      OLLAMA_HOST: http://ollama:11434
+
+      # Paths
+      RAG_VECTOR_DB_DIR: /app/chroma_db
+      RAG_DOCUMENTS_DIR: /app/documents
+
+      # Redis caching
+      RAG_CACHE__USE_REDIS: "true"
+      RAG_CACHE__REDIS_HOST: redis
+      RAG_CACHE__REDIS_PORT: 6379
+      RAG_CACHE__REDIS_DB: 0
+
+      # Models
+      RAG_LLM__MODEL_NAME: llama3.1:8b
+      RAG_EMBEDDING__MODEL_NAME: nomic-embed-text
+
+      # Optional: GPU support
+      # CUDA_VISIBLE_DEVICES: 0
+      # DEVICE_TYPE: cuda
+    volumes:
+      # Mount vector database (must exist and be populated)
+      - ../chroma_db:/app/chroma_db:ro
+      # Mount documents directory
+      - ../documents:/app/documents:ro
+      # Mount logs directory
+      - ../logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - rag-network
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  redis_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge

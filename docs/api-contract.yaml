@@ -1,0 +1,634 @@
+openapi: 3.0.0
+info:
+  title: Tactical RAG API
+  version: 1.0.0
+  description: |
+    REST API for the Tactical RAG system - an enterprise-grade Retrieval Augmented Generation system
+    with adaptive retrieval strategies and Redis caching.
+  contact:
+    name: API Support
+    email: support@tacticalrag.com
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: http://localhost:8000/api
+    description: Development API endpoint
+
+tags:
+  - name: Health
+    description: System health and status endpoints
+  - name: Query
+    description: Query processing endpoints
+  - name: Documents
+    description: Document management endpoints
+  - name: Settings
+    description: Configuration and settings endpoints
+  - name: Feedback
+    description: User feedback endpoints
+  - name: Cache
+    description: Cache management endpoints
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      description: Check the health status of the system and all dependencies
+      tags:
+        - Health
+      responses:
+        '200':
+          description: System health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                  services:
+                    type: object
+                    properties:
+                      redis:
+                        type: boolean
+                        description: Redis cache availability
+                      ollama:
+                        type: boolean
+                        description: Ollama LLM availability
+                      chromadb:
+                        type: boolean
+                        description: ChromaDB vector store availability
+                      gpu:
+                        type: boolean
+                        description: GPU availability
+                  metrics:
+                    type: object
+                    properties:
+                      uptime_seconds:
+                        type: number
+                      total_queries:
+                        type: integer
+                      cache_hit_rate:
+                        type: number
+                        format: float
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/status:
+    get:
+      summary: Get detailed system status
+      description: Retrieve comprehensive system status including metrics and configuration
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Detailed system status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [operational, offline]
+                  documents:
+                    type: integer
+                    description: Number of indexed documents
+                  chunks:
+                    type: integer
+                    description: Number of document chunks
+                  uptime:
+                    type: string
+                  queries_processed:
+                    type: integer
+                  avg_latency:
+                    type: number
+                    format: float
+                  cache_hit_rate:
+                    type: number
+                    format: float
+                  mode:
+                    type: string
+                    enum: [simple, adaptive]
+                  config:
+                    type: object
+                    properties:
+                      model:
+                        type: string
+                      embedding:
+                        type: string
+                      gpu:
+                        type: string
+                      gpu_memory_mb:
+                        type: integer
+
+  /api/query:
+    post:
+      summary: Submit a query
+      description: Process a question using the RAG system with optional conversation context
+      tags:
+        - Query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+                - mode
+              properties:
+                question:
+                  type: string
+                  description: The question to ask
+                  example: "What are the main requirements for beard grooming in AR 670-1?"
+                mode:
+                  type: string
+                  enum: [simple, adaptive]
+                  description: Retrieval mode to use
+                  example: adaptive
+                use_context:
+                  type: boolean
+                  default: true
+                  description: Whether to use conversation context
+                session_id:
+                  type: string
+                  description: Optional session ID for conversation tracking
+      responses:
+        '200':
+          description: Query result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer:
+                    type: string
+                    description: Generated answer
+                  sources:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Source'
+                  metadata:
+                    type: object
+                    properties:
+                      strategy_used:
+                        type: string
+                        enum: [simple_dense, hybrid_search, advanced_multi_query]
+                      query_type:
+                        type: string
+                        enum: [simple, moderate, complex]
+                      mode:
+                        type: string
+                        enum: [simple, adaptive]
+                      latency_ms:
+                        type: number
+                        format: float
+                      cache_hit:
+                        type: boolean
+                  explanation:
+                    type: object
+                    nullable: true
+                    properties:
+                      query_type:
+                        type: string
+                      complexity_score:
+                        type: number
+                      scoring_breakdown:
+                        type: object
+                      strategy_reasoning:
+                        type: string
+                  error:
+                    type: boolean
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/documents/upload:
+    post:
+      summary: Upload documents
+      description: Upload one or more documents for indexing
+      tags:
+        - Documents
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Documents to upload (PDF, DOCX, TXT, MD)
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  files_processed:
+                    type: integer
+                  chunks_created:
+                    type: integer
+                  message:
+                    type: string
+        '400':
+          description: Invalid file format or upload error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/documents:
+    get:
+      summary: List indexed documents
+      description: Retrieve list of all indexed documents
+      tags:
+        - Documents
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file_name:
+                          type: string
+                        file_type:
+                          type: string
+                        size_bytes:
+                          type: integer
+                        chunks:
+                          type: integer
+                        indexed_at:
+                          type: string
+                          format: date-time
+
+  /api/settings:
+    get:
+      summary: Get current settings
+      description: Retrieve current system configuration and runtime settings
+      tags:
+        - Settings
+      responses:
+        '200':
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum: [simple, adaptive]
+                  runtime_settings:
+                    type: object
+                    properties:
+                      simple_k:
+                        type: integer
+                      hybrid_k:
+                        type: integer
+                      advanced_k:
+                        type: integer
+                      rerank_weight:
+                        type: number
+                        format: float
+                      rrf_constant:
+                        type: integer
+                      simple_threshold:
+                        type: integer
+                      moderate_threshold:
+                        type: integer
+
+    put:
+      summary: Update settings
+      description: Update system configuration and runtime settings
+      tags:
+        - Settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum: [simple, adaptive]
+                runtime_settings:
+                  type: object
+                  properties:
+                    simple_k:
+                      type: integer
+                      minimum: 1
+                      maximum: 10
+                    hybrid_k:
+                      type: integer
+                      minimum: 5
+                      maximum: 40
+                    advanced_k:
+                      type: integer
+                      minimum: 5
+                      maximum: 30
+                    rerank_weight:
+                      type: number
+                      format: float
+                      minimum: 0.0
+                      maximum: 1.0
+                    rrf_constant:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/settings/reset:
+    post:
+      summary: Reset settings to defaults
+      description: Reset all runtime settings to their default values
+      tags:
+        - Settings
+      responses:
+        '200':
+          description: Settings reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  settings:
+                    type: object
+
+  /api/feedback:
+    post:
+      summary: Submit feedback
+      description: Submit user feedback for a query/answer pair
+      tags:
+        - Feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rating
+              properties:
+                rating:
+                  type: string
+                  enum: [thumbs_up, thumbs_down]
+                query:
+                  type: string
+                answer:
+                  type: string
+                comment:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Feedback submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /api/feedback/stats:
+    get:
+      summary: Get feedback statistics
+      description: Retrieve aggregated feedback statistics
+      tags:
+        - Feedback
+      responses:
+        '200':
+          description: Feedback statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_feedback:
+                    type: integer
+                  thumbs_up_count:
+                    type: integer
+                  thumbs_down_count:
+                    type: integer
+                  satisfaction_rate:
+                    type: number
+                    format: float
+                  by_query_type:
+                    type: object
+                  by_strategy:
+                    type: object
+
+  /api/cache/stats:
+    get:
+      summary: Get cache statistics
+      description: Retrieve cache performance statistics
+      tags:
+        - Cache
+      responses:
+        '200':
+          description: Cache statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query_cache:
+                    type: object
+                    properties:
+                      hits:
+                        type: integer
+                      misses:
+                        type: integer
+                      hit_rate:
+                        type: number
+                        format: float
+                      size:
+                        type: integer
+                  embedding_cache:
+                    type: object
+                    properties:
+                      hits:
+                        type: integer
+                      misses:
+                        type: integer
+                      hit_rate:
+                        type: number
+                        format: float
+                  semantic_cache:
+                    type: object
+                    properties:
+                      hits:
+                        type: integer
+                      misses:
+                        type: integer
+                      hit_rate:
+                        type: number
+                        format: float
+
+  /api/cache/clear:
+    post:
+      summary: Clear cache
+      description: Clear all cached data
+      tags:
+        - Cache
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cache_type:
+                  type: string
+                  enum: [all, query, embedding, semantic]
+                  default: all
+      responses:
+        '200':
+          description: Cache cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /api/conversation/clear:
+    post:
+      summary: Clear conversation history
+      description: Clear conversation memory for the current session
+      tags:
+        - Query
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Conversation cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+components:
+  schemas:
+    Source:
+      type: object
+      properties:
+        file_name:
+          type: string
+        file_type:
+          type: string
+        relevance_score:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+        excerpt:
+          type: string
+          description: Text excerpt from the source
+        metadata:
+          type: object
+          properties:
+            page_number:
+              type: integer
+              nullable: true
+            chunk_index:
+              type: integer
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: boolean
+          example: true
+        message:
+          type: string
+          description: Human-readable error message
+        code:
+          type: string
+          description: Machine-readable error code
+        details:
+          type: object
+          nullable: true
+          description: Additional error details
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Optional API key for authentication (future use)
+
+security: []

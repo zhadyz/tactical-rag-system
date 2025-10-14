@@ -12,6 +12,7 @@ import sys
 import os
 
 from langchain_ollama import OllamaEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.docstore.document import Document
 
@@ -74,11 +75,30 @@ class DocumentIndexer:
         logger.info("\nðŸ”¢ STAGE 2: EMBEDDING GENERATION")
         logger.info("-" * 70)
         
-        embeddings = OllamaEmbeddings(
-            model=self.config.embedding.model_name,
-            base_url=self.config.ollama_host
-        )
-        
+        logger.info(f"   Model: {self.config.embedding.model_name}")
+        logger.info(f"   Type: {self.config.embedding.model_type}")
+
+        if self.config.embedding.model_type == "huggingface":
+            # UPGRADED: Using state-of-the-art HuggingFace embedding model
+            import torch
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"   Device: {device}")
+
+            embeddings = HuggingFaceEmbeddings(
+                model_name=self.config.embedding.model_name,
+                model_kwargs={'device': device},
+                encode_kwargs={
+                    'normalize_embeddings': self.config.embedding.normalize_embeddings,
+                    'batch_size': self.config.embedding.batch_size
+                }
+            )
+        else:
+            # Fallback to Ollama embeddings
+            embeddings = OllamaEmbeddings(
+                model=self.config.embedding.model_name,
+                base_url=self.config.ollama_host
+            )
+
         # Test embedding
         logger.info("Testing embedding model...")
         test_embed = await asyncio.to_thread(embeddings.embed_query, "test")

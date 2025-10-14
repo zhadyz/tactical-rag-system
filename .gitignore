@@ -53,4 +53,4 @@ state.json.backup_*
 # Excessive documentation (keep only README and essentials)
 BREAKTHROUGH_SUMMARY_*.md
 IMPLEMENTATION_GUIDE_*.md
-SYSTEMIC_ANALYSIS_*.md
+SYSTEMIC_ANALYSIS_*.mdnul
