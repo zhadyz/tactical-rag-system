@@ -87,6 +87,10 @@ class QueryMetadata(BaseModel):
     processing_time_ms: Optional[float] = Field(None, description="Processing time in milliseconds")
     timing_breakdown: Optional[Dict[str, Any]] = Field(None, description="Detailed timing breakdown by stage")
     cache_hit: Optional[bool] = Field(None, description="Whether result was served from cache")
+    optimization: Optional[str] = Field(None, description="Optimization strategy applied")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Overall confidence score (0-1)")
+    confidence_interpretation: Optional[str] = Field(None, description="Human-readable confidence level (Low/Medium/High)")
+    confidence_signals: Optional[Dict[str, float]] = Field(None, description="Individual confidence signal scores")
 
     class Config:
         json_schema_extra = {
@@ -103,7 +107,15 @@ class QueryMetadata(BaseModel):
                         "answer_generation": {"time_ms": 400.0, "percentage": 32.0}
                     }
                 },
-                "cache_hit": False
+                "cache_hit": False,
+                "optimization": "speed_optimized",
+                "confidence": 0.82,
+                "confidence_interpretation": "High",
+                "confidence_signals": {
+                    "retrieval_score": 0.85,
+                    "answer_length": 0.78,
+                    "semantic_coherence": 0.83
+                }
             }
         }
 
@@ -188,13 +200,17 @@ class SettingsUpdate(BaseModel):
     rrf_constant: Optional[int] = Field(None, ge=1, le=100, description="RRF constant")
     simple_threshold: Optional[int] = Field(None, ge=0, le=10, description="Simple classification threshold")
     moderate_threshold: Optional[int] = Field(None, ge=0, le=10, description="Moderate classification threshold")
+    llm_model: Optional[str] = Field(None, description="LLM model name (Ollama model ID)")
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="LLM temperature")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "simple_k": 5,
                 "hybrid_k": 20,
-                "rerank_weight": 0.7
+                "rerank_weight": 0.7,
+                "llm_model": "qwen2.5:14b-instruct-q4_K_M",
+                "temperature": 0.0
             }
         }
 

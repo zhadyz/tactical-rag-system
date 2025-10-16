@@ -107,6 +107,32 @@ export const api = {
       throw new ApiError(`Failed to clear conversation`, response.status);
     }
   },
+
+  // Clear cache and conversation memory
+  clearCacheAndMemory: async (): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_BASE}/api/conversation/clear`, {
+      method: 'POST',
+    });
+    return handleResponse<{ success: boolean; message: string }>(response);
+  },
+
+  // Get settings
+  getSettings: async (): Promise<{ success: boolean; message: string; current_settings: any }> => {
+    const response = await fetch(`${API_BASE}/api/settings`);
+    return handleResponse<{ success: boolean; message: string; current_settings: any }>(response);
+  },
+
+  // Update settings (including model hot-swap)
+  updateSettings: async (settings: any): Promise<{ success: boolean; message: string; current_settings: any }> => {
+    const response = await fetch(`${API_BASE}/api/settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(settings),
+    });
+    return handleResponse<{ success: boolean; message: string; current_settings: any }>(response);
+  },
 };
 
 export { ApiError };

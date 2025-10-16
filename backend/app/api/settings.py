@@ -48,10 +48,15 @@ async def get_settings(
     ```
     """
     try:
+        # Include LLM model info in settings
+        current_settings = engine.runtime_settings.copy()
+        current_settings['llm_model'] = engine.config.llm.model_name
+        current_settings['temperature'] = engine.config.llm.temperature
+
         return SettingsResponse(
             success=True,
             message="Current settings retrieved",
-            current_settings=engine.runtime_settings.copy()
+            current_settings=current_settings
         )
 
     except Exception as e:

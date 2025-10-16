@@ -145,6 +145,12 @@ services:
       - VLLM_HOST=http://vllm-server:8000
       - VLLM_MODEL=mistralai/Mistral-7B-Instruct-v0.3
 
+      # CRITICAL: Embedding model configuration (must match database indexing)
+      # Database was indexed with BAAI/bge-large-en-v1.5 (1024-dim)
+      - EMBEDDING_MODEL=BAAI/bge-large-en-v1.5
+      - EMBEDDING_TYPE=huggingface
+      - EMBEDDING_DIMENSION=1024
+
       # Qdrant configuration (optional - enable with USE_QDRANT=true)
       - USE_QDRANT=false
       - QDRANT_HOST=qdrant
@@ -165,8 +171,9 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
       # Performance feature flags
-      # PERFORMANCE FIX: Enable vLLM for 10-20x speedup and better concurrency
-      - USE_VLLM=true  # ENABLED - using vLLM for production performance
+      # vLLM DISABLED: RTX 5080 Blackwell incompatible with current vLLM releases
+      # See DEPLOYMENT_STATUS_v3.9.md for full technical details
+      - USE_VLLM=false  # DISABLED - RTX 5080 incompatibility (awaiting PyTorch 2.8+ with sm_120 support)
       - USE_EMBEDDING_CACHE=true
 
     # GPU resource allocation

@@ -52,7 +52,7 @@ const useStore = create<AppStore>()(
       documents: [],
       isUploading: false,
       settings: {
-        mode: 'adaptive',
+        mode: 'simple', // Changed from 'adaptive' - simple mode is 3-5x faster for most queries
         useContext: true,
         streamResponse: true, // Enable streaming by default
         darkMode: false,

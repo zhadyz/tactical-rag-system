@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Moon, Sun, Settings, Trash2 } from 'lucide-react';
 import useStore from '../../store/useStore';
+import { SettingsPanel } from '../Settings/SettingsPanel';
 
 export const Header: React.FC = () => {
   const darkMode = useStore((state) => state.settings.darkMode);
   const toggleDarkMode = useStore((state) => state.toggleDarkMode);
   const clearChat = useStore((state) => state.clearChat);
   const messageCount = useStore((state) => state.messages.length);
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
@@ -61,8 +64,9 @@ export const Header: React.FC = () => {
             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          {/* Settings button (placeholder) */}
+          {/* Settings button */}
           <button
+            onClick={() => setSettingsOpen(true)}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
             aria-label="Settings"
             title="Settings"
@@ -71,6 +75,9 @@ export const Header: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Settings Panel */}
+      <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 };

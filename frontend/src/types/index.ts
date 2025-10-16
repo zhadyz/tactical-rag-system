@@ -42,6 +42,10 @@ export interface QueryMetadata {
   processing_time_ms: number;
   timing_breakdown?: TimingBreakdown;
   cache_hit?: boolean;
+  optimization?: string;
+  confidence?: number;
+  confidence_interpretation?: string;
+  confidence_signals?: Record<string, number>;
 }
 
 export interface QueryResponse {

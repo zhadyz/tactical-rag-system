@@ -1,56 +1,178 @@
-# AI Agent Internal Files (tracked: .ai/DEVELOPMENT.md only)
+# ============================================================================
+# Tactical RAG v3.8 - Git Ignore Configuration
+# ============================================================================
+
+# -----------------------------------------------------------------------------
+# AI Agent Internal Files & Memory
+# -----------------------------------------------------------------------------
 .ai/*
 !.ai/DEVELOPMENT.md
 messages/
+.claude/memory/agent_reports/
+.claude/memory/state.json
+.claude/memory/mission_context.md
 
-# Data and documents
+# -----------------------------------------------------------------------------
+# Data & Vector Stores (Not tracked - user-specific)
+# -----------------------------------------------------------------------------
 documents/
 chroma_db/
 vector_db/
+data/collection_metadata.json
 
-# Deployment artifacts (your Docker images)
-_deployment/
-DEPLOYMENT_PACKAGE/
-*.tar
-*.tar.gz
-
-# Generated files
+# -----------------------------------------------------------------------------
+# Logs & Cache
+# -----------------------------------------------------------------------------
 logs/
 .cache/
+*.log
+*_log.txt
+*_output.log
+*_progress.log
+
+# -----------------------------------------------------------------------------
+# Python Runtime
+# -----------------------------------------------------------------------------
 __pycache__/
 *.pyc
 *.pyo
-
-# Python virtual environment
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 .venv/
 venv/
 env/
 
-# IDE files
+# -----------------------------------------------------------------------------
+# Node.js / Frontend
+# -----------------------------------------------------------------------------
+node_modules/
+frontend/dist/
+frontend/build/
+.npm
+.pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# -----------------------------------------------------------------------------
+# Docker & Deployment
+# -----------------------------------------------------------------------------
+_deployment/
+DEPLOYMENT_PACKAGE/
+*.tar
+*.tar.gz
+docker-compose.override.yml
+
+# -----------------------------------------------------------------------------
+# IDE & Editor Files
+# -----------------------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
 
-# OS files
+# -----------------------------------------------------------------------------
+# OS Files
+# -----------------------------------------------------------------------------
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Sensitive config
+# -----------------------------------------------------------------------------
+# Sensitive Configuration
+# -----------------------------------------------------------------------------
 .env
+.env.local
+.env.production
 secrets/
-build_output.txt
-build_error.txt
+credentials.json
+*.key
+*.pem
 
-# Test and research files (local development only)
+# -----------------------------------------------------------------------------
+# Test & Research Files (Local development artifacts)
+# -----------------------------------------------------------------------------
 test_*.py
+!tests/  # Keep tests directory
 reproduce_*.py
 investigate_*.py
 research_*.py
+benchmark_*.py
+debug_*.py
+quick_*.py
+manual_*.py
+analyze_*.py
+deep_search_*.py
+*_test_suite.py
+*_comparison.py
 
-# State backups
-state.json.backup_*
+# -----------------------------------------------------------------------------
+# Test Results & Artifacts
+# -----------------------------------------------------------------------------
+*_results.json
+*_report.json
+baseline_results_*.json
+performance_results*.json
+qa_test_*.json
+comparison_results*.json
+functional_qa_results.json
+week1_test_results.json
+confirm_perf_results.json
+diagnostic_report.json
+vectorstore_analysis.json
 
-# Excessive documentation (keep only README and essentials)
+# -----------------------------------------------------------------------------
+# Experimental & Research Documentation (Keep README only)
+# -----------------------------------------------------------------------------
 BREAKTHROUGH_SUMMARY_*.md
 IMPLEMENTATION_GUIDE_*.md
-SYSTEMIC_ANALYSIS_*.mdnul
+SYSTEMIC_ANALYSIS_*.md
+ACCURACY_*.md
+CHATGPT_PARITY_*.md
+DEPLOYMENT_STATUS_*.md
+EMBEDDING_MODEL_ANALYSIS.md
+EVALUATION_FRAMEWORK.md
+FUNCTIONAL_QA_REPORT.md
+GPT4_LEVEL_PROMPTS.md
+HIGH_IMPACT_*.md
+LOVELESS_*.md
+PERFORMANCE_OPTIMIZATIONS.md
+PRODUCTION_FIX_REPORT.md
+QA_VALIDATION_*.md
+SPEED_WITHOUT_SACRIFICE.md
+STRATEGIC_INTELLIGENCE_INDEX.md
+WEEK1_*.md
+ADVANCED_RETRIEVAL_ARCHITECTURE.md
+CHANGELOG_*.md
+IMPROVEMENTS.md
+OVERNIGHT_PROGRESS_REPORT.md
+
+# -----------------------------------------------------------------------------
+# Build Artifacts
+# -----------------------------------------------------------------------------
+build_output.txt
+build_error.txt
+nul
+
+# -----------------------------------------------------------------------------
+# Batch Scripts & Shell Scripts (Keep essential ones)
+# -----------------------------------------------------------------------------
+start_all_services.bat
+test_*.sh
+test_*.bat
+test_*.ps1
+run_reindex.sh
+trigger_reindex.py

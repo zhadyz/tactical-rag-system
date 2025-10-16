@@ -11,9 +11,10 @@ from pathlib import Path
 
 class EmbeddingConfig(BaseModel):
     """Embedding model configuration"""
-    # UPGRADED: Using BAAI/bge-large-en-v1.5 for state-of-the-art retrieval quality
-    # This is one of the best open-source embedding models for semantic search
-    model_name: str = Field(default="BAAI/bge-large-en-v1.5", description="HuggingFace embedding model")
+    # CRITICAL FIX: Must match the model used during indexing!
+    # Database was indexed with BAAI/bge-large-en-v1.5 (1024-dim HuggingFace)
+    # Using a different model will cause complete retrieval failure
+    model_name: str = Field(default="BAAI/bge-large-en-v1.5", description="Embedding model")
     model_type: str = Field(default="huggingface", description="Model type: 'huggingface' or 'ollama'")
     dimension: int = Field(default=1024, description="Embedding dimension (1024 for bge-large)")
     batch_size: int = Field(default=32, description="Batch size for embedding generation")
@@ -23,7 +24,10 @@ class EmbeddingConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     """LLM configuration (Ollama)"""
-    model_name: str = Field(default="llama3.1:8b", description="Ollama LLM model")
+    # V3.8 UPGRADE: Qwen2.5 14B for superior reasoning (BBH 78.2, HumanEval 84.8)
+    # Previous: llama3.1:8b (MMLU 66.7, BBH ~50)
+    # Qwen2.5 advantages: 44-point BBH gap, 34% lower hallucination rate (49% vs 83%)
+    model_name: str = Field(default="qwen2.5:14b-instruct-q4_K_M", description="Ollama LLM model")
     temperature: float = Field(default=0.0, ge=0.0, le=2.0, description="Generation temperature")
     top_p: float = Field(default=0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
     top_k: int = Field(default=40, ge=0, description="Top-k sampling parameter")
@@ -197,9 +201,11 @@ class SystemConfig(BaseModel):
     )
 
     # LLM backend selection (CRITICAL FEATURE FLAG)
+    # DISABLED: RTX 5080 Blackwell incompatible with current vLLM releases
+    # See: DEPLOYMENT_STATUS_v3.9.md for details
     use_vllm: bool = Field(
         default=False,
-        description="Use vLLM instead of Ollama (False = Ollama 16s, True = vLLM 1-2s)"
+        description="Use vLLM instead of Ollama (DISABLED due to RTX 5080 incompatibility)"
     )
     
     class Config:

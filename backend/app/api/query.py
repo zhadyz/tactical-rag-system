@@ -5,6 +5,8 @@ Query API endpoints with security hardening
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from typing import Dict
+from collections import defaultdict
+from datetime import datetime, timedelta
 import logging
 import json
 import asyncio
@@ -16,6 +18,37 @@ from ..core.rag_engine import RAGEngine
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["query"])
+
+# SECURITY: Rate limiting (simple in-memory implementation)
+# In production, use Redis or a proper rate limiting library
+_rate_limit_store = defaultdict(list)
+RATE_LIMIT_REQUESTS = 30  # Max requests
+RATE_LIMIT_WINDOW = 60  # Per 60 seconds
+
+def check_rate_limit(client_ip: str) -> tuple[bool, str | None]:
+    """
+    Check if client has exceeded rate limit
+
+    Returns:
+        (is_allowed, error_message)
+    """
+    now = datetime.now()
+    window_start = now - timedelta(seconds=RATE_LIMIT_WINDOW)
+
+    # Clean old requests
+    _rate_limit_store[client_ip] = [
+        ts for ts in _rate_limit_store[client_ip]
+        if ts > window_start
+    ]
+
+    # Check limit
+    request_count = len(_rate_limit_store[client_ip])
+    if request_count >= RATE_LIMIT_REQUESTS:
+        return False, f"Rate limit exceeded. Max {RATE_LIMIT_REQUESTS} requests per {RATE_LIMIT_WINDOW} seconds."
+
+    # Record this request
+    _rate_limit_store[client_ip].append(now)
+    return True, None
 
 # SECURITY: Prompt injection detection patterns
 PROMPT_INJECTION_PATTERNS = [
@@ -31,8 +64,14 @@ PROMPT_INJECTION_PATTERNS = [
     r"developer\s+mode",
     r"admin\s+mode",
     r"debug\s+mode",
+    r"<\|im_start\|>",  # Role markers (ChatML format)
+    r"<\|im_end\|>",
     r"assistant:\s*",  # Role injection
     r"###\s*(system|assistant|user)",  # Role markers
+    r"\[INST\]",  # Instruction markers (Llama format)
+    r"\[/INST\]",
+    r"<<SYS>>",  # System markers
+    r"<</SYS>>",
 ]
 
 def detect_prompt_injection(query: str) -> tuple[bool, str | None]:
@@ -122,6 +161,13 @@ async def query(
     ```
     """
     try:
+        # SECURITY: Rate limiting
+        client_ip = req.client.host if req.client else "unknown"
+        is_allowed, error_msg = check_rate_limit(client_ip)
+        if not is_allowed:
+            logger.warning(f"[SECURITY] Rate limit exceeded for {client_ip}")
+            raise HTTPException(status_code=429, detail=error_msg)
+
         # SECURITY: Sanitize input
         sanitized_query = sanitize_input(request.question)
 
@@ -149,6 +195,8 @@ async def query(
             # Log but don't reject - allow system to process normally
             # In production, you may want to reject: raise HTTPException(status_code=400, ...)
 
+        # ENHANCEMENT: Detailed query logging for accuracy tracking
+        logger.info(f"[QUERY TRACKING] query='{sanitized_query}', mode={request.mode}, use_context={request.use_context}, client_ip={client_ip}")
         logger.info(f"[API] Query received: {sanitized_query[:50]}... (mode={request.mode})")
 
         # Process query through RAG engine with sanitized input
@@ -174,6 +222,7 @@ async def query(
 
 @router.post("/query/stream")
 async def query_stream(
+    req: Request,
     request: QueryRequest,
     engine: RAGEngine = Depends(get_rag_engine)
 ):
@@ -200,13 +249,43 @@ async def query_stream(
     }
     ```
     """
+    # SECURITY: Rate limiting (check before starting stream)
+    client_ip = req.client.host if req.client else "unknown"
+    is_allowed, error_msg = check_rate_limit(client_ip)
+    if not is_allowed:
+        logger.warning(f"[SECURITY] Rate limit exceeded for {client_ip} (streaming)")
+        raise HTTPException(status_code=429, detail=error_msg)
+
+    # SECURITY: Sanitize and validate input
+    sanitized_query = sanitize_input(request.question)
+
+    if not sanitized_query or len(sanitized_query) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Query cannot be empty or whitespace-only"
+        )
+
+    if len(sanitized_query) > 10000:
+        raise HTTPException(
+            status_code=400,
+            detail="Query too long (maximum 10,000 characters)"
+        )
+
+    # SECURITY: Detect prompt injection
+    is_suspicious, matched_pattern = detect_prompt_injection(sanitized_query)
+    if is_suspicious:
+        logger.warning(
+            f"[SECURITY] Potential prompt injection in streaming query from {client_ip}: "
+            f"pattern='{matched_pattern}', query='{sanitized_query[:100]}...'"
+        )
+
     async def generate():
         try:
-            logger.info(f"[API STREAM] Query received: {request.question[:50]}... (mode={request.mode})")
+            logger.info(f"[API STREAM] Query received: {sanitized_query[:50]}... (mode={request.mode})")
 
-            # Stream the response
+            # Stream the response (use sanitized query)
             async for chunk in engine.query_stream(
-                question=request.question,
+                question=sanitized_query,
                 mode=request.mode,
                 use_context=request.use_context
             ):
