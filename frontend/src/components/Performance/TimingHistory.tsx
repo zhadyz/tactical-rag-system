@@ -11,14 +11,17 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
   limit = 10,
   showChart = true,
 }) => {
-  const recentQueries = usePerformanceStore((state) => state.getRecentQueries(limit));
-  const stats = usePerformanceStore((state) => state.getStats());
+  const queryHistory = usePerformanceStore((state) => state.queryHistory);
+  const stats = usePerformanceStore((state) => state.stats);
+
+  // Get recent queries by slicing the history
+  const recentQueries = queryHistory.slice(0, limit);
 
   if (recentQueries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
-        <AlertCircle size={48} className="text-gray-400 dark:text-gray-600 mb-3" />
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <AlertCircle size={48} className="text-neutral-400 dark:text-neutral-600 mb-3" />
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
           No query history yet. Start asking questions to see performance metrics.
         </p>
       </div>
@@ -47,10 +50,10 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
     <div className="space-y-6">
       {/* Statistics Summary */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="p-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
-            <Clock size={16} className="text-gray-500" />
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <Clock size={16} className="text-neutral-500" />
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
               Average Time
             </span>
           </div>
@@ -59,10 +62,10 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
           </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="p-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Zap size={16} className="text-blue-500" />
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
               Cache Hit Rate
             </span>
           </div>
@@ -71,10 +74,10 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
           </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="p-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={16} className="text-green-500" />
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
               Fastest Query
             </span>
           </div>
@@ -83,14 +86,14 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
           </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="p-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
-            <BarChart3 size={16} className="text-gray-500" />
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <BarChart3 size={16} className="text-neutral-500" />
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
               Total Queries
             </span>
           </div>
-          <div className="text-2xl font-bold font-mono text-gray-700 dark:text-gray-300">
+          <div className="text-2xl font-bold font-mono text-neutral-700 dark:text-neutral-300">
             {stats.totalQueries}
           </div>
         </div>
@@ -99,19 +102,19 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
       {/* Cache Performance Comparison */}
       {stats.avgCachedTime > 0 && stats.avgUncachedTime > 0 && (
         <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
             Cache Performance Impact
           </h4>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Cached Queries</div>
+              <div className="text-xs text-neutral-600 dark:text-neutral-400 mb-1">Cached Queries</div>
               <div className="text-lg font-bold font-mono text-blue-600 dark:text-blue-400">
                 {(stats.avgCachedTime / 1000).toFixed(2)}s
               </div>
             </div>
             <div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Uncached Queries</div>
-              <div className="text-lg font-bold font-mono text-gray-600 dark:text-gray-400">
+              <div className="text-xs text-neutral-600 dark:text-neutral-400 mb-1">Uncached Queries</div>
+              <div className="text-lg font-bold font-mono text-neutral-600 dark:text-neutral-400">
                 {(stats.avgUncachedTime / 1000).toFixed(2)}s
               </div>
             </div>
@@ -125,7 +128,7 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
       {/* Performance Trend Chart */}
       {showChart && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
             <BarChart3 size={16} />
             Recent Performance Trend
           </h4>
@@ -137,10 +140,10 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
               return (
                 <div key={query.id} className="group">
                   <div className="flex items-center gap-2 text-xs mb-0.5">
-                    <span className="text-gray-500 dark:text-gray-500 font-mono w-6">
+                    <span className="text-neutral-500 dark:text-neutral-500 font-mono w-6">
                       #{recentQueries.length - idx}
                     </span>
-                    <span className="flex-1 truncate text-gray-600 dark:text-gray-400">
+                    <span className="flex-1 truncate text-neutral-600 dark:text-neutral-400">
                       {query.question}
                     </span>
                     <span className={`font-mono font-semibold ${getPerformanceTextColor(query.time_ms)}`}>
@@ -150,7 +153,7 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
                       <Zap size={12} className="text-blue-500" />
                     )}
                   </div>
-                  <div className="relative h-5 bg-gray-200 dark:bg-gray-700 rounded-sm overflow-hidden">
+                  <div className="relative h-5 bg-neutral-200 dark:bg-neutral-700 rounded-sm overflow-hidden">
                     <div
                       className={`h-full ${getPerformanceColor(query.time_ms)} transition-all duration-300 ease-out group-hover:opacity-80`}
                       style={{ width: `${barWidth}%` }}
@@ -165,17 +168,17 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
 
       {/* Recent Queries List */}
       <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+        <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
           Query Details
         </h4>
         <div className="space-y-2">
           {recentQueries.slice(0, 5).map((query) => (
             <div
               key={query.id}
-              className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow"
+              className="p-3 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between gap-2 mb-1">
-                <p className="text-sm text-gray-900 dark:text-gray-100 flex-1 line-clamp-2">
+                <p className="text-sm text-neutral-900 dark:text-neutral-100 flex-1 line-clamp-2">
                   {query.question}
                 </p>
                 <span className={`text-sm font-bold font-mono ${getPerformanceTextColor(query.time_ms)}`}>
@@ -183,7 +186,7 @@ export const TimingHistory: React.FC<TimingHistoryProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   {new Date(query.timestamp).toLocaleTimeString()}
                 </span>
                 {query.cache_hit && (

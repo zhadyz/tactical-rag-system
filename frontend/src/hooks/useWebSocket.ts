@@ -29,17 +29,23 @@ export const useWebSocket = ({
 
     // Set up event listeners
     socket.on('connect', () => {
-      console.log('WebSocket connected');
+      if (import.meta.env.DEV) {
+        console.log('WebSocket connected');
+      }
       onConnect?.();
     });
 
     socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+      if (import.meta.env.DEV) {
+        console.log('WebSocket disconnected');
+      }
       onDisconnect?.();
     });
 
     socket.on('error', (error: Error) => {
-      console.error('WebSocket error:', error);
+      if (import.meta.env.DEV) {
+        console.error('WebSocket error:', error);
+      }
       onError?.(error);
     });
 
@@ -60,7 +66,9 @@ export const useWebSocket = ({
     if (socketRef.current?.connected) {
       socketRef.current.emit(event, data);
     } else {
-      console.warn('WebSocket not connected');
+      if (import.meta.env.DEV) {
+        console.warn('WebSocket not connected');
+      }
     }
   }, []);
 

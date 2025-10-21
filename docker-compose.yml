@@ -132,6 +132,8 @@ services:
       - ./chroma_db:/app/chroma_db
       # Map logs for persistence
       - ./logs:/app/logs
+      # Map data directory for metadata cache (CRITICAL for <5s startup)
+      - ./data:/app/data
       # Mount source code for development (hot reload)
       - ./_src:/app/_src
 
@@ -168,7 +170,7 @@ services:
       # API settings
       - API_HOST=0.0.0.0
       - API_PORT=8000
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173
 
       # Performance feature flags
       # vLLM DISABLED: RTX 5080 Blackwell incompatible with current vLLM releases
@@ -199,12 +201,14 @@ services:
       - rag-network
 
     # Health check
+    # EXTENDED start_period for multiprocessing metadata computation
+    # First startup may take 30-60s with optimized parallel processing
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 180s  # Was 60s - Extended to 3min for metadata computation
 
   # ============================================================
   # SERVICE 4: React Frontend (NEW)

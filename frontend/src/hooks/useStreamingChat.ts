@@ -99,10 +99,14 @@ export const useStreamingChat = () => {
                     break;
 
                   default:
-                    console.warn('Unknown event type:', event.type);
+                    if (import.meta.env.DEV) {
+                      console.warn('Unknown event type:', event.type);
+                    }
                 }
               } catch (err) {
-                console.error('Error parsing SSE event:', err, line);
+                if (import.meta.env.DEV) {
+                  console.error('Error parsing SSE event:', err, line);
+                }
               }
             }
           }
@@ -118,18 +122,24 @@ export const useStreamingChat = () => {
               callbacks.onDone();
             }
           } catch (err) {
-            console.error('Error parsing final SSE event:', err);
+            if (import.meta.env.DEV) {
+              console.error('Error parsing final SSE event:', err);
+            }
           }
         }
 
       } catch (err: any) {
         // Don't report errors for aborted requests
         if (err.name === 'AbortError') {
-          console.log('Stream aborted by user');
+          if (import.meta.env.DEV) {
+            console.log('Stream aborted by user');
+          }
           return;
         }
 
-        console.error('Streaming error:', err);
+        if (import.meta.env.DEV) {
+          console.error('Streaming error:', err);
+        }
         if (callbacks.onError) {
           callbacks.onError(err.message || 'Stream failed');
         }

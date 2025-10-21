@@ -1,8 +1,7 @@
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import useStore from '../store/useStore';
-// Temporarily disable performanceStore to debug Suspense error
-// import { usePerformanceStore } from '../store/performanceStore';
+import { usePerformanceStore } from '../store/performanceStore';
 import { api } from '../services/api';
 import { useStreamingChat } from './useStreamingChat';
 import type { Message } from '../types';
@@ -17,7 +16,7 @@ export const useChat = () => {
   const setError = useStore((state) => state.setError);
   const settings = useStore((state) => state.settings);
   const { sendMessageStream, cancelStream } = useStreamingChat();
-  // const addQuery = usePerformanceStore((state) => state.addQuery);
+  const addQuery = usePerformanceStore((state) => state.addQuery);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -72,6 +71,21 @@ export const useChat = () => {
                   processing_time: metadata.processing_time_ms,
                   ...metadata,
                 });
+
+                // Track performance metrics (streaming)
+                if (metadata?.processing_time_ms) {
+                  addQuery({
+                    id: uuidv4(),
+                    timestamp: new Date().toISOString(),
+                    question: content,
+                    time_ms: metadata.processing_time_ms,
+                    cache_hit: metadata.cache_hit || false,
+                    breakdown: metadata.timing_breakdown,
+                    strategy_used: metadata.strategy_used,
+                    query_type: metadata.query_type,
+                    mode: metadata.mode,
+                  });
+                }
               },
               onDone: () => {
                 // Mark streaming as complete
@@ -112,23 +126,23 @@ export const useChat = () => {
           };
           addMessage(assistantMessage);
 
+          // Track performance metrics (non-streaming)
+          if (response.metadata?.processing_time_ms) {
+            addQuery({
+              id: uuidv4(),
+              timestamp: new Date().toISOString(),
+              question: content,
+              time_ms: response.metadata.processing_time_ms,
+              cache_hit: response.metadata.cache_hit || false,
+              breakdown: response.metadata.timing_breakdown,
+              strategy_used: response.metadata.strategy_used,
+              query_type: response.metadata.query_type,
+              mode: response.metadata.mode,
+            });
+          }
+
           setLoading(false);
         }
-
-        // Track performance metrics - Temporarily disabled to debug Suspense error
-        // if (response.metadata?.processing_time_ms) {
-        //   addQuery({
-        //     id: uuidv4(),
-        //     timestamp: new Date().toISOString(),
-        //     question: content,
-        //     time_ms: response.metadata.processing_time_ms,
-        //     cache_hit: response.metadata.cache_hit || false,
-        //     breakdown: response.metadata.timing_breakdown,
-        //     strategy_used: response.metadata.strategy_used,
-        //     query_type: response.metadata.query_type,
-        //     mode: response.metadata.mode,
-        //   });
-        // }
       } catch (err: any) {
         console.error('Error sending message:', err);
         setError(err.message || 'Failed to send message. Please try again.');
@@ -158,6 +172,7 @@ export const useChat = () => {
       setError,
       settings,
       sendMessageStream,
+      addQuery,
     ]
   );
 

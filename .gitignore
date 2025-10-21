@@ -3,14 +3,16 @@
 # ============================================================================
 
 # -----------------------------------------------------------------------------
-# AI Agent Internal Files & Memory
+# AI Agent Internal Files & Memory (NEVER PUSH TO GITHUB)
 # -----------------------------------------------------------------------------
 .ai/*
 !.ai/DEVELOPMENT.md
 messages/
-.claude/memory/agent_reports/
-.claude/memory/state.json
-.claude/memory/mission_context.md
+.claude/
+*.claude/
+.aider*
+cursor/
+.cursor/
 
 # -----------------------------------------------------------------------------
 # Data & Vector Stores (Not tracked - user-specific)
@@ -31,7 +33,7 @@ logs/
 *_progress.log
 
 # -----------------------------------------------------------------------------
-# Python Runtime
+# Python Runtime & Experimental Code
 # -----------------------------------------------------------------------------
 __pycache__/
 *.pyc
@@ -46,6 +48,15 @@ build/
 .venv/
 venv/
 env/
+
+# Experimental modules (NOT production-ready)
+_src/*_upgrade.py
+_src/chain_of_verification.py
+_src/confidence_scoring.py
+_src/hyde_retrieval.py
+_src/query_decomposition.py
+_src/experimental/
+_src/prototype_*.py
 
 # -----------------------------------------------------------------------------
 # Node.js / Frontend
@@ -66,6 +77,9 @@ DEPLOYMENT_PACKAGE/
 *.tar
 *.tar.gz
 docker-compose.override.yml
+
+# Docker persistent volumes (production cache data)
+volumes/
 
 # -----------------------------------------------------------------------------
 # IDE & Editor Files
@@ -103,10 +117,11 @@ credentials.json
 *.pem
 
 # -----------------------------------------------------------------------------
-# Test & Research Files (Local development artifacts)
+# Test & Research Files (Local development artifacts - NOT for GitHub)
 # -----------------------------------------------------------------------------
 test_*.py
-!tests/  # Keep tests directory
+!tests/  # Keep tests directory (but exclude content for now)
+tests/*  # Exclude test contents until validated
 reproduce_*.py
 investigate_*.py
 research_*.py
@@ -118,12 +133,18 @@ analyze_*.py
 deep_search_*.py
 *_test_suite.py
 *_comparison.py
+reindex.*
+module_activation_logs.txt
 
 # -----------------------------------------------------------------------------
-# Test Results & Artifacts
+# Test Results & Artifacts (Local only)
 # -----------------------------------------------------------------------------
 *_results.json
 *_report.json
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
 baseline_results_*.json
 performance_results*.json
 qa_test_*.json
@@ -133,32 +154,65 @@ week1_test_results.json
 confirm_perf_results.json
 diagnostic_report.json
 vectorstore_analysis.json
+loveless_qa_report_*.json
 
 # -----------------------------------------------------------------------------
-# Experimental & Research Documentation (Keep README only)
+# Internal Research & Development Docs (Local only - NOT for GitHub)
 # -----------------------------------------------------------------------------
+# Strategic research documents
+STRATEGIC_*.md
+MISTRAL_VS_*.md
+RTX_*.md
+CHATGPT_PARITY_*.md
+EMBEDDING_MODEL_ANALYSIS.md
+ADVANCED_RETRIEVAL_ARCHITECTURE.md
+GPT4_LEVEL_PROMPTS.md
+EVALUATION_FRAMEWORK.md
+SPEED_WITHOUT_SACRIFICE.md
+
+# QA & Testing reports
+LOVELESS_*.md
+QA_*.md
+FUNCTIONAL_QA_REPORT.md
+TEST_*.md
+EDGE_CASE_*.md
+
+# Implementation & optimization reports
 BREAKTHROUGH_SUMMARY_*.md
 IMPLEMENTATION_GUIDE_*.md
+HIGH_IMPACT_*.md
+PERFORMANCE_OPTIMIZATIONS.md
+WEEK1_*.md
+PHASE_*.md
 SYSTEMIC_ANALYSIS_*.md
 ACCURACY_*.md
-CHATGPT_PARITY_*.md
+
+# Deployment & production reports
 DEPLOYMENT_STATUS_*.md
-EMBEDDING_MODEL_ANALYSIS.md
-EVALUATION_FRAMEWORK.md
-FUNCTIONAL_QA_REPORT.md
-GPT4_LEVEL_PROMPTS.md
-HIGH_IMPACT_*.md
-LOVELESS_*.md
-PERFORMANCE_OPTIMIZATIONS.md
-PRODUCTION_FIX_REPORT.md
-QA_VALIDATION_*.md
-SPEED_WITHOUT_SACRIFICE.md
-STRATEGIC_INTELLIGENCE_INDEX.md
-WEEK1_*.md
-ADVANCED_RETRIEVAL_ARCHITECTURE.md
+PRODUCTION_*.md
+INFRASTRUCTURE_*.md
+VLLM_*.md
+MIGRATION_*.md
+SYNONYM_*.md
+QUERY_*.md
+S_PLUS_*.md
+
+# Miscellaneous internal docs
 CHANGELOG_*.md
 IMPROVEMENTS.md
 OVERNIGHT_PROGRESS_REPORT.md
+STRATEGIC_INTELLIGENCE_INDEX.md
+VERIFIED_*.md
+GIT_COMMIT_GUIDE.md
+GITHUB_READY_CHECKLIST.md
+FIELD_DEPLOYMENT_GUIDE.md
+TROUBLESHOOTING_QUICK_REFERENCE.md
+DEPLOYMENT_VALIDATION_CHECKLIST.md
+OFFLINE_VALIDATION_REPORT.md
+LOVELESS_SECURITY_AUDIT_REPORT.md
+docs/archive/
+tests/development/
+scripts/
 
 # -----------------------------------------------------------------------------
 # Build Artifacts
@@ -168,7 +222,7 @@ build_error.txt
 nul
 
 # -----------------------------------------------------------------------------
-# Batch Scripts & Shell Scripts (Keep essential ones)
+# Development Scripts (Local only - NOT for GitHub)
 # -----------------------------------------------------------------------------
 start_all_services.bat
 test_*.sh
@@ -176,3 +230,10 @@ test_*.bat
 test_*.ps1
 run_reindex.sh
 trigger_reindex.py
+
+# -----------------------------------------------------------------------------
+# Docker Compose Variants (Keep main + production)
+# -----------------------------------------------------------------------------
+docker-compose.*.yml
+!docker-compose.yml
+!docker-compose.production.yml

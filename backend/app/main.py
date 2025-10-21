@@ -19,6 +19,7 @@ from .core.rag_engine import RAGEngine
 from .api.query import router as query_router, set_rag_engine as set_query_engine
 from .api.settings import router as settings_router
 from .api.documents import router as documents_router, set_rag_engine as set_documents_engine
+from .api.documents_coverage import router as coverage_router, set_rag_engine as set_coverage_engine
 from .api.models import router as models_router
 from .models.schemas import HealthResponse
 
@@ -51,9 +52,10 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 70)
 
     try:
-        # Initialize RAG engine
+        # Initialize RAG engine with config from file
         logger.info("Initializing RAG Engine...")
-        rag_engine = RAGEngine()
+        from _src.config import load_config
+        rag_engine = RAGEngine(load_config('config.yml'))
 
         success, message = await rag_engine.initialize()
 
@@ -64,6 +66,7 @@ async def lifespan(app: FastAPI):
         # Set engine in routers
         set_query_engine(rag_engine)
         set_documents_engine(rag_engine)
+        set_coverage_engine(rag_engine)
 
         logger.info("=" * 70)
         logger.info("BACKEND READY - Listening on port 8000")
@@ -154,7 +157,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # SECURITY: Restrict origins in production
 # TODO: Set environment variable CORS_ORIGINS in production to specific domains
 import os
-allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -275,6 +278,7 @@ async def root() -> Dict:
 app.include_router(query_router)
 app.include_router(settings_router)
 app.include_router(documents_router)
+app.include_router(coverage_router)
 app.include_router(models_router)
 
 

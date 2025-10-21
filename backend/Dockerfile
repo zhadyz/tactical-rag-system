@@ -31,16 +31,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # ============================================================
-# STEP 5: Install PyTorch with CUDA 12.1 (OPTIONAL)
+# STEP 5: Install PyTorch (CPU-only due to RTX 5080 limitation)
 # ============================================================
-# If you want GPU support in the backend, uncomment this:
-# RUN pip install --no-cache-dir \
-#     torch==2.5.1+cu121 \
-#     torchvision==0.20.1+cu121 \
-#     torchaudio==2.5.1+cu121 \
-#     --index-url https://download.pytorch.org/whl/cu121
-
-# For CPU-only (faster build, smaller image):
+# RTX 5080 Blackwell (sm_120) incompatible with PyTorch 2.5.1 (max sm_90)
+# Requires PyTorch 2.8+ with sm_120 support (not yet released)
+# Backend uses CPU for embeddings/reranking, Ollama uses GPU for LLM
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # ============================================================
@@ -59,10 +54,13 @@ COPY backend/app /app/app
 # The RAG engine imports from here
 COPY _src /app/_src
 
+# Copy config.yml for RAG configuration
+COPY config.yml /app/config.yml
+
 # ============================================================
 # STEP 8: Create necessary directories
 # ============================================================
-RUN mkdir -p /app/documents /app/chroma_db /app/logs /app/.cache
+RUN mkdir -p /app/documents /app/chroma_db /app/logs /app/.cache /app/data
 
 # ============================================================
 # STEP 9: Expose the port

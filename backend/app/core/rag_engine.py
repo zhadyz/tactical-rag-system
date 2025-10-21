@@ -5,10 +5,14 @@ CRITICAL: This does NOT modify existing code, only imports and wraps it
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime
+
+# Initialize logger FIRST (needed for import error handling)
+logger = logging.getLogger(__name__)
 
 # Add _src directory to Python path to import existing modules
 # Path calculation: /app/app/core/rag_engine.py -> /app/_src
@@ -22,7 +26,16 @@ from conversation_memory import ConversationMemory
 from cache_next_gen import NextGenCacheManager
 from embedding_cache import EmbeddingCache
 from llm_factory import create_llm
-from collection_metadata import CollectionMetadata
+
+# CRITICAL FIX: Import optimized metadata with fallback to standard version
+try:
+    from collection_metadata_optimized import CollectionMetadataOptimized as CollectionMetadata
+    logger.info("✓ Using OPTIMIZED metadata system with smart caching")
+except ImportError as e:
+    logger.warning(f"Failed to import optimized metadata (falling back to standard): {e}")
+    from collection_metadata import CollectionMetadata
+    logger.warning("⚠ Using standard metadata system (slower startup)")
+
 from confidence_scoring import ConfidenceScorer
 
 # LangChain imports
@@ -34,8 +47,6 @@ from langchain.docstore.document import Document
 
 # Import timing utilities
 from ..utils.timing import StageTimer
-
-logger = logging.getLogger(__name__)
 
 
 class RAGEngine:
@@ -102,168 +113,273 @@ class RAGEngine:
 
     async def initialize(self) -> Tuple[bool, str]:
         """
-        Initialize all RAG components asynchronously.
+        Initialize all RAG components asynchronously with PARALLEL LOADING.
+
+        OPTIMIZATION: Components are loaded in parallel groups to minimize startup time.
+        Expected speedup: 14-18 seconds (78s → 60-64s)
 
         Returns:
             Tuple of (success: bool, message: str)
         """
         try:
             logger.info("=" * 60)
-            logger.info("INITIALIZING RAG ENGINE")
+            logger.info("INITIALIZING RAG ENGINE (PARALLEL MODE)")
             logger.info("=" * 60)
 
-            # 1. Initialize embedding cache (do this first for Redis connection)
-            logger.info("\n1. Initializing embedding cache...")
-            redis_url = f"redis://{self.config.cache.redis_host}:{self.config.cache.redis_port}"
-            self.embedding_cache = EmbeddingCache(
-                redis_url=redis_url,
-                ttl=86400 * 7,  # 7 days
-                key_prefix="emb:v1:"
-            )
-            await self.embedding_cache.connect()
-            logger.info(f"✓ Embedding cache connected to {redis_url}")
+            # ============================================================
+            # PARALLEL GROUP 1: Independent components (run concurrently)
+            # ============================================================
+            logger.info("\n[PARALLEL GROUP 1] Loading independent components...")
 
-            # 2. Initialize embeddings
-            logger.info("\n2. Initializing embedding model...")
-            logger.info(f"   Model: {self.config.embedding.model_name}")
-            logger.info(f"   Type: {self.config.embedding.model_type}")
-            logger.info(f"   Expected dimension: {self.config.embedding.dimension}")
-
-            # CRITICAL: Must match database indexing
-            # Database contains 1024-dim embeddings from BAAI/bge-large-en-v1.5
-            if self.config.embedding.model_type == "huggingface":
-                import torch
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-                logger.info(f"   Device: {device}")
-
-                self.embeddings = HuggingFaceEmbeddings(
-                    model_name=self.config.embedding.model_name,
-                    model_kwargs={'device': device},
-                    encode_kwargs={
-                        'normalize_embeddings': self.config.embedding.normalize_embeddings,
-                        'batch_size': self.config.embedding.batch_size
-                    }
+            async def init_embedding_cache():
+                """Initialize embedding cache"""
+                logger.info("  → Connecting to Redis cache...")
+                redis_url = f"redis://{self.config.cache.redis_host}:{self.config.cache.redis_port}"
+                cache = EmbeddingCache(
+                    redis_url=redis_url,
+                    ttl=86400 * 7,  # 7 days
+                    key_prefix="emb:v1:"
                 )
-            else:
-                # Ollama embeddings fallback
-                self.embeddings = OllamaEmbeddings(
-                    model=self.config.embedding.model_name,
-                    base_url=self.config.ollama_host
+                await cache.connect()
+                logger.info(f"  ✓ Redis cache connected")
+                return cache
+
+            async def init_embeddings():
+                """Initialize embedding model"""
+                logger.info("  → Loading embedding model...")
+                logger.info(f"     Model: {self.config.embedding.model_name}")
+
+                if self.config.embedding.model_type == "huggingface":
+                    import torch
+                    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                    logger.info(f"     Device: {device}")
+
+                    embeddings = HuggingFaceEmbeddings(
+                        model_name=self.config.embedding.model_name,
+                        model_kwargs={'device': device},
+                        encode_kwargs={
+                            'normalize_embeddings': self.config.embedding.normalize_embeddings,
+                            'batch_size': self.config.embedding.batch_size
+                        }
+                    )
+                else:
+                    embeddings = OllamaEmbeddings(
+                        model=self.config.embedding.model_name,
+                        base_url=self.config.ollama_host
+                    )
+
+                # Test embeddings
+                test_embed = await asyncio.to_thread(
+                    embeddings.embed_query,
+                    "test"
                 )
+                logger.info(f"  ✓ Embeddings ready (dim: {len(test_embed)})")
+                return embeddings
 
-            # Test embeddings
-            test_embed = await asyncio.to_thread(
-                self.embeddings.embed_query,
-                "test"
-            )
-            logger.info(f"✓ Embeddings ready (dim: {len(test_embed)})")
+            async def load_bm25_data():
+                """Load BM25 metadata file"""
+                logger.info("  → Loading BM25 metadata...")
+                metadata_file = self.config.vector_db_dir / "chunk_metadata.json"
 
-            # 3. Initialize cache manager
-            logger.info("\n3. Initializing cache system...")
+                if metadata_file.exists():
+                    import json
+                    data = await asyncio.to_thread(
+                        lambda: json.load(open(metadata_file, 'r'))
+                    )
+                    logger.info(f"  ✓ BM25 metadata loaded ({len(data['texts'])} chunks)")
+                    return data
+                else:
+                    logger.warning("  ⚠ BM25 metadata not found")
+                    return None
 
-            def embed_for_cache(text: str) -> List[float]:
-                """Sync wrapper for embeddings (for cache)"""
-                return self.embeddings.embed_query(text)
-
-            self.cache_manager = NextGenCacheManager(
-                self.config,
-                embeddings_func=embed_for_cache
-            )
-            logger.info("✓ Cache system ready")
-
-            # 4. Load vectorstore
-            logger.info("\n4. Loading vector database...")
-            if not self.config.vector_db_dir.exists():
-                return False, f"Vector database not found at {self.config.vector_db_dir}"
-
-            self.vectorstore = Chroma(
-                persist_directory=str(self.config.vector_db_dir),
-                embedding_function=self.embeddings
-            )
-            logger.info("✓ Vector store loaded")
-
-            # 4.5. Initialize collection metadata
-            logger.info("\n4.5. Initializing collection metadata...")
-            try:
-                from pathlib import Path as PathLib
-                metadata_path = PathLib(self.config.scope_detection.metadata_path)
-
-                self.collection_metadata = CollectionMetadata.load_or_compute(
-                    vectorstore=self.vectorstore,
-                    embeddings=self.embeddings,
-                    llm=None,  # Will be set later
-                    metadata_path=metadata_path,
-                    force_recompute=self.config.scope_detection.force_recompute
+            async def init_llm():
+                """Initialize LLM client"""
+                logger.info("  → Creating LLM client...")
+                llm = await asyncio.to_thread(
+                    create_llm, self.config, False
                 )
-                logger.info(f"✓ Collection metadata ready")
-            except Exception as e:
-                logger.warning(f"⚠ Collection metadata initialization skipped: {e}")
-                logger.warning("  Out-of-scope detection will be disabled")
-                self.collection_metadata = None
+                logger.info("  ✓ LLM client created")
+                return llm
 
-            # 5. Load BM25 retriever
-            logger.info("\n5. Loading BM25 retriever...")
-            metadata_file = self.config.vector_db_dir / "chunk_metadata.json"
+            # Run Group 1 in parallel
+            results = await asyncio.gather(
+                init_embedding_cache(),
+                init_embeddings(),
+                load_bm25_data(),
+                init_llm(),
+                return_exceptions=True
+            )
 
-            if metadata_file.exists():
-                import json
-                with open(metadata_file, 'r') as f:
-                    data = json.load(f)
+            # Unpack results (with error handling)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Parallel init failed for component {i}: {result}")
+                    raise result
+
+            self.embedding_cache, self.embeddings, bm25_data, self.llm = results
+            logger.info("[GROUP 1] ✓ All independent components loaded")
+
+            # ============================================================
+            # PARALLEL GROUP 2: Components that depend on Group 1
+            # ============================================================
+            logger.info("\n[PARALLEL GROUP 2] Loading dependent components...")
+
+            async def init_cache_manager():
+                """Initialize cache manager (needs embeddings)"""
+                logger.info("  → Initializing cache system...")
+
+                def embed_for_cache(text: str) -> List[float]:
+                    return self.embeddings.embed_query(text)
+
+                cache_manager = NextGenCacheManager(
+                    self.config,
+                    embeddings_func=embed_for_cache
+                )
+                logger.info("  ✓ Cache system ready")
+                return cache_manager
+
+            async def init_vectorstore():
+                """Initialize vectorstore (needs embeddings)"""
+                logger.info("  → Loading vector database...")
+
+                if not self.config.vector_db_dir.exists():
+                    raise FileNotFoundError(f"Vector database not found at {self.config.vector_db_dir}")
+
+                vectorstore = await asyncio.to_thread(
+                    Chroma,
+                    persist_directory=str(self.config.vector_db_dir),
+                    embedding_function=self.embeddings
+                )
+                logger.info("  ✓ Vector store loaded")
+                return vectorstore
+
+            async def init_bm25_retriever(data):
+                """Initialize BM25 retriever (needs BM25 data)"""
+                logger.info("  → Building BM25 retriever...")
+
+                if data:
                     texts = data['texts']
                     metadata = data['metadata']
+                    bm25_docs = [
+                        Document(page_content=text, metadata=meta)
+                        for text, meta in zip(texts, metadata)
+                    ]
+                    retriever = await asyncio.to_thread(
+                        BM25Retriever.from_documents, bm25_docs
+                    )
+                    retriever.k = self.config.retrieval.initial_k
+                    logger.info(f"  ✓ BM25 ready")
+                else:
+                    logger.warning("  ⚠ Using dummy BM25 retriever")
+                    retriever = BM25Retriever.from_documents([
+                        Document(page_content="dummy")
+                    ])
+                return retriever
 
-                bm25_docs = [
-                    Document(page_content=text, metadata=meta)
-                    for text, meta in zip(texts, metadata)
-                ]
-                self.bm25_retriever = BM25Retriever.from_documents(bm25_docs)
-                self.bm25_retriever.k = self.config.retrieval.initial_k
-                logger.info(f"✓ BM25 ready ({len(texts)} chunks)")
-            else:
-                logger.warning("⚠ BM25 metadata not found, using dummy retriever")
-                self.bm25_retriever = BM25Retriever.from_documents([
-                    Document(page_content="dummy")
-                ])
+            async def warmup_llm():
+                """Warm up LLM model (needs LLM client)"""
+                logger.info("  → Warming up LLM model...")
+                logger.info("     This loads the model into VRAM (15-45s, one-time cost)")
 
-            # 6. Connect to LLM (using LLM factory for vLLM support)
-            logger.info("\n6. Connecting to LLM...")
-            self.llm = create_llm(self.config, test_connection=False)
-            logger.info("✓ LLM client created")
+                warmup_start = asyncio.get_event_loop().time()
+                try:
+                    await asyncio.to_thread(
+                        self.llm.invoke,
+                        "Hi"  # Minimal prompt
+                    )
+                    warmup_time = (asyncio.get_event_loop().time() - warmup_start) * 1000
+                    logger.info(f"  ✓ LLM warmed up in {warmup_time/1000:.1f}s")
+                    return True
+                except Exception as e:
+                    logger.warning(f"  ⚠ LLM warm-up failed: {e}")
+                    return False
 
-            # PERFORMANCE FIX: Warm up the LLM model during startup
-            # This prevents 40+ second delay on first user query
-            logger.info("\n6.5. Warming up LLM model...")
-            logger.info("   This loads the model into VRAM (15-45 seconds, one-time cost)")
-            logger.info("   User queries will be instant once warm-up completes...")
-
-            warmup_start = asyncio.get_event_loop().time()
-            try:
-                # Send a minimal query to force model loading
-                warmup_result = await asyncio.to_thread(
-                    self.llm.invoke,
-                    "Hi"  # Minimal prompt for fastest possible inference
-                )
-                warmup_time = (asyncio.get_event_loop().time() - warmup_start) * 1000
-
-                logger.info(f"✓ LLM warmed up in {warmup_time:.1f}ms ({warmup_time/1000:.1f}s)")
-                logger.info("✓ Model loaded in VRAM - ready for instant queries")
-            except Exception as e:
-                logger.warning(f"⚠ LLM warm-up failed: {e}")
-                logger.warning("  First user query may be slower than expected")
-                logger.info("✓ LLM ready (but not warmed up)")
-
-            # 7. Initialize conversation memory
-            logger.info("\n7. Initializing conversation memory...")
-            self.conversation_memory = ConversationMemory(
-                llm=self.llm,
-                max_exchanges=10,
-                summarization_threshold=5,
-                enable_summarization=True
+            # Run Group 2 in parallel
+            results = await asyncio.gather(
+                init_cache_manager(),
+                init_vectorstore(),
+                init_bm25_retriever(bm25_data),
+                warmup_llm(),
+                return_exceptions=True
             )
-            logger.info("✓ Conversation memory ready")
 
-            # 8. Initialize retrieval engines
-            logger.info("\n8. Initializing retrieval engines...")
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Parallel init failed for component {i}: {result}")
+                    raise result
+
+            self.cache_manager, self.vectorstore, self.bm25_retriever, _ = results
+            logger.info("[GROUP 2] ✓ All dependent components loaded")
+
+            # ============================================================
+            # PARALLEL GROUP 3: Components needing vectorstore + LLM
+            # ============================================================
+            logger.info("\n[PARALLEL GROUP 3] Loading final components...")
+
+            async def init_metadata():
+                """Initialize collection metadata (needs vectorstore + embeddings)"""
+                logger.info("  → Initializing collection metadata...")
+                try:
+                    from pathlib import Path as PathLib
+                    metadata_path = PathLib(self.config.scope_detection.metadata_path)
+
+                    metadata = await asyncio.to_thread(
+                        CollectionMetadata.load_or_compute,
+                        vectorstore=self.vectorstore,
+                        embeddings=self.embeddings,
+                        llm=None,
+                        metadata_path=metadata_path,
+                        force_recompute=self.config.scope_detection.force_recompute
+                    )
+                    logger.info("  ✓ Collection metadata ready")
+                    return metadata
+                except Exception as e:
+                    logger.warning(f"  ⚠ Metadata init skipped: {e}")
+                    return None
+
+            async def init_conversation_memory():
+                """Initialize conversation memory (needs LLM)"""
+                logger.info("  → Initializing conversation memory...")
+                memory = ConversationMemory(
+                    llm=self.llm,
+                    max_exchanges=10,
+                    summarization_threshold=5,
+                    enable_summarization=True
+                )
+                logger.info("  ✓ Conversation memory ready")
+                return memory
+
+            async def init_confidence_scorer():
+                """Initialize confidence scorer (needs embeddings)"""
+                logger.info("  → Initializing confidence scorer...")
+                try:
+                    scorer = ConfidenceScorer(embeddings=self.embeddings)
+                    logger.info("  ✓ Confidence scorer ready")
+                    return scorer
+                except Exception as e:
+                    logger.warning(f"  ⚠ Confidence scorer failed: {e}")
+                    return None
+
+            # Run Group 3 in parallel
+            results = await asyncio.gather(
+                init_metadata(),
+                init_conversation_memory(),
+                init_confidence_scorer(),
+                return_exceptions=True
+            )
+
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Parallel init failed for component {i}: {result}")
+                    raise result
+
+            self.collection_metadata, self.conversation_memory, self.confidence_scorer = results
+            logger.info("[GROUP 3] ✓ Final components loaded")
+
+            # ============================================================
+            # SEQUENTIAL: Retrieval engines (need everything)
+            # ============================================================
+            logger.info("\n[FINAL] Initializing retrieval engines...")
             self.retrieval_engine = AdaptiveRetriever(
                 vectorstore=self.vectorstore,
                 bm25_retriever=self.bm25_retriever,
@@ -279,21 +395,9 @@ class RAGEngine:
             )
             logger.info("✓ Retrieval engines ready")
 
-            # 9. Initialize confidence scorer
-            logger.info("\n9. Initializing confidence scorer...")
-            try:
-                self.confidence_scorer = ConfidenceScorer(
-                    embeddings=self.embeddings
-                )
-                logger.info("✓ Confidence scorer ready")
-            except Exception as e:
-                logger.warning(f"⚠ Confidence scorer initialization failed: {e}")
-                logger.warning("  Confidence scores will not be available")
-                self.confidence_scorer = None
-
             self.initialized = True
             logger.info("\n" + "=" * 60)
-            logger.info("RAG ENGINE READY")
+            logger.info("RAG ENGINE READY (PARALLEL INIT COMPLETE)")
             logger.info("=" * 60)
 
             return True, "RAG Engine initialized successfully"
@@ -369,7 +473,14 @@ class RAGEngine:
 
             # Stage 3: Document retrieval (with sub-stage timing)
             if mode == "simple":
-                retrieval_result = await self._simple_retrieve(enhanced_query, timer)
+                # BUGFIX: Pass both original question and enhanced query
+                # - original question used for multi-query expansion decision
+                # - enhanced query used for retrieval if multi-query not activated
+                retrieval_result = await self._simple_retrieve(
+                    enhanced_query,
+                    timer,
+                    original_query=question
+                )
             else:
                 timer.start_stage("retrieval")
                 retrieval_result = await self.retrieval_engine.retrieve(
@@ -429,7 +540,7 @@ class RAGEngine:
                 "answer": answer,
                 "sources": self._format_sources(retrieval_result),
                 "metadata": {
-                    "strategy_used": "simple_dense_optimized" if mode == "simple" else retrieval_result.strategy_used,
+                    "strategy_used": retrieval_result.strategy_used,  # BUGFIX: Use actual strategy (e.g., multi_query_fusion)
                     "query_type": "simple" if mode == "simple" else retrieval_result.query_type,
                     "mode": mode,
                     "processing_time_ms": timing_breakdown["total_ms"],
@@ -458,7 +569,7 @@ class RAGEngine:
                             response=answer,
                             retrieved_docs=retrieval_result.documents,
                             query_type="simple" if mode == "simple" else retrieval_result.query_type,
-                            strategy_used="simple_dense_optimized" if mode == "simple" else retrieval_result.strategy_used
+                            strategy_used=retrieval_result.strategy_used  # BUGFIX: Use actual strategy
                         )
 
                     # Cache result (sync operation, but fire and forget)
@@ -524,54 +635,47 @@ class RAGEngine:
 
         return embedding
 
-    async def _simple_retrieve(self, query: str, timer: Optional[StageTimer] = None) -> RetrievalResult:
+    async def _simple_retrieve(
+        self,
+        query: str,
+        timer: Optional[StageTimer] = None,
+        original_query: str = None  # BUGFIX: Original user question for multi-query decision
+    ) -> RetrievalResult:
         """
-        Simple retrieval using direct dense vector search with sub-stage timing
+        Simple retrieval delegated to retrieval engine (supports multi-query fusion)
 
         PERFORMANCE: Optimized for speed with reduced K and simplified scoring
+        Multi-Query Fusion: Automatically activates for vague queries when enabled in config
         """
 
-        # Sub-stage: Retrieval (embedding + vector search combined)
+        # Delegate to retrieval engine which handles multi-query fusion logic
         if timer:
-            timer.start_stage("retrieval.dense_search")
+            timer.start_stage("retrieval.simple")
 
-        # OPTIMIZATION: Reduce K for simple queries (3 instead of 5)
-        # Fewer documents = faster retrieval + faster LLM
-        simple_k = min(3, self.runtime_settings.get('simple_k', 5))
-
-        # Chroma computes embedding internally in similarity_search_with_score
-        docs = await asyncio.to_thread(
-            self.vectorstore.similarity_search_with_score,
+        # BUGFIX: Pass original_query for multi-query expansion decision
+        retrieval_result = await self.retrieval_engine._simple_retrieval(
             query,
-            k=simple_k
+            original_query=original_query
         )
 
         if timer:
             timer.end_stage()
 
-        # Sub-stage: Score normalization (OPTIMIZATION: Simplified calculation)
-        if timer:
-            timer.start_stage("retrieval.score_normalization")
-
-        documents = [doc for doc, score in docs]
-
-        # OPTIMIZATION: Simplified scoring (avoid min/max computation)
-        # For simple queries, just invert distance directly
-        scores = [max(0.0, 1.0 / (1.0 + score)) for doc, score in docs]
-
-        if timer:
-            timer.end_stage()
-
-        return RetrievalResult(
-            documents=documents,
-            scores=scores,
-            query_type="simple",
-            strategy_used="simple_dense_optimized",
-            explanation=None
-        )
+        return retrieval_result
 
     def _format_sources(self, retrieval_result: RetrievalResult) -> List[Dict]:
-        """Format source documents for API response"""
+        """
+        Format source documents for API response.
+
+        IMPORTANT: Must match Source schema in schemas.py:
+        {
+          file_name: str,
+          file_type: str,
+          relevance_score: float,
+          excerpt: str,
+          metadata: Dict[str, Any]
+        }
+        """
         sources = []
         seen_files = set()
 
@@ -586,16 +690,35 @@ class RAGEngine:
 
             seen_files.add(file_name)
 
-            sources.append({
+            # Extract file extension for file_type
+            file_extension = os.path.splitext(file_name)[1]
+            if file_extension:
+                file_type = file_extension[1:]  # Remove leading dot (.pdf -> pdf)
+            else:
+                file_type = 'unknown'
+
+            # Truncate excerpt to 500 characters
+            excerpt = doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content
+
+            # Format to match Source schema
+            source_dict = {
                 "file_name": file_name,
-                "file_type": doc.metadata.get('file_type', 'unknown'),
+                "file_type": file_type,
                 "relevance_score": float(score),
-                "excerpt": doc.page_content[:250] + "..." if len(doc.page_content) > 250 else doc.page_content,
-                "metadata": {
-                    k: v for k, v in doc.metadata.items()
-                    if k in ['page_number', 'chunk_index']
-                }
-            })
+                "excerpt": excerpt,
+                "metadata": {}
+            }
+
+            # Add page number to metadata if available
+            if 'page_number' in doc.metadata:
+                source_dict["metadata"]["page_number"] = doc.metadata['page_number']
+
+            # Add any other metadata fields
+            for key, value in doc.metadata.items():
+                if key not in ['file_name', 'page_number']:
+                    source_dict["metadata"][key] = value
+
+            sources.append(source_dict)
 
         return sources
 
@@ -806,6 +929,10 @@ class RAGEngine:
                 "mode": mode,
                 "processing_time_ms": processing_time
             }
+
+            # Add query variants for transparency (only when multi-query fusion is used)
+            if retrieval_result.query_variants:
+                metadata["query_variants"] = retrieval_result.query_variants
 
             yield {"type": "metadata", "content": metadata}
             yield {"type": "done"}

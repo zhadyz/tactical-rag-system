@@ -151,18 +151,63 @@ async def upload_document(
                 detail=f"Unsupported file type: {file_ext}. Supported: {', '.join(supported_extensions)}"
             )
 
-        # Save file to documents directory
+        # Read file content
+        content = await file.read()
+
+        # FILE SIZE LIMIT: 50MB industry standard (prevents memory issues)
+        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large: {len(content) / 1024 / 1024:.1f}MB. Maximum allowed: 50MB"
+            )
+
+        # DUPLICATE DETECTION: Check SHA256 hash
+        import hashlib
+        file_hash = hashlib.sha256(content).hexdigest()
+
+        # Check if file with same hash exists
         documents_dir = engine.config.documents_dir
         documents_dir.mkdir(exist_ok=True)
 
+        duplicate_found = False
+        for existing_file in documents_dir.rglob("*"):
+            if existing_file.is_file() and existing_file.suffix.lower() in supported_extensions:
+                try:
+                    with open(existing_file, 'rb') as f:
+                        existing_hash = hashlib.sha256(f.read()).hexdigest()
+                        if existing_hash == file_hash:
+                            duplicate_found = True
+                            logger.info(f"[API] Duplicate detected: {file.filename} matches {existing_file.name}")
+                            return JSONResponse(
+                                status_code=200,
+                                content={
+                                    "success": True,
+                                    "message": f"File already exists as '{existing_file.name}' (duplicate detected)",
+                                    "file_name": existing_file.name,
+                                    "file_size_bytes": len(content),
+                                    "duplicate": True,
+                                    "sha256": file_hash
+                                }
+                            )
+                except Exception as e:
+                    logger.warning(f"Could not check {existing_file}: {e}")
+                    continue
+
+        # Save file to documents directory
         file_path = documents_dir / file.filename
 
-        # Read and save file
-        content = await file.read()
+        # Check if filename exists (different content)
+        if file_path.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=f"File '{file.filename}' already exists. Delete it first or use a different name."
+            )
+
         with open(file_path, 'wb') as f:
             f.write(content)
 
-        logger.info(f"[API] File saved: {file_path} ({len(content)} bytes)")
+        logger.info(f"[API] File saved: {file_path} ({len(content)} bytes), SHA256: {file_hash[:16]}...")
 
         return JSONResponse(
             status_code=200,

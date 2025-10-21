@@ -1,83 +1,74 @@
-import React, { useState } from 'react';
-import { Moon, Sun, Settings, Trash2 } from 'lucide-react';
+import React from 'react';
+import { Moon, Sun, Settings, Trash2, Zap } from 'lucide-react';
 import useStore from '../../store/useStore';
-import { SettingsPanel } from '../Settings/SettingsPanel';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onOpenSettings: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
   const darkMode = useStore((state) => state.settings.darkMode);
   const toggleDarkMode = useStore((state) => state.toggleDarkMode);
   const clearChat = useStore((state) => state.clearChat);
   const messageCount = useStore((state) => state.messages.length);
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   return (
-    <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+    <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 backdrop-blur-xl">
       <div className="flex items-center justify-between px-6 py-4">
         {/* Logo and title */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary-600 to-primary-700 rounded-lg flex items-center justify-center">
-            <svg
-              className="w-6 h-6 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
+          <div className="w-11 h-11 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+            <Zap className="w-6 h-6 text-white" strokeWidth={2.5} fill="currentColor" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+            <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
               Tactical RAG
             </h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
               Intelligent Document Q&A
             </p>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {/* Clear chat button */}
           {messageCount > 0 && (
             <button
               onClick={clearChat}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+              className="group p-2.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-150 text-neutral-600 dark:text-neutral-400 hover:text-error-600 dark:hover:text-error-400"
               aria-label="Clear chat"
               title="Clear chat"
             >
-              <Trash2 size={20} />
+              <Trash2 size={20} strokeWidth={2} className="group-hover:scale-110 transition-transform" />
             </button>
           )}
 
           {/* Dark mode toggle */}
           <button
             onClick={toggleDarkMode}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            className="group p-2.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-150 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
             aria-label="Toggle dark mode"
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            {darkMode ? (
+              <Sun size={20} strokeWidth={2} className="group-hover:rotate-12 transition-transform" />
+            ) : (
+              <Moon size={20} strokeWidth={2} className="group-hover:rotate-12 transition-transform" />
+            )}
           </button>
 
           {/* Settings button */}
           <button
-            onClick={() => setSettingsOpen(true)}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            onClick={onOpenSettings}
+            className="group p-2.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-150 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
             aria-label="Settings"
             title="Settings"
           >
-            <Settings size={20} />
+            <Settings size={20} strokeWidth={2} className="group-hover:rotate-45 transition-transform duration-300" />
           </button>
         </div>
       </div>
-
-      {/* Settings Panel */}
-      <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 };

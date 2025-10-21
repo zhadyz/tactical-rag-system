@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, MessageSquare, Sparkles, BookOpen, FileSearch } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
+import { ErrorBoundary } from '../ErrorBoundary/ErrorBoundary';
 import useStore from '../../store/useStore';
 import { useChat } from '../../hooks/useChat';
 
@@ -20,78 +21,105 @@ export const ChatWindow: React.FC = () => {
   }, [messages]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-50 dark:bg-neutral-950">
       {/* Messages container */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          // Empty state
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-md px-4">
-              <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-primary-600 dark:text-primary-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                  />
-                </svg>
+          // Empty state - Enterprise-grade design
+          <div className="h-full flex items-center justify-center px-4 py-12">
+            <div className="text-center max-w-2xl mx-auto space-y-8 animate-fade-in">
+              {/* Hero icon */}
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/20 rounded-3xl shadow-lg">
+                <MessageSquare
+                  className="w-10 h-10 text-primary-600 dark:text-primary-400"
+                  strokeWidth={2}
+                />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                Welcome to Tactical RAG
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Ask questions about your documents and get intelligent,
-                context-aware answers powered by advanced retrieval and
-                reasoning.
+
+              {/* Heading */}
+              <div className="space-y-3">
+                <h1 className="text-4xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
+                  Welcome to Tactical RAG
+                </h1>
+                <p className="text-lg text-neutral-600 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
+                  Ask questions about your documents and get intelligent, context-aware answers
+                  powered by advanced retrieval and reasoning.
+                </p>
+              </div>
+
+              {/* Suggestion cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                <div className="group p-5 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-lg transition-all duration-200 cursor-pointer">
+                  <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-200">
+                    <Sparkles size={20} className="text-primary-600 dark:text-primary-400" strokeWidth={2} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                    Explore Topics
+                  </h3>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                    What are the main topics discussed in the documents?
+                  </p>
+                </div>
+
+                <div className="group p-5 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-lg transition-all duration-200 cursor-pointer">
+                  <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-200">
+                    <BookOpen size={20} className="text-primary-600 dark:text-primary-400" strokeWidth={2} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                    Summarize Content
+                  </h3>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                    Summarize the key findings and important insights
+                  </p>
+                </div>
+
+                <div className="group p-5 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-lg transition-all duration-200 cursor-pointer">
+                  <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-200">
+                    <FileSearch size={20} className="text-primary-600 dark:text-primary-400" strokeWidth={2} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                    Compare Sections
+                  </h3>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                    Compare and contrast different sections or documents
+                  </p>
+                </div>
+              </div>
+
+              {/* Subtle footer hint */}
+              <p className="text-xs text-neutral-500 dark:text-neutral-500 font-medium pt-4">
+                Start by typing your question below
               </p>
-              <div className="text-sm text-gray-500 dark:text-gray-400 space-y-2">
-                <p>Try asking:</p>
-                <ul className="text-left space-y-1 max-w-xs mx-auto">
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary-600 dark:text-primary-400">•</span>
-                    <span>What are the main topics in the documents?</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary-600 dark:text-primary-400">•</span>
-                    <span>Summarize the key findings</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary-600 dark:text-primary-400">•</span>
-                    <span>Compare different sections</span>
-                  </li>
-                </ul>
-              </div>
             </div>
           </div>
         ) : (
           // Messages list
           <div className="max-w-4xl mx-auto w-full">
             {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <ErrorBoundary key={message.id} componentName="ChatMessage">
+                <ChatMessage message={message} />
+              </ErrorBoundary>
             ))}
             <div ref={messagesEndRef} />
           </div>
         )}
 
-        {/* Error message */}
+        {/* Error message - Enterprise styling */}
         {error && (
           <div className="max-w-4xl mx-auto w-full px-6 pb-4">
-            <div className="flex items-center gap-3 p-4 bg-error-50 dark:bg-error-900/30 border border-error-200 dark:border-error-800 rounded-lg">
-              <AlertCircle
-                size={20}
-                className="text-error-600 dark:text-error-400 flex-shrink-0"
-              />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-error-900 dark:text-error-200">
+            <div className="flex items-start gap-3 p-4 bg-error-50 dark:bg-error-900/30 border border-error-200 dark:border-error-800 rounded-xl shadow-sm animate-slide-in">
+              <div className="flex-shrink-0 w-8 h-8 bg-error-100 dark:bg-error-900/50 rounded-lg flex items-center justify-center">
+                <AlertCircle
+                  size={18}
+                  className="text-error-600 dark:text-error-400"
+                  strokeWidth={2}
+                />
+              </div>
+              <div className="flex-1 pt-0.5">
+                <p className="text-sm font-semibold text-error-900 dark:text-error-200 mb-0.5">
                   Error
                 </p>
-                <p className="text-sm text-error-700 dark:text-error-300">
+                <p className="text-sm text-error-700 dark:text-error-300 leading-relaxed">
                   {error}
                 </p>
               </div>
@@ -101,12 +129,14 @@ export const ChatWindow: React.FC = () => {
       </div>
 
       {/* Input area */}
-      <ChatInput
-        onSend={sendMessage}
-        onCancel={cancelStream}
-        disabled={isLoading}
-        isStreaming={isStreaming}
-      />
+      <ErrorBoundary componentName="ChatInput">
+        <ChatInput
+          onSend={sendMessage}
+          onCancel={cancelStream}
+          disabled={isLoading}
+          isStreaming={isStreaming}
+        />
+      </ErrorBoundary>
     </div>
   );
 };
