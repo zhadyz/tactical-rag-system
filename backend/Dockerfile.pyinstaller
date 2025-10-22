@@ -1,0 +1,33 @@
+# PyInstaller Build Container for Tactical RAG Backend
+# Builds standalone Windows executable from Python source
+# Uses Python 3.11 to avoid numpy dependency conflicts
+
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    upx \
+    binutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PyInstaller
+RUN pip install --no-cache-dir pyinstaller==6.16.0
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy entire project (backend + _src)
+COPY . .
+
+# Build with PyInstaller
+WORKDIR /app/backend
+RUN pyinstaller backend.spec
+
+# Output will be at /app/backend/dist/tactical-rag-backend/
