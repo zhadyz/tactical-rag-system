@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Enterprise-grade base styles */
+  body {
+    @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  * {
+    @apply border-neutral-200 dark:border-neutral-800;
+  }
+
+  /* Professional focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-neutral-900;
+  }
+
+  /* Smooth transitions by default */
+  * {
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@layer components {
+  /* Premium button components */
+  .btn-primary {
+    @apply relative bg-gradient-to-b from-primary-500 to-primary-600 text-white px-4 py-2.5 rounded-xl
+           font-medium shadow-sm hover:shadow-md hover:from-primary-600 hover:to-primary-700
+           active:scale-[0.98] transition-all duration-150 disabled:opacity-50
+           disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  .btn-secondary {
+    @apply relative bg-neutral-100 text-neutral-900 px-4 py-2.5 rounded-xl font-medium
+           shadow-sm hover:bg-neutral-200 hover:shadow-md active:scale-[0.98]
+           transition-all duration-150 dark:bg-neutral-800 dark:text-neutral-100
+           dark:hover:bg-neutral-700;
+  }
+
+  .btn-ghost {
+    @apply relative text-neutral-700 px-4 py-2.5 rounded-xl font-medium
+           hover:bg-neutral-100 active:scale-[0.98] transition-all duration-150
+           dark:text-neutral-300 dark:hover:bg-neutral-800;
+  }
+
+  /* Enterprise input components */
+  .input-field {
+    @apply w-full px-4 py-3 bg-white dark:bg-neutral-900
+           border border-neutral-300 dark:border-neutral-700 rounded-xl
+           text-neutral-900 dark:text-neutral-100 placeholder-neutral-500
+           dark:placeholder-neutral-400 shadow-sm transition-all duration-150
+           focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           focus:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Professional card components */
+  .card {
+    @apply bg-white dark:bg-neutral-900 rounded-2xl shadow-sm
+           border border-neutral-200 dark:border-neutral-800
+           transition-shadow duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-lg hover:border-neutral-300
+           dark:hover:border-neutral-700 cursor-pointer;
+  }
+
+  /* Glass morphism effect for modals */
+  .glass-panel {
+    @apply bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl
+           border border-neutral-200/50 dark:border-neutral-800/50
+           shadow-2xl rounded-2xl;
+  }
+
+  /* Premium badge component */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium
+           bg-neutral-100 text-neutral-700 dark:bg-neutral-800
+           dark:text-neutral-300;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary-100 text-primary-700 dark:bg-primary-900/30
+           dark:text-primary-400;
+  }
+
+  .badge-success {
+    @apply badge bg-success-100 text-success-700 dark:bg-success-900/30
+           dark:text-success-400;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-100 text-warning-700 dark:bg-warning-900/30
+           dark:text-warning-400;
+  }
+
+  .badge-error {
+    @apply badge bg-error-100 text-error-700 dark:bg-error-900/30
+           dark:text-error-400;
+  }
+
+  /* Elegant divider */
+  .divider {
+    @apply h-px bg-gradient-to-r from-transparent via-neutral-200
+           to-transparent dark:via-neutral-800;
+  }
+}
+
+/* Premium custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 dark:bg-neutral-700 rounded-full
+         hover:bg-neutral-400 dark:hover:bg-neutral-600
+         transition-colors duration-150;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection styling */
+::selection {
+  @apply bg-primary-500/20 text-primary-900 dark:text-primary-100;
+}
+
+/* Loading shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  @apply animate-pulse bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200
+         dark:from-neutral-800 dark:via-neutral-700 dark:to-neutral-800
+         bg-[length:2000px_100%];
+  animation: shimmer 2s linear infinite;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* PDF Viewer Modal Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-highlight {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-pulse-highlight {
+  animation: pulse-highlight 2s ease-in-out infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
