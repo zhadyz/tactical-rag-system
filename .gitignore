@@ -13,6 +13,7 @@ messages/
 .aider*
 cursor/
 .cursor/
+agents/
 
 # -----------------------------------------------------------------------------
 # Data & Vector Stores (Not tracked - user-specific)
