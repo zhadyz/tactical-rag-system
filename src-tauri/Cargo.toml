@@ -30,3 +30,15 @@ tauri-plugin-shell = "2"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+open = "5.0"
+
+# ATLAS Protocol - Phase 1: Embedding Service Dependencies
+# Commented out: Backend handles embeddings via Python (llama-cpp-python with CUDA)
+# ort = { version = "2.0.0-rc.10", features = ["cuda", "download-binaries"] }
+# tokenizers = "0.15"
+# rayon = "1.8"
+# anyhow = "1.0"
+# tracing = "0.1"
+# tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# thiserror = "1.0"
+# ndarray = "0.16"

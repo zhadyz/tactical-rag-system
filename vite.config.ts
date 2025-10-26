@@ -5,10 +5,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
 
-  // Tauri expects a fixed port during development
+  // Development server configuration with dynamic port assignment
   server: {
     port: 5173,
-    strictPort: true,
+    strictPort: false, // Allow auto-increment if port is busy
     watch: {
       // Ignore Tauri's Rust directory to prevent reload loops
       ignored: ["**/src-tauri/**"],
