@@ -1,0 +1,7 @@
+{
+  "overview": "System Overview",
+  "data-flow": "Data Flow",
+  "components": "Components",
+  "deployment": "Deployment Architecture",
+  "decisions": "Design Decisions"
+}

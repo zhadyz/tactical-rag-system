@@ -1,0 +1,684 @@
+# API Reference
+
+Complete REST API documentation for ATLAS Protocol. All endpoints return JSON responses.
+
+---
+
+## Base URL
+
+```
+Production: https://apollo.onyxlab.ai
+Development: http://localhost:8000
+```
+
+---
+
+## Authentication
+
+Currently, ATLAS Protocol does not require authentication. **Production deployments should implement:**
+- API keys via `Authorization: Bearer <token>` header
+- Rate limiting (default: 30 requests/minute per IP)
+- CORS policies
+
+---
+
+## Rate Limiting
+
+| Environment | Limit | Window |
+|-------------|-------|--------|
+| Development | 30 requests | 60 seconds |
+| Production | 100 requests | 60 seconds |
+
+**Rate Limit Headers:**
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1706355600
+```
+
+**429 Response:**
+```json
+{
+  "detail": "Rate limit exceeded. Max 100 requests per 60 seconds."
+}
+```
+
+---
+
+## Health Check
+
+### GET /api/health
+
+Check system health and readiness.
+
+**Request:**
+```bash
+curl -X GET http://localhost:8000/api/health
+```
+
+**Response 200 OK:**
+```json
+{
+  "status": "healthy",
+  "version": "4.0.0",
+  "components": {
+    "llm": "ready",
+    "vector_store": "ready",
+    "cache": "ready",
+    "embedding_model": "ready"
+  },
+  "gpu_available": true,
+  "gpu_layers_loaded": 33,
+  "model_loaded": "Meta-Llama-3.1-8B-Instruct-Q5_K_M",
+  "context_length": 8192,
+  "speculative_decoding": true,
+  "timestamp": "2025-01-27T12:00:00Z"
+}
+```
+
+**Response 503 Service Unavailable:**
+```json
+{
+  "status": "unhealthy",
+  "components": {
+    "llm": "loading",
+    "vector_store": "ready",
+    "cache": "ready"
+  },
+  "message": "System initializing, please wait 30 seconds"
+}
+```
+
+---
+
+## Query Endpoints
+
+### POST /api/query
+
+Process a RAG query and return a complete response.
+
+**Request Body:**
+```json
+{
+  "question": "What is the remote work equipment stipend?",
+  "mode": "simple",
+  "use_context": false,
+  "rerank_preset": "quality"
+}
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `question` | string | ✅ | - | User query (max 10,000 chars) |
+| `mode` | enum | ❌ | `"simple"` | Query mode: `"simple"` or `"adaptive"` |
+| `use_context` | boolean | ❌ | `false` | Use conversation history |
+| `rerank_preset` | enum | ❌ | `"quality"` | Reranking: `"speed"`, `"quality"`, `"comprehensive"` |
+
+**Response 200 OK:**
+```json
+{
+  "answer": "The company provides a $500 annual stipend for home office equipment to remote employees.",
+  "sources": [
+    {
+      "content": "3. Equipment\nThe company provides a laptop and $500 annual stipend for home office equipment.",
+      "metadata": {
+        "filename": "company_policy.txt",
+        "chunk_id": 2,
+        "category": "policy",
+        "upload_date": "2025-01-27T10:00:00Z"
+      },
+      "relevance_score": 0.94
+    },
+    {
+      "content": "Remote employees are provided with standard equipment package including laptop, monitor, and keyboard.",
+      "metadata": {
+        "filename": "hr_handbook.pdf",
+        "chunk_id": 15,
+        "page": 8
+      },
+      "relevance_score": 0.82
+    }
+  ],
+  "metadata": {
+    "mode": "simple",
+    "query_type": "factual",
+    "processing_time_ms": 623,
+    "tokens_per_second": 94.2,
+    "gpu_accelerated": true,
+    "chunks_retrieved": 7,
+    "chunks_reranked": 3,
+    "cache_hit": false
+  },
+  "context_used": false,
+  "timestamp": "2025-01-27T12:00:05Z"
+}
+```
+
+**Error Responses:**
+
+```json
+// 400 Bad Request - Invalid input
+{
+  "detail": "Query cannot be empty or whitespace-only"
+}
+
+// 429 Too Many Requests
+{
+  "detail": "Rate limit exceeded. Max 30 requests per 60 seconds."
+}
+
+// 500 Internal Server Error
+{
+  "detail": "Query processing failed: <error message>"
+}
+
+// 503 Service Unavailable
+{
+  "detail": "RAG Engine not initialized. Please wait for system startup."
+}
+```
+
+**Code Examples:**
+
+<tabs>
+<tab label="cURL">
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the remote work policy?",
+    "mode": "simple",
+    "use_context": false
+  }'
+```
+</tab>
+
+<tab label="Python">
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/api/query",
+    json={
+        "question": "What is the remote work policy?",
+        "mode": "simple",
+        "use_context": False
+    }
+)
+
+result = response.json()
+print(f"Answer: {result['answer']}")
+print(f"Sources: {len(result['sources'])}")
+print(f"Latency: {result['metadata']['processing_time_ms']}ms")
+```
+</tab>
+
+<tab label="JavaScript">
+```javascript
+const response = await fetch('http://localhost:8000/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    question: "What is the remote work policy?",
+    mode: "simple",
+    use_context: false
+  })
+});
+
+const result = await response.json();
+console.log(`Answer: ${result.answer}`);
+console.log(`Sources: ${result.sources.length}`);
+```
+</tab>
+
+<tab label="Go">
+```go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "net/http"
+)
+
+type QueryRequest struct {
+    Question   string `json:"question"`
+    Mode       string `json:"mode"`
+    UseContext bool   `json:"use_context"`
+}
+
+func query() {
+    req := QueryRequest{
+        Question:   "What is the remote work policy?",
+        Mode:       "simple",
+        UseContext: false,
+    }
+
+    jsonData, _ := json.Marshal(req)
+    resp, _ := http.Post(
+        "http://localhost:8000/api/query",
+        "application/json",
+        bytes.NewBuffer(jsonData),
+    )
+    defer resp.Body.Close()
+
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+}
+```
+</tab>
+</tabs>
+
+---
+
+### POST /api/query/stream
+
+Stream query response token-by-token using Server-Sent Events (SSE).
+
+**Request Body:** Same as `/api/query`
+
+**Response:** Server-Sent Events stream
+
+**Event Types:**
+
+```typescript
+type StreamEvent =
+  | { type: "token"; content: string }
+  | { type: "sources"; content: Source[] }
+  | { type: "metadata"; content: Metadata }
+  | { type: "done" }
+  | { type: "error"; content: string }
+```
+
+**Example Stream:**
+```
+data: {"type":"token","content":"The"}
+
+data: {"type":"token","content":" company"}
+
+data: {"type":"token","content":" provides"}
+
+data: {"type":"sources","content":[{"content":"...","relevance_score":0.94}]}
+
+data: {"type":"metadata","content":{"processing_time_ms":1240}}
+
+data: {"type":"done"}
+```
+
+**Code Examples:**
+
+<tabs>
+<tab label="JavaScript (EventSource)">
+```javascript
+const eventSource = new EventSource(
+  'http://localhost:8000/api/query/stream?' +
+  new URLSearchParams({
+    question: "What is the remote work policy?",
+    mode: "simple"
+  })
+);
+
+let answer = "";
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === 'token') {
+    answer += data.content;
+    console.log(data.content);  // Print token
+  } else if (data.type === 'sources') {
+    console.log('Sources:', data.content);
+  } else if (data.type === 'done') {
+    console.log('Complete answer:', answer);
+    eventSource.close();
+  }
+};
+```
+</tab>
+
+<tab label="Python (sseclient)">
+```python
+import requests
+import json
+from sseclient import SSEClient
+
+url = "http://localhost:8000/api/query/stream"
+data = {
+    "question": "What is the remote work policy?",
+    "mode": "simple"
+}
+
+response = requests.post(url, json=data, stream=True)
+client = SSEClient(response)
+
+answer = ""
+for event in client.events():
+    data = json.loads(event.data)
+
+    if data["type"] == "token":
+        answer += data["content"]
+        print(data["content"], end="", flush=True)
+    elif data["type"] == "done":
+        print("\n\nComplete!")
+        break
+```
+</tab>
+
+<tab label="cURL">
+```bash
+curl -N -X POST http://localhost:8000/api/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the remote work policy?",
+    "mode": "simple"
+  }'
+```
+</tab>
+</tabs>
+
+---
+
+## Conversation Management
+
+### POST /api/conversation/clear
+
+Clear conversation memory and reset context.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/conversation/clear
+```
+
+**Response 200 OK:**
+```json
+{
+  "success": true,
+  "message": "Conversation memory cleared successfully"
+}
+```
+
+**Use Case:**
+- Starting a new topic
+- Resetting after unrelated questions
+- Clearing context before benchmark testing
+
+---
+
+## Document Management
+
+### POST /api/documents/upload
+
+Upload and index a document.
+
+**Request (multipart/form-data):**
+```bash
+curl -X POST http://localhost:8000/api/documents/upload \
+  -F "file=@company_policy.pdf" \
+  -F 'metadata={"category":"policy","department":"HR"}'
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file | ✅ | Document file (PDF, DOCX, TXT, MD, CSV) |
+| `metadata` | JSON string | ❌ | Custom metadata (key-value pairs) |
+
+**Response 200 OK:**
+```json
+{
+  "document_id": "doc_abc123xyz",
+  "filename": "company_policy.pdf",
+  "status": "processing",
+  "chunks_created": 15,
+  "processing_time_ms": 2340,
+  "file_size_bytes": 245760,
+  "pages": 8,
+  "upload_timestamp": "2025-01-27T12:00:00Z"
+}
+```
+
+**Supported File Types:**
+
+| Extension | Type | OCR Support |
+|-----------|------|-------------|
+| `.pdf` | PDF | ✅ (for images) |
+| `.docx` | Word | ❌ |
+| `.txt` | Plain text | ❌ |
+| `.md` | Markdown | ❌ |
+| `.csv` | CSV | ❌ |
+| `.html` | HTML | ❌ |
+
+**Code Examples:**
+
+<tabs>
+<tab label="Python">
+```python
+import requests
+
+with open("company_policy.pdf", "rb") as f:
+    files = {"file": f}
+    metadata = {
+        "metadata": '{"category":"policy","department":"HR"}'
+    }
+
+    response = requests.post(
+        "http://localhost:8000/api/documents/upload",
+        files=files,
+        data=metadata
+    )
+
+print(response.json())
+```
+</tab>
+
+<tab label="JavaScript">
+```javascript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('metadata', JSON.stringify({
+  category: "policy",
+  department: "HR"
+}));
+
+const response = await fetch('http://localhost:8000/api/documents/upload', {
+  method: 'POST',
+  body: formData
+});
+
+const result = await response.json();
+console.log(`Uploaded: ${result.filename}`);
+```
+</tab>
+
+<tab label="cURL">
+```bash
+curl -X POST http://localhost:8000/api/documents/upload \
+  -F "file=@document.pdf" \
+  -F 'metadata={"category":"manual","version":"v2.1"}'
+```
+</tab>
+</tabs>
+
+---
+
+### GET /api/documents/list
+
+List all uploaded documents.
+
+**Request:**
+```bash
+curl -X GET http://localhost:8000/api/documents/list
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 100 | Max documents to return |
+| `offset` | integer | 0 | Pagination offset |
+| `category` | string | - | Filter by metadata category |
+
+**Response 200 OK:**
+```json
+{
+  "documents": [
+    {
+      "document_id": "doc_abc123",
+      "filename": "company_policy.pdf",
+      "upload_date": "2025-01-27T10:00:00Z",
+      "file_size_bytes": 245760,
+      "chunks": 15,
+      "metadata": {
+        "category": "policy",
+        "department": "HR"
+      }
+    },
+    {
+      "document_id": "doc_xyz789",
+      "filename": "employee_handbook.docx",
+      "upload_date": "2025-01-26T14:30:00Z",
+      "file_size_bytes": 512000,
+      "chunks": 42,
+      "metadata": {
+        "category": "handbook"
+      }
+    }
+  ],
+  "total_count": 127,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+---
+
+### DELETE /api/documents/{document_id}
+
+Delete a document and its embeddings.
+
+**Request:**
+```bash
+curl -X DELETE http://localhost:8000/api/documents/doc_abc123
+```
+
+**Response 200 OK:**
+```json
+{
+  "success": true,
+  "document_id": "doc_abc123",
+  "chunks_deleted": 15,
+  "message": "Document deleted successfully"
+}
+```
+
+**Response 404 Not Found:**
+```json
+{
+  "detail": "Document not found: doc_abc123"
+}
+```
+
+---
+
+## Metrics & Monitoring
+
+### GET /metrics
+
+Prometheus-compatible metrics endpoint.
+
+**Request:**
+```bash
+curl -X GET http://localhost:8000/metrics
+```
+
+**Response (Prometheus format):**
+```
+# HELP atlas_query_duration_seconds Query processing duration
+# TYPE atlas_query_duration_seconds histogram
+atlas_query_duration_seconds_bucket{le="0.5"} 234
+atlas_query_duration_seconds_bucket{le="1.0"} 456
+atlas_query_duration_seconds_bucket{le="2.0"} 789
+atlas_query_duration_seconds_sum 1234.56
+atlas_query_duration_seconds_count 1000
+
+# HELP atlas_tokens_per_second LLM generation speed
+# TYPE atlas_tokens_per_second gauge
+atlas_tokens_per_second 94.2
+
+# HELP atlas_cache_hit_ratio Cache hit ratio
+# TYPE atlas_cache_hit_ratio gauge
+atlas_cache_hit_ratio 0.73
+```
+
+---
+
+## Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| 200 | OK | Request successful |
+| 400 | Bad Request | Invalid input parameters |
+| 404 | Not Found | Resource not found |
+| 429 | Too Many Requests | Rate limit exceeded |
+| 500 | Internal Server Error | Server-side error |
+| 503 | Service Unavailable | System initializing or unhealthy |
+
+**Error Response Format:**
+```json
+{
+  "detail": "Human-readable error message",
+  "error_code": "VALIDATION_ERROR",
+  "timestamp": "2025-01-27T12:00:00Z"
+}
+```
+
+---
+
+## Postman Collection
+
+Download the complete API collection: [atlas-protocol.postman_collection.json](/downloads/atlas-protocol.postman_collection.json)
+
+**Import to Postman:**
+1. Open Postman
+2. Click **Import**
+3. Select `atlas-protocol.postman_collection.json`
+4. Set environment variable `BASE_URL` to `http://localhost:8000`
+
+---
+
+## OpenAPI Specification
+
+Interactive API documentation: `http://localhost:8000/docs`
+
+Download OpenAPI spec: `http://localhost:8000/openapi.json`
+
+---
+
+## WebSocket Support (Planned)
+
+Future release will include WebSocket support for:
+- Real-time streaming
+- Bi-directional communication
+- Lower latency
+
+```javascript
+// Future API
+const ws = new WebSocket('ws://localhost:8000/ws/query');
+ws.send(JSON.stringify({ question: "Hello" }));
+ws.onmessage = (event) => console.log(event.data);
+```
+
+---
+
+## Next Steps
+
+- 🚀 [Quick Start](../getting-started/quickstart.mdx) - Try the API
+- ⚙️ [Configuration](../getting-started/configuration.mdx) - Optimize settings
+- 📊 [Monitoring](../advanced/monitoring.mdx) - Track performance
+
+---
+
+**Last Updated**: January 2025 | **Version**: 4.0.0 | **API Version**: v1

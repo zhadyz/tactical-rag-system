@@ -1,0 +1,9 @@
+{
+  "optimization": "Performance Optimization",
+  "scaling": "Scaling & Load Balancing",
+  "custom-models": "Custom Models",
+  "plugins": "Plugin Development",
+  "security": "Security Best Practices",
+  "monitoring": "Monitoring & Observability",
+  "troubleshooting": "Troubleshooting"
+}

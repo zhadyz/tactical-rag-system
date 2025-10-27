@@ -1,0 +1,283 @@
+---
+title: Installation
+description: Install Apollo RAG and set up your development environment
+---
+
+import { Callout } from '@/components/Callout'
+import { Tabs, TabsPanel } from '@/components/Tabs'
+
+# Installation
+
+Apollo RAG supports multiple installation methods depending on your use case and infrastructure.
+
+## System Requirements
+
+### Minimum Requirements
+
+- **OS**: Linux (Ubuntu 20.04+), macOS (12+), or Windows 10/11 with WSL2
+- **Python**: 3.9 or higher
+- **RAM**: 8GB minimum, 16GB recommended
+- **Storage**: 10GB for models and dependencies
+
+### GPU Requirements (Optional but Recommended)
+
+For optimal performance with GPU acceleration:
+
+- **NVIDIA GPU**: Compute Capability 7.0+ (RTX 2000 series or newer)
+- **VRAM**: 6GB minimum, 12GB+ recommended
+- **CUDA**: 11.8 or higher
+- **cuDNN**: 8.6 or higher
+
+<Callout type="info">
+  Apollo works on CPU-only systems but GPU acceleration provides **10x faster** retrieval and
+  embedding operations.
+</Callout>
+
+## Installation Methods
+
+<Tabs items={['Docker (Recommended)', 'pip Install', 'From Source']}>
+
+<TabsPanel value="Docker (Recommended)">
+
+### Docker Installation
+
+The fastest way to get Apollo running is with Docker Compose:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/apollo-rag.git
+cd apollo-rag
+
+# Launch with Docker Compose (includes GPU support)
+docker compose up -d
+
+# Verify the installation
+curl http://localhost:8000/health
+```
+
+The Docker setup includes:
+- ✅ FastAPI backend with GPU support
+- ✅ Vector database (FAISS)
+- ✅ Monitoring stack (Prometheus + Grafana)
+- ✅ Redis cache
+- ✅ Pre-configured models
+
+<Callout type="success">
+  Docker Compose automatically detects NVIDIA GPUs and enables GPU acceleration if available.
+</Callout>
+
+</TabsPanel>
+
+<TabsPanel value="pip Install">
+
+### pip Installation
+
+Install Apollo as a Python package:
+
+```bash
+# Create a virtual environment
+python -m venv apollo-env
+source apollo-env/bin/activate  # On Windows: apollo-env\Scripts\activate
+
+# Install Apollo with GPU support
+pip install apollo-rag[gpu]
+
+# Or CPU-only version
+pip install apollo-rag
+
+# Verify installation
+apollo --version
+```
+
+**Optional Dependencies:**
+
+```bash
+# For PDF processing
+pip install apollo-rag[pdf]
+
+# For advanced monitoring
+pip install apollo-rag[monitoring]
+
+# Install all extras
+pip install apollo-rag[all]
+```
+
+</TabsPanel>
+
+<TabsPanel value="From Source">
+
+### Build from Source
+
+For development or customization:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/apollo-rag.git
+cd apollo-rag
+
+# Install in development mode
+pip install -e ".[dev,gpu]"
+
+# Run tests to verify
+pytest tests/
+
+# Start the development server
+python -m apollo.server --dev
+```
+
+**Development Dependencies:**
+
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Install all development tools
+pip install -e ".[dev,test,docs]"
+```
+
+</TabsPanel>
+
+</Tabs>
+
+## GPU Setup
+
+### CUDA Installation
+
+If you have an NVIDIA GPU, install CUDA for optimal performance:
+
+<Tabs items={['Ubuntu/Debian', 'Windows', 'macOS']}>
+
+<TabsPanel value="Ubuntu/Debian">
+
+```bash
+# Add NVIDIA package repositories
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb
+sudo dpkg -i cuda-keyring_1.0-1_all.deb
+sudo apt-get update
+
+# Install CUDA Toolkit
+sudo apt-get install cuda-toolkit-11-8
+
+# Install cuDNN
+sudo apt-get install libcudnn8
+
+# Verify installation
+nvidia-smi
+nvcc --version
+```
+
+</TabsPanel>
+
+<TabsPanel value="Windows">
+
+1. Download [CUDA Toolkit 11.8](https://developer.nvidia.com/cuda-11-8-0-download-archive)
+2. Download [cuDNN 8.6](https://developer.nvidia.com/cudnn)
+3. Install both following the NVIDIA documentation
+4. Verify with PowerShell:
+
+```powershell
+nvidia-smi
+nvcc --version
+```
+
+</TabsPanel>
+
+<TabsPanel value="macOS">
+
+<Callout type="warning">
+  NVIDIA GPUs are not supported on modern macOS. Apollo can run on CPU or you can use Docker with
+  GPU passthrough on a Linux host.
+</Callout>
+
+For Metal GPU acceleration (experimental):
+
+```bash
+pip install apollo-rag[metal]
+```
+
+</TabsPanel>
+
+</Tabs>
+
+## Verify Installation
+
+After installation, verify everything is working:
+
+```bash
+# Check Apollo version
+apollo --version
+
+# Run diagnostics
+apollo diagnose
+
+# Check GPU availability
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+# Test with a simple query
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "test query"}'
+```
+
+Expected output:
+
+```json
+{
+  "status": "success",
+  "version": "4.1.0",
+  "gpu_enabled": true,
+  "gpu_count": 1,
+  "gpu_name": "NVIDIA RTX 4090"
+}
+```
+
+## Troubleshooting
+
+### GPU Not Detected
+
+If CUDA is installed but Apollo doesn't detect it:
+
+```bash
+# Check CUDA environment variables
+echo $CUDA_HOME
+echo $LD_LIBRARY_PATH
+
+# Reinstall PyTorch with CUDA support
+pip uninstall torch torchvision
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+```
+
+### Permission Errors (Docker)
+
+If you get permission errors with Docker:
+
+```bash
+# Add your user to the docker group
+sudo usermod -aG docker $USER
+
+# Log out and back in, then restart Docker
+sudo systemctl restart docker
+```
+
+### Import Errors
+
+If you encounter import errors:
+
+```bash
+# Clear pip cache and reinstall
+pip cache purge
+pip install --force-reinstall apollo-rag[gpu]
+```
+
+## Next Steps
+
+Now that Apollo is installed:
+
+1. [Configure](/getting-started/configuration) your deployment
+2. [Upload your first document](/getting-started/first-query)
+3. [Explore the API](/api-reference)
+
+<Callout type="info">
+  Need help? Join our [Discord community](https://discord.gg/apollo-rag) or check the
+  [troubleshooting guide](/advanced/troubleshooting).
+</Callout>

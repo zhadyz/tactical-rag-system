@@ -1,0 +1,51 @@
+{
+  "name": "apollo-docs",
+  "version": "4.1.0",
+  "description": "Apollo RAG Documentation - GPU-Accelerated Intelligence",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,tsx,md,mdx}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,mdx}\""
+  },
+  "dependencies": {
+    "next": "^14.2.35",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "nextra": "^3.2.3",
+    "nextra-theme-docs": "^3.2.3",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-accordion": "^1.2.21",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-tooltip": "^1.2.2",
+    "lucide-react": "^0.545.0",
+    "shiki": "^1.29.1",
+    "recharts": "^2.15.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.7.0",
+    "next-themes": "^0.4.4",
+    "cmdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "typescript": "~5.9.3",
+    "tailwindcss": "^3.4.18",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.10",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "^14.2.35"
+  },
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
+  }
+}

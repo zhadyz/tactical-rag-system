@@ -1,0 +1,9 @@
+{
+  "rag-pipeline": "RAG Pipeline",
+  "gpu-acceleration": "GPU Acceleration",
+  "adaptive-retrieval": "Adaptive Retrieval",
+  "vector-search": "Vector Search",
+  "document-processing": "Document Processing",
+  "query-analysis": "Query Analysis",
+  "response-generation": "Response Generation"
+}

@@ -1,0 +1,617 @@
+# Configuration Guide
+
+Master ATLAS Protocol configuration for optimal performance. This guide covers every parameter in `config.yml` with real-world examples.
+
+---
+
+## Configuration File Location
+
+```bash
+# Docker deployment
+backend/config.yml
+
+# Manual installation
+backend/config.yml
+
+# Environment variable override
+export CONFIG_PATH=/custom/path/config.yml
+```
+
+---
+
+## Complete Configuration Reference
+
+### LLM Backend Configuration (`llamacpp`)
+
+```yaml
+llamacpp:
+  # ============================================================
+  # MODEL SELECTION
+  # ============================================================
+  model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+  # Supported models: Any GGUF format model
+  # Recommended: Llama 3.1/3.2, Mistral, Qwen, Phi
+  # Quantization: Q4_K_M (fast), Q5_K_M (balanced), Q8_0 (quality)
+
+  # ============================================================
+  # GPU ACCELERATION
+  # ============================================================
+  n_gpu_layers: 33
+  # 0 = CPU only
+  # 33 = Full GPU offload (Llama 3.1 8B has 32 layers + 1 output)
+  # Partial offload: 16-24 for mixed CPU/GPU
+  # Rule of thumb: (GPU_VRAM_GB - 2) / 0.5 = max layers
+
+  # ============================================================
+  # CONTEXT & MEMORY
+  # ============================================================
+  n_ctx: 8192
+  # Context window size (tokens)
+  # Llama 3.1 supports up to 128K, but RAM/VRAM intensive
+  # 4096 = Standard (4GB VRAM)
+  # 8192 = Extended (8GB VRAM)
+  # 16384 = Large (12GB+ VRAM)
+  # 32768 = XL (16GB+ VRAM, slower)
+
+  n_batch: 512
+  # Batch size for prompt processing
+  # Higher = faster prompt eval, more VRAM
+  # 512 = Balanced
+  # 1024 = Fast (if VRAM allows)
+  # 256 = Conservative (low VRAM)
+
+  # ============================================================
+  # CPU SETTINGS
+  # ============================================================
+  n_threads: 8
+  # CPU threads for non-GPU layers
+  # Set to: (CPU cores - 2) or (CPU cores / 2)
+  # Hyper-threading: Use physical cores only
+
+  use_mlock: true
+  # Lock model in RAM (prevents swapping to disk)
+  # true = Faster, requires sufficient RAM
+  # false = Allows paging (slower but safer)
+
+  use_mmap: true
+  # Memory-map model file (efficient loading)
+  # true = Recommended (fast startup, shared memory)
+  # false = Load entire model to RAM (slower startup)
+
+  # ============================================================
+  # GENERATION PARAMETERS
+  # ============================================================
+  temperature: 0.0
+  # Sampling randomness (0.0 = deterministic, 1.0 = creative)
+  # 0.0 = Factual QA (recommended for RAG)
+  # 0.3-0.5 = Slight creativity
+  # 0.7-0.9 = Creative writing
+  # 1.0+ = Maximum creativity (unstable)
+
+  top_p: 0.9
+  # Nucleus sampling (cumulative probability)
+  # 0.9 = Recommended (diverse but coherent)
+  # 1.0 = Consider all tokens
+  # 0.5 = Very focused (may be repetitive)
+
+  top_k: 40
+  # Top-K sampling (limit token pool)
+  # 40 = Balanced
+  # 100+ = More diverse
+  # 10-20 = Very focused
+
+  repeat_penalty: 1.1
+  # Penalize token repetition
+  # 1.0 = No penalty
+  # 1.1 = Light penalty (recommended)
+  # 1.2+ = Strong penalty (may affect coherence)
+
+  max_tokens: 2048
+  # Maximum response length (tokens)
+  # 512 = Short answers
+  # 1024 = Medium (emails, summaries)
+  # 2048 = Long (reports, essays)
+  # 4096 = Very long (not recommended for chat)
+
+  verbose: false
+  # Debug logging for llama.cpp
+  # false = Production (quiet)
+  # true = Development (detailed logs)
+
+  # ============================================================
+  # SPECULATIVE DECODING (QUICK WIN #8)
+  # ============================================================
+  enable_speculative_decoding: true
+  # Speedup: 500ms → 300ms (1.7x faster)
+  # Requires draft model (small, fast model predicts ahead)
+  # true = 40% latency reduction
+  # false = Standard inference
+
+  draft_model_path: "./models/Llama-3.2-1B-Instruct.Q4_K_M.gguf"
+  # Small model for speculation (1B parameters)
+  # Must be compatible architecture
+  # Q4 quantization recommended (speed over quality)
+
+  n_gpu_layers_draft: 33
+  # GPU offload for draft model
+  # Usually full offload (draft is small)
+
+  num_draft: 5
+  # Number of tokens to draft ahead
+  # 5 = Balanced
+  # 8-10 = Aggressive (diminishing returns)
+  # 2-3 = Conservative
+```
+
+---
+
+### Advanced Reranking Configuration
+
+```yaml
+advanced_reranking:
+  # ============================================================
+  # BGE RERANKER (GPU Accelerated)
+  # ============================================================
+  enable_bge_reranker: false
+  # Cross-encoder reranking (SOTA accuracy)
+  # Disabled on RTX 5080 due to PyTorch sm_120 incompatibility
+  # Enable on RTX 4090 and older architectures
+  # true = Best accuracy (slower)
+  # false = Fallback to LLM reranking
+
+  bge_reranker_device: "cuda"
+  # "cuda" = GPU acceleration
+  # "cpu" = CPU fallback
+  # "cuda:0" = Specific GPU
+
+  bge_reranker_batch_size: 32
+  # Reranking batch size
+  # 32 = Balanced
+  # 64 = Fast (if VRAM allows)
+  # 16 = Conservative
+
+  # ============================================================
+  # LLM RERANKING (Primary on RTX 5080)
+  # ============================================================
+  enable_llm_reranking: true
+  # Use main LLM for reranking
+  # true = Works on all hardware
+  # false = No reranking (lower accuracy)
+
+  llm_rerank_top_n: 3
+  # QUICK WIN #3: Rerank top N chunks
+  # 3 = Fast, focused (recommended)
+  # 5-7 = Better recall (slower)
+  # 10+ = Comprehensive (much slower)
+
+  hybrid_rerank_alpha: 0.7
+  # Weight for hybrid reranking
+  # 0.7 = Favor semantic similarity
+  # 0.5 = Balanced
+  # 0.3 = Favor BM25 keyword matching
+
+  llm_scoring_temperature: 0.0
+  # Temperature for relevance scoring
+  # 0.0 = Deterministic (recommended)
+  # 0.1-0.3 = Slight variance
+
+  rerank_preset: "quality"
+  # Preset optimization profiles
+  # "speed" = Fast, 3 chunks, aggressive cutoff
+  # "quality" = Balanced, 5 chunks, moderate cutoff
+  # "comprehensive" = Slow, 10 chunks, lenient cutoff
+```
+
+---
+
+### Redis Cache Configuration
+
+```yaml
+cache:
+  redis_host: "redis"
+  # Docker service name: "redis"
+  # Manual install: "localhost" or "127.0.0.1"
+  # Remote: "redis.example.com"
+
+  redis_port: 6379
+  # Default Redis port
+  # Change if custom port used
+
+  redis_db: 0
+  # Redis database index (0-15)
+  # Use different DBs for multi-tenant
+
+  ttl: 604800
+  # Cache TTL in seconds
+  # 604800 = 7 days (recommended)
+  # 86400 = 1 day
+  # 3600 = 1 hour
+  # 0 = No expiration (not recommended)
+```
+
+---
+
+## Hardware-Specific Configurations
+
+### RTX 4080/4090 (16GB VRAM)
+```yaml
+llamacpp:
+  model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+  n_gpu_layers: 33      # Full offload
+  n_ctx: 16384          # Large context
+  n_batch: 1024         # Fast prompt processing
+  enable_speculative_decoding: true
+
+advanced_reranking:
+  enable_bge_reranker: true    # GPU reranking works
+  bge_reranker_batch_size: 64
+  llm_rerank_top_n: 5
+```
+
+### RTX 3060/3070 (8-12GB VRAM)
+```yaml
+llamacpp:
+  model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"  # Smaller quantization
+  n_gpu_layers: 24      # Partial offload
+  n_ctx: 8192           # Standard context
+  n_batch: 512          # Balanced
+  enable_speculative_decoding: true
+
+advanced_reranking:
+  enable_bge_reranker: true
+  bge_reranker_batch_size: 32
+  llm_rerank_top_n: 3
+```
+
+### RTX 3050/GTX 1660 (6-8GB VRAM)
+```yaml
+llamacpp:
+  model_path: "./models/Llama-3.2-3B-Instruct.Q4_K_M.gguf"  # Smaller model
+  n_gpu_layers: 20      # Partial offload
+  n_ctx: 4096           # Smaller context
+  n_batch: 256          # Conservative
+  enable_speculative_decoding: false   # Not enough VRAM
+
+advanced_reranking:
+  enable_bge_reranker: false   # CPU fallback
+  enable_llm_reranking: true
+  llm_rerank_top_n: 3
+```
+
+### CPU Only (No GPU)
+```yaml
+llamacpp:
+  model_path: "./models/Llama-3.2-3B-Instruct.Q4_K_M.gguf"
+  n_gpu_layers: 0       # CPU inference
+  n_ctx: 4096
+  n_batch: 128          # Lower batch for RAM
+  n_threads: 12         # Match CPU cores
+  use_mlock: false      # Prevent RAM exhaustion
+  enable_speculative_decoding: false
+
+advanced_reranking:
+  enable_bge_reranker: false
+  enable_llm_reranking: false   # Too slow on CPU
+  llm_rerank_top_n: 1
+```
+
+### MacBook Pro M1/M2/M3 (16GB Unified Memory)
+```yaml
+llamacpp:
+  model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+  n_gpu_layers: 0       # Use Metal (auto-detected)
+  n_ctx: 8192
+  n_batch: 512
+  n_threads: 8          # Performance cores
+  use_mlock: true
+  enable_speculative_decoding: true
+
+advanced_reranking:
+  enable_bge_reranker: true
+  bge_reranker_device: "mps"   # Metal Performance Shaders
+  llm_rerank_top_n: 3
+```
+
+---
+
+## Environment Variable Overrides
+
+You can override `config.yml` settings via environment variables:
+
+```bash
+# Docker Compose
+environment:
+  - LLM_BACKEND=llamacpp
+  - MODEL_PATH=/app/models/custom-model.gguf
+  - GPU_LAYERS=24
+  - CONTEXT_LENGTH=4096
+  - ENABLE_SPECULATIVE_DECODING=false
+
+# Manual setup
+export LLM_BACKEND=llamacpp
+export MODEL_PATH=/home/user/models/llama.gguf
+export GPU_LAYERS=33
+export CONTEXT_LENGTH=8192
+```
+
+### Priority Order
+1. Environment variables (highest)
+2. `config.yml` file
+3. Default values (lowest)
+
+---
+
+## Vector Store Configuration
+
+### Qdrant (Recommended)
+```yaml
+vector_store:
+  type: "qdrant"
+  host: "qdrant"         # Docker: service name, Manual: localhost
+  port: 6333             # HTTP API
+  grpc_port: 6334        # gRPC (faster)
+  collection: "atlas_knowledge_base"
+  prefer_grpc: false     # true = faster, false = simpler
+  distance_metric: "cosine"   # cosine, euclidean, dot
+```
+
+### ChromaDB (Legacy)
+```yaml
+vector_store:
+  type: "chroma"
+  persist_directory: "./chroma_db"
+  collection: "atlas_docs"
+```
+
+---
+
+## Embedding Model Selection
+
+### BAAI/bge-large-en-v1.5 (Default)
+- **Dimensions**: 1024
+- **Size**: 1.3GB
+- **Speed**: ~50ms/chunk
+- **Accuracy**: ⭐⭐⭐⭐⭐
+- **Best for**: General purpose, English
+
+```yaml
+embeddings:
+  model: "BAAI/bge-large-en-v1.5"
+  device: "cuda"      # cuda, cpu, mps
+  batch_size: 32
+```
+
+### all-MiniLM-L6-v2 (Fast)
+- **Dimensions**: 384
+- **Size**: 80MB
+- **Speed**: ~10ms/chunk
+- **Accuracy**: ⭐⭐⭐
+- **Best for**: Speed-critical, large datasets
+
+```yaml
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  device: "cuda"
+  batch_size: 64
+```
+
+### multilingual-e5-large (Multilingual)
+- **Dimensions**: 1024
+- **Size**: 2.2GB
+- **Speed**: ~80ms/chunk
+- **Accuracy**: ⭐⭐⭐⭐
+- **Best for**: Non-English, cross-lingual
+
+```yaml
+embeddings:
+  model: "intfloat/multilingual-e5-large"
+  device: "cuda"
+  batch_size: 16
+```
+
+---
+
+## Performance Tuning Presets
+
+### Speed-Optimized (Low Latency)
+```yaml
+llamacpp:
+  model_path: "./models/Llama-3.2-3B-Instruct.Q4_K_M.gguf"
+  n_gpu_layers: 33
+  n_ctx: 4096
+  n_batch: 1024
+  temperature: 0.0
+  max_tokens: 512
+  enable_speculative_decoding: true
+
+advanced_reranking:
+  enable_llm_reranking: true
+  llm_rerank_top_n: 1   # Minimal reranking
+  rerank_preset: "speed"
+```
+
+**Expected Latency**: 200-400ms
+
+---
+
+### Quality-Optimized (High Accuracy)
+```yaml
+llamacpp:
+  model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf"
+  n_gpu_layers: 33
+  n_ctx: 16384
+  n_batch: 512
+  temperature: 0.0
+  max_tokens: 2048
+  enable_speculative_decoding: false
+
+advanced_reranking:
+  enable_bge_reranker: true
+  llm_rerank_top_n: 10
+  rerank_preset: "comprehensive"
+```
+
+**Expected Latency**: 2000-5000ms
+
+---
+
+### Balanced (Production Default)
+```yaml
+llamacpp:
+  model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+  n_gpu_layers: 33
+  n_ctx: 8192
+  n_batch: 512
+  temperature: 0.0
+  max_tokens: 2048
+  enable_speculative_decoding: true
+
+advanced_reranking:
+  enable_llm_reranking: true
+  llm_rerank_top_n: 3
+  rerank_preset: "quality"
+```
+
+**Expected Latency**: 600-1200ms
+
+---
+
+## Validation & Testing
+
+### Validate Configuration
+```bash
+# Python validation script
+python3 -c "
+from backend._src.config import load_config
+config = load_config()
+print('✓ Configuration valid')
+print(f'Model: {config.llamacpp.model_path}')
+print(f'GPU Layers: {config.llamacpp.n_gpu_layers}')
+print(f'Context: {config.llamacpp.n_ctx}')
+"
+```
+
+### Benchmark Configuration
+```bash
+# Run test query with metrics
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Test query for benchmarking",
+    "mode": "simple"
+  }' | jq '.metadata'
+```
+
+**Monitor**:
+- `processing_time_ms`: Total latency
+- `tokens_per_second`: Generation speed
+- `gpu_accelerated`: GPU usage confirmation
+
+---
+
+## Configuration Management
+
+### Version Control
+```bash
+# Keep config.yml in version control
+git add backend/config.yml
+
+# Use environment-specific configs
+backend/config.dev.yml       # Development
+backend/config.prod.yml      # Production
+backend/config.test.yml      # Testing
+```
+
+### Secrets Management
+```yaml
+# DON'T commit sensitive values
+redis_password: "${REDIS_PASSWORD}"  # Use env vars
+
+# Docker secrets
+secrets:
+  redis_password:
+    external: true
+```
+
+### Hot Reload
+```bash
+# Restart backend to apply changes
+docker compose -f backend/docker-compose.atlas.yml restart atlas-backend
+
+# Watch logs for errors
+docker logs -f atlas-backend
+```
+
+---
+
+## Troubleshooting Configuration
+
+### Issue: "Failed to load model"
+```
+FileNotFoundError: ./models/llama.gguf not found
+```
+
+**Fix**:
+```bash
+# Verify model path
+ls -lh models/
+
+# Update config.yml with correct path
+model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+```
+
+---
+
+### Issue: "CUDA out of memory"
+```
+RuntimeError: CUDA out of memory. Tried to allocate 12.5GB
+```
+
+**Fix**:
+```yaml
+# Reduce GPU layers
+n_gpu_layers: 24   # From 33
+
+# Or reduce context
+n_ctx: 4096       # From 8192
+
+# Or use smaller quantization
+model_path: "./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+```
+
+---
+
+### Issue: Slow generation (<10 tok/s)
+```
+tokens_per_second: 3.2
+```
+
+**Check**:
+```bash
+# Verify GPU is active
+curl http://localhost:8000/api/health | jq '.gpu_available'
+
+# Check GPU layers
+curl http://localhost:8000/api/health | jq '.gpu_layers_loaded'
+```
+
+**Fix**:
+```yaml
+# Ensure full GPU offload
+n_gpu_layers: 33
+
+# Increase batch size
+n_batch: 1024
+```
+
+---
+
+## Next Steps
+
+- 🚀 [Docker Deployment](../deployment/docker.mdx) - Production setup
+- ⚡ [Model Management](../advanced/model-management.mdx) - Swap models, quantization
+- 📊 [Monitoring](../advanced/monitoring.mdx) - Prometheus & Grafana
+
+---
+
+**Last Updated**: January 2025 | **Version**: 4.0.0

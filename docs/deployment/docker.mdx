@@ -1,0 +1,686 @@
+# Docker Deployment Guide
+
+Production-grade Docker deployment for ATLAS Protocol. This guide covers single-node deployment, scaling strategies, and production best practices.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     ATLAS PROTOCOL STACK                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Atlas Backend│  │    Qdrant    │  │    Redis     │    │
+│  │ FastAPI+RAG  │  │ Vector Store │  │    Cache     │    │
+│  │  Port: 8000  │  │  Port: 6333  │  │  Port: 6379  │    │
+│  │  GPU: 15GB   │  │  RAM: 16GB   │  │  RAM: 8GB    │    │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
+│         │                 │                  │             │
+│         └─────────────────┴──────────────────┘             │
+│                    atlas-network                           │
+│                    172.28.0.0/16                           │
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Prometheus   │  │   Grafana    │  │  cAdvisor    │    │
+│  │   Metrics    │  │  Dashboards  │  │  Container   │    │
+│  │  Port: 9090  │  │  Port: 3001  │  │    Metrics   │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Quick Start (Production)
+
+### Prerequisites
+- Docker 24.0+ with BuildKit enabled
+- Docker Compose 2.20+
+- NVIDIA Docker runtime (for GPU)
+- 64GB+ RAM, 100GB+ storage
+
+### One-Command Deploy
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/apollo-rag.git
+cd apollo-rag
+
+# Download models (5.4GB + 771MB)
+./scripts/download-models.sh
+
+# Start full stack
+docker compose -f backend/docker-compose.atlas.yml up -d
+
+# Verify deployment
+curl http://localhost:8000/api/health
+```
+
+---
+
+## Multi-Stage Dockerfile Deep Dive
+
+### Stage 1: Base Dependencies (Debian Bookworm)
+```dockerfile
+FROM python:3.11-slim-bookworm AS base
+
+# CRITICAL: Bookworm (glibc 2.36) required for CUDA 12.1 compatibility
+# Trixie (glibc 2.40) has mathcalls.h issues with CUDA C++17
+```
+
+**Why Bookworm?**
+- CUDA 12.1 requires glibc ≤ 2.36
+- Trixie (glibc 2.40) breaks CUDA compilation
+- Debian Bookworm is the latest stable compatible version
+
+### Stage 2: CUDA Toolkit Installation
+```dockerfile
+# Install gcc-12/g++-12 (CUDA 12.1 requires gcc ≤ 12)
+RUN apt-get install -y gcc-12 g++-12
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+
+# Install minimal CUDA components
+RUN apt-get install -y \
+    cuda-nvcc-12-1 \
+    cuda-cudart-dev-12-1 \
+    libcublas-dev-12-1
+```
+
+**Why gcc-12?**
+- CUDA 12.1 doesn't support gcc-13+
+- Default Debian Bookworm gcc is gcc-14
+- Must explicitly install and set gcc-12 as default
+
+### Stage 3: Python Dependencies with CUDA
+```dockerfile
+# Install PyTorch with CUDA 12.1
+RUN pip install --no-cache-dir \
+    torch==2.5.1 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Build llama-cpp-python from source with CUDA
+ENV CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+RUN pip install llama-cpp-python==0.3.2 --no-binary llama-cpp-python
+```
+
+**CRITICAL**: Pre-built wheels DON'T have real CUDA support despite `cu121` tag. Must build from source.
+
+### Stage 4: Model Pre-Caching (Startup Speed)
+```dockerfile
+# Pre-download embedding model (15s saved on startup)
+RUN python3 -c "\
+from sentence_transformers import SentenceTransformer; \
+model = SentenceTransformer('BAAI/bge-large-en-v1.5')"
+
+# Pre-download reranker model
+RUN python3 -c "\
+from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+tokenizer = AutoTokenizer.from_pretrained('BAAI/bge-reranker-large'); \
+model = AutoModelForSequenceClassification.from_pretrained('BAAI/bge-reranker-large')"
+```
+
+**Optimization**: Models downloaded during build = 20-30s startup vs 60-80s without pre-caching.
+
+### Stage 5: Application Code
+```dockerfile
+# Embed llama.cpp models directly (no volume mount issues)
+COPY models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf /models/
+COPY models/Llama-3.2-1B-Instruct.Q4_K_M.gguf /models/
+```
+
+**Why embed models?**
+- Windows Docker volume mounts have permission issues
+- Faster startup (no disk I/O wait)
+- Self-contained image (portable)
+- Downside: Larger image size (~9GB vs 3GB)
+
+---
+
+## Docker Compose Configuration
+
+### Service: atlas-backend
+
+```yaml
+atlas-backend:
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile.atlas
+    args:
+      - BUILDKIT_INLINE_CACHE=1
+
+  image: atlas-protocol-backend:v4.0
+  container_name: atlas-backend
+  restart: unless-stopped
+
+  ports:
+    - "8000:8000"
+
+  volumes:
+    - ./documents:/app/documents        # Document uploads
+    - ../models:/app/models             # Model storage
+    - ./config.yml:/app/config.yml:ro   # Configuration (read-only)
+    - ./logs:/app/logs                  # Application logs
+    - type: tmpfs
+      target: /tmp
+      tmpfs:
+        size: 4G                        # Fast temporary storage
+
+  environment:
+    # Core
+    - PYTHONUNBUFFERED=1
+    - CONFIG_PATH=/app/config.yml
+
+    # LLM
+    - LLM_BACKEND=llamacpp
+    - MODEL_PATH=/app/models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+    - GPU_LAYERS=33
+    - CONTEXT_LENGTH=8192
+
+    # Vector Store
+    - VECTOR_STORE=qdrant
+    - QDRANT_HOST=qdrant
+    - QDRANT_PORT=6333
+
+    # Cache
+    - RAG_CACHE__USE_REDIS=true
+    - RAG_CACHE__REDIS_HOST=redis
+
+    # GPU
+    - NVIDIA_VISIBLE_DEVICES=0
+    - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+  deploy:
+    resources:
+      limits:
+        cpus: '14'
+        memory: 48G
+      reservations:
+        cpus: '8'
+        memory: 24G
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 60s   # Allow 60s for model loading
+
+  networks:
+    atlas-network:
+      ipv4_address: 172.28.0.10
+```
+
+### Resource Allocation Explained
+
+**CPU Limits:**
+- `limits.cpus: 14` = Maximum 14 cores
+- `reservations.cpus: 8` = Guaranteed 8 cores
+- Why? RAG pipeline benefits from parallel document processing
+
+**Memory Limits:**
+- `limits.memory: 48G` = Maximum 48GB RAM
+- `reservations.memory: 24G` = Guaranteed 24GB
+- Breakdown:
+  - LLM: ~8GB
+  - Embedding model: ~2GB
+  - Reranker: ~1GB
+  - Vector operations: ~5GB
+  - Cache & buffers: ~8GB
+  - OS overhead: ~4GB
+  - Headroom: ~20GB
+
+**GPU:**
+- `count: 1` = Use one GPU
+- `capabilities: [gpu]` = Enable CUDA
+- Alternative: `count: all` for multi-GPU
+
+---
+
+### Service: Qdrant (Vector Database)
+
+```yaml
+qdrant:
+  image: qdrant/qdrant:v1.15.0
+  container_name: atlas-qdrant
+
+  ports:
+    - "6333:6333"  # HTTP API
+    - "6334:6334"  # gRPC (faster)
+
+  volumes:
+    - qdrant_storage:/qdrant/storage   # Persistent vectors
+    - ./data/qdrant:/qdrant/snapshots  # Backup snapshots
+
+  environment:
+    - QDRANT__SERVICE__HTTP_PORT=6333
+    - QDRANT__SERVICE__GRPC_PORT=6334
+    - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=4
+    - QDRANT__STORAGE__WAL__WAL_CAPACITY_MB=128
+
+  deploy:
+    resources:
+      limits:
+        cpus: '4'
+        memory: 16G
+      reservations:
+        cpus: '2'
+        memory: 8G
+
+  healthcheck:
+    test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/6333' || exit 1"]
+    interval: 15s
+```
+
+**Why Qdrant over ChromaDB?**
+- ✅ Better performance for production (10x faster on large datasets)
+- ✅ Native gRPC support (lower latency)
+- ✅ Built-in sharding and replication
+- ✅ Prometheus metrics out-of-the-box
+- ✅ HNSW index (faster similarity search)
+
+---
+
+### Service: Redis (Cache Layer)
+
+```yaml
+redis:
+  image: redis:7.2-alpine
+  container_name: atlas-redis
+
+  volumes:
+    - redis_data:/data
+
+  command: >
+    redis-server
+    --maxmemory 8gb
+    --maxmemory-policy allkeys-lru
+    --save 900 1
+    --appendonly yes
+    --appendfsync everysec
+
+  deploy:
+    resources:
+      limits:
+        cpus: '2'
+        memory: 8G
+```
+
+**Cache Strategy:**
+- `maxmemory-policy: allkeys-lru` = Evict least recently used keys
+- `appendonly: yes` = Persist cache to disk (survive restarts)
+- `appendfsync: everysec` = Flush every second (balance speed/durability)
+
+**What's Cached?**
+- Embedding vectors (L4 cache)
+- Query results (L2 cache)
+- Document chunks (L1 cache)
+- Reranking scores
+
+---
+
+## Production Best Practices
+
+### 1. Security Hardening
+
+```yaml
+# Use non-root user
+USER app
+
+# Read-only filesystem
+read_only: true
+tmpfs:
+  - /tmp
+  - /var/cache
+
+# Drop unnecessary capabilities
+cap_drop:
+  - ALL
+cap_add:
+  - NET_BIND_SERVICE
+
+# Security options
+security_opt:
+  - no-new-privileges:true
+  - apparmor=docker-default
+```
+
+### 2. Resource Limits (OOM Prevention)
+
+```yaml
+# Enable memory limits
+deploy:
+  resources:
+    limits:
+      memory: 48G
+    reservations:
+      memory: 24G
+
+# Docker daemon OOM killer
+oom_kill_disable: false
+oom_score_adj: -500   # Less likely to be killed
+```
+
+### 3. Logging Strategy
+
+```yaml
+logging:
+  driver: "json-file"
+  options:
+    max-size: "100m"    # Rotate at 100MB
+    max-file: "5"       # Keep 5 rotations
+    labels: "service=atlas-backend,environment=production"
+    compress: "true"    # Gzip old logs
+```
+
+**Centralized Logging (Optional):**
+```yaml
+logging:
+  driver: "gelf"
+  options:
+    gelf-address: "udp://logstash:12201"
+    tag: "atlas-backend"
+```
+
+### 4. Health Checks
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+  interval: 15s        # Check every 15s
+  timeout: 5s          # Fail if no response in 5s
+  retries: 3           # Mark unhealthy after 3 failures
+  start_period: 60s    # Grace period for startup
+```
+
+**Custom Health Endpoint:**
+```python
+@router.get("/api/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "components": {
+            "llm": check_llm(),
+            "vector_store": check_qdrant(),
+            "cache": check_redis()
+        },
+        "gpu_available": torch.cuda.is_available()
+    }
+```
+
+### 5. Network Isolation
+
+```yaml
+networks:
+  atlas-network:
+    driver: bridge
+    internal: false      # Allow internet access
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+```
+
+**Service-to-Service Communication:**
+- Use service names as hostnames (`http://qdrant:6333`)
+- Static IP assignment for predictable routing
+- Firewall rules via `iptables` (see Security section)
+
+---
+
+## Scaling Strategies
+
+### Vertical Scaling (Scale Up)
+
+**GPU Upgrade:**
+```yaml
+# Before: RTX 3060 (8GB)
+n_gpu_layers: 24
+n_ctx: 4096
+
+# After: RTX 4090 (24GB)
+n_gpu_layers: 33
+n_ctx: 16384
+batch_size: 1024
+```
+
+**RAM Upgrade:**
+```yaml
+# 64GB → 128GB
+deploy:
+  resources:
+    limits:
+      memory: 96G   # Use more for cache
+```
+
+### Horizontal Scaling (Scale Out)
+
+**Load Balancer + Multiple Backends:**
+```yaml
+version: '3.8'
+
+services:
+  atlas-backend-1:
+    <<: *atlas-backend-template
+    container_name: atlas-backend-1
+    networks:
+      atlas-network:
+        ipv4_address: 172.28.0.10
+
+  atlas-backend-2:
+    <<: *atlas-backend-template
+    container_name: atlas-backend-2
+    networks:
+      atlas-network:
+        ipv4_address: 172.28.0.11
+
+  nginx-lb:
+    image: nginx:alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx-lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - atlas-backend-1
+      - atlas-backend-2
+```
+
+**nginx-lb.conf:**
+```nginx
+upstream atlas_backend {
+    least_conn;   # Route to least busy server
+    server atlas-backend-1:8000 max_fails=3 fail_timeout=30s;
+    server atlas-backend-2:8000 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 80;
+
+    location / {
+        proxy_pass http://atlas_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 120s;
+    }
+}
+```
+
+**Shared State (Redis):**
+- All backends connect to same Redis instance
+- Cache hits across all instances
+- Conversation memory shared
+
+**Dedicated Vector Store:**
+- Single Qdrant instance (scale independently)
+- Or Qdrant cluster with sharding (advanced)
+
+---
+
+## Backup & Disaster Recovery
+
+### Automated Backups
+
+```bash
+#!/bin/bash
+# backup.sh - Daily backup script
+
+BACKUP_DIR="/backups/atlas-$(date +%Y%m%d)"
+mkdir -p "$BACKUP_DIR"
+
+# Backup Qdrant vectors
+docker exec atlas-qdrant \
+  curl -X POST http://localhost:6333/collections/atlas_knowledge_base/snapshots \
+  -H "Content-Type: application/json"
+
+docker cp atlas-qdrant:/qdrant/snapshots "$BACKUP_DIR/qdrant"
+
+# Backup Redis
+docker exec atlas-redis redis-cli SAVE
+docker cp atlas-redis:/data "$BACKUP_DIR/redis"
+
+# Backup configuration
+cp backend/config.yml "$BACKUP_DIR/"
+cp backend/docker-compose.atlas.yml "$BACKUP_DIR/"
+
+# Compress
+tar -czf "$BACKUP_DIR.tar.gz" "$BACKUP_DIR"
+rm -rf "$BACKUP_DIR"
+
+# Upload to S3 (optional)
+aws s3 cp "$BACKUP_DIR.tar.gz" s3://my-backups/atlas/
+```
+
+### Restore Procedure
+
+```bash
+# Extract backup
+tar -xzf atlas-20250127.tar.gz
+cd atlas-20250127
+
+# Stop services
+docker compose -f docker-compose.atlas.yml down
+
+# Restore Qdrant
+docker cp qdrant/. atlas-qdrant:/qdrant/snapshots
+docker exec atlas-qdrant \
+  curl -X PUT http://localhost:6333/collections/atlas_knowledge_base/snapshots/recover \
+  -H "Content-Type: application/json" \
+  -d '{"snapshot":"snapshot-name.dat"}'
+
+# Restore Redis
+docker cp redis/. atlas-redis:/data
+docker compose restart redis
+
+# Start services
+docker compose -f docker-compose.atlas.yml up -d
+```
+
+---
+
+## Monitoring & Observability
+
+### Prometheus Metrics
+
+**Exposed Metrics:**
+- `atlas_query_duration_seconds` - Query latency histogram
+- `atlas_tokens_per_second` - LLM generation speed
+- `atlas_cache_hit_ratio` - Cache effectiveness
+- `atlas_vector_search_duration` - Qdrant lookup time
+- `atlas_rerank_duration` - Reranking overhead
+
+**prometheus.yml:**
+```yaml
+scrape_configs:
+  - job_name: 'atlas-backend'
+    static_configs:
+      - targets: ['atlas-backend:8000']
+
+  - job_name: 'qdrant'
+    static_configs:
+      - targets: ['qdrant:6333']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+```
+
+### Grafana Dashboards
+
+**Access**: `http://localhost:3001`
+**Credentials**: admin / atlas_admin_2025
+
+**Pre-configured Dashboards:**
+1. **ATLAS Overview**: High-level metrics (QPS, latency, errors)
+2. **GPU Utilization**: VRAM usage, temperature, utilization %
+3. **Vector Store**: Qdrant collection stats, search performance
+4. **Cache Analytics**: Hit ratio, eviction rate, memory usage
+
+---
+
+## Troubleshooting Production Issues
+
+### Issue: Container OOM Killed
+
+```bash
+# Check OOM events
+docker inspect atlas-backend | jq '.[0].State.OOMKilled'
+
+# View memory usage
+docker stats atlas-backend
+```
+
+**Fix:**
+```yaml
+# Increase memory limit
+deploy:
+  resources:
+    limits:
+      memory: 64G   # From 48G
+```
+
+### Issue: GPU Not Accessible
+
+```bash
+# Verify GPU in container
+docker exec atlas-backend nvidia-smi
+
+# Check Docker runtime
+docker info | grep -i nvidia
+```
+
+**Fix:**
+```bash
+# Install nvidia-docker2
+sudo apt-get install nvidia-docker2
+sudo systemctl restart docker
+```
+
+### Issue: Slow Startup (>2 minutes)
+
+```bash
+# Check startup logs
+docker logs atlas-backend | grep "startup_duration"
+```
+
+**Causes:**
+- Models not pre-cached → Rebuild with model caching
+- Network volume mount → Use embedded models
+- Cold Qdrant start → Increase `start_period` in healthcheck
+
+---
+
+## Next Steps
+
+- ☸️ [Kubernetes Deployment](./kubernetes.mdx) - Scale across clusters
+- 📊 [Monitoring Deep Dive](../advanced/monitoring.mdx) - Grafana dashboards
+- 🔒 [Security Hardening](../advanced/security.mdx) - Production security
+
+---
+
+**Last Updated**: January 2025 | **Version**: 4.0.0
