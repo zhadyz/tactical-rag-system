@@ -2,9 +2,9 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [main]
+    branches: [v4.2-production]
   pull_request:
-    branches: [main]
+    branches: [v4.2-production]
 
 permissions:
   contents: read
@@ -40,7 +40,7 @@ jobs:
           path: docs-site/out
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/v4.2-production'
     needs: build
     runs-on: ubuntu-latest
 
