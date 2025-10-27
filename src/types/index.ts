@@ -28,6 +28,7 @@ export interface QueryRequest {
   question: string;
   mode: 'simple' | 'adaptive';
   use_context: boolean;
+  rerank_preset?: 'quick' | 'quality' | 'deep';
 }
 
 export interface TimingStage {
@@ -70,6 +71,7 @@ export interface Settings {
   useContext: boolean;
   streamResponse: boolean;
   darkMode: boolean;
+  rerankPreset: 'quick' | 'quality' | 'deep';
 }
 
 export interface StreamEvent {

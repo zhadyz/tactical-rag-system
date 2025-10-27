@@ -91,7 +91,7 @@ backend/.dockerignore
 backend/.env.atlas
 
 # Backend internals
-backend/_src/
+# backend/_src/  # REMOVED - needed for Docker builds to track code changes
 backend/tests/
 backend/monitoring/
 

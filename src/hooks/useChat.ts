@@ -86,6 +86,7 @@ export const useChat = () => {
               question: content,
               mode: settings.mode,
               use_context: settings.useContext,
+              rerank_preset: settings.rerankPreset,
             },
             {
               onToken: (token: string) => {
@@ -151,6 +152,7 @@ export const useChat = () => {
             question: content,
             mode: settings.mode,
             use_context: settings.useContext,
+            rerank_preset: settings.rerankPreset,
           });
 
           // Add assistant response

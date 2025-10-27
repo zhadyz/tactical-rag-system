@@ -56,6 +56,7 @@ const useStore = create<AppStore>()(
         useContext: true,
         streamResponse: true, // Enable streaming by default
         darkMode: false,
+        rerankPreset: 'quality', // Default to balanced preset (3 documents)
       },
 
       // Chat actions

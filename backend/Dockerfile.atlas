@@ -93,11 +93,12 @@ WORKDIR /build
 
 # OPTIMIZATION: Install PyTorch FIRST (largest dependency, rarely changes)
 # This layer will be cached across builds
+# QUICK WIN #7: Install CUDA-enabled PyTorch for BGE Reranker v2-m3 GPU acceleration
 RUN pip install --no-cache-dir \
     torch==2.5.1 \
     torchvision \
     torchaudio \
-    --index-url https://download.pytorch.org/whl/cpu
+    --index-url https://download.pytorch.org/whl/cu121
 
 # OPTIMIZATION: Copy requirements BEFORE code (leverage Docker layer cache)
 COPY backend/requirements.txt /build/requirements.txt
@@ -152,14 +153,20 @@ WORKDIR /app
 # Copy application code
 COPY backend/app /app/app
 COPY backend/_src /app/_src
-COPY config.yml /app/config.yml
+
+# QUICK WIN #8: Copy config.yml to enable speculative decoding
+COPY backend/config.yml /app/config.yml
 
 # Create necessary directories
 RUN mkdir -p /app/documents /app/chroma_db /app/logs /app/.cache /app/data /models
 
-# OPTIMIZATION: Embed llama.cpp model directly (bypasses Windows Docker volume mount issues)
-# Model: Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf (5.4GB)
+# OPTIMIZATION: Embed llama.cpp models directly (bypasses Windows Docker volume mount issues)
+# Main model: Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf (5.4GB)
 COPY models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf /models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+
+# QUICK WIN #8: Draft model for Speculative Decoding (500ms → 300ms)
+# Draft model: Llama-3.2-1B-Instruct.Q4_K_M.gguf (771MB)
+COPY models/Llama-3.2-1B-Instruct.Q4_K_M.gguf /models/Llama-3.2-1B-Instruct.Q4_K_M.gguf
 
 # ============================================================
 # STAGE 5: Runtime Configuration

@@ -206,7 +206,8 @@ async def query(
         result = await engine.query(
             question=sanitized_query,
             mode=request.mode,
-            use_context=request.use_context
+            use_context=request.use_context,
+            rerank_preset=request.rerank_preset
         )
 
         # DEBUG: engine.query() returned successfully

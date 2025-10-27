@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Trash2, CheckCircle, Cpu } from 'lucide-react';
+import { X, Trash2, CheckCircle, Cpu, Zap, Star, Search } from 'lucide-react';
 import { ModeSelector } from './ModeSelector';
 import { QwenStatus } from '../System/QwenStatus';
 import useStore from '../../store/useStore';
@@ -141,6 +141,107 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 Query Mode
               </h3>
               <ModeSelector />
+            </div>
+
+            {/* Rerank Preset */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                Rerank Quality
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Balance between speed and answer quality
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => updateSettings({ rerankPreset: 'quick' })}
+                  className={`relative p-3 rounded-lg border-2 transition-all ${
+                    settings.rerankPreset === 'quick'
+                      ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/20'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                  aria-label="Quick preset - 2 documents"
+                  aria-pressed={settings.rerankPreset === 'quick'}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <Zap
+                      size={20}
+                      className={settings.rerankPreset === 'quick' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}
+                    />
+                    <div className="text-center">
+                      <div className={`text-xs font-semibold ${
+                        settings.rerankPreset === 'quick'
+                          ? 'text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Quick
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        2 docs
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => updateSettings({ rerankPreset: 'quality' })}
+                  className={`relative p-3 rounded-lg border-2 transition-all ${
+                    settings.rerankPreset === 'quality'
+                      ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/20'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                  aria-label="Quality preset - 3 documents (default)"
+                  aria-pressed={settings.rerankPreset === 'quality'}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <Star
+                      size={20}
+                      className={settings.rerankPreset === 'quality' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}
+                    />
+                    <div className="text-center">
+                      <div className={`text-xs font-semibold ${
+                        settings.rerankPreset === 'quality'
+                          ? 'text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Quality
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        3 docs
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => updateSettings({ rerankPreset: 'deep' })}
+                  className={`relative p-3 rounded-lg border-2 transition-all ${
+                    settings.rerankPreset === 'deep'
+                      ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/20'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                  aria-label="Deep preset - 5 documents"
+                  aria-pressed={settings.rerankPreset === 'deep'}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <Search
+                      size={20}
+                      className={settings.rerankPreset === 'deep' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}
+                    />
+                    <div className="text-center">
+                      <div className={`text-xs font-semibold ${
+                        settings.rerankPreset === 'deep'
+                          ? 'text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Deep
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        5 docs
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
             </div>
 
             {/* Query Options */}
