@@ -34,8 +34,6 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   generateEtags: true,
-  // Static generation
-  distDir: 'out',
   // Custom headers for security
   async headers() {
     return [
