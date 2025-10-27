@@ -1,0 +1,637 @@
+---
+title: API Reference
+description: Complete Apollo RAG API documentation with interactive examples
+---
+
+import { Callout } from '@/components/Callout'
+
+# API Reference
+
+Apollo RAG provides a REST API for document retrieval and question answering. All endpoints return JSON and support CORS.
+
+## Base URL
+
+```
+http://localhost:8000
+```
+
+## Authentication
+
+Currently, Apollo runs without authentication for development. For production deployments, implement authentication middleware or use a reverse proxy like Nginx.
+
+<Callout type="warning">
+  **Security:** Enable rate limiting and authentication before deploying to production. Apollo includes built-in rate limiting (30 requests/minute per IP).
+</Callout>
+
+---
+
+## Endpoints
+
+### Health Check
+
+#### `GET /health`
+
+Check system status and configuration.
+
+**Response:**
+
+```json
+{
+  "status": "healthy",
+  "version": "4.1.0",
+  "gpu_enabled": true,
+  "gpu_count": 1,
+  "gpu_name": "NVIDIA RTX 4090",
+  "vector_store": "chroma",
+  "document_count": 142589,
+  "cache_enabled": true,
+  "conversation_memory_enabled": true
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | System health status: `healthy` or `unhealthy` |
+| `version` | string | Apollo version number |
+| `gpu_enabled` | boolean | Whether GPU acceleration is active |
+| `gpu_count` | number | Number of available GPUs |
+| `gpu_name` | string | GPU model name (if available) |
+| `vector_store` | string | Active vector store: `chroma` or `qdrant` |
+| `document_count` | number | Total indexed documents |
+| `cache_enabled` | boolean | Whether caching layer is active |
+| `conversation_memory_enabled` | boolean | Whether conversation memory is enabled |
+
+**cURL Example:**
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+### Query
+
+#### `POST /api/query`
+
+Process a question using the RAG system.
+
+**Request Body:**
+
+```json
+{
+  "question": "Can I grow a beard?",
+  "mode": "simple",
+  "use_context": false,
+  "rerank_preset": "balanced"
+}
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `question` | string | ✅ Yes | - | The question to answer (max 10,000 chars) |
+| `mode` | string | ❌ No | `"simple"` | Retrieval mode: `simple` or `adaptive` |
+| `use_context` | boolean | ❌ No | `false` | Use conversation history |
+| `rerank_preset` | string | ❌ No | `"balanced"` | Re-ranking preset: `speed`, `balanced`, `quality` |
+
+**Retrieval Modes:**
+
+#### Simple Mode
+
+- **Use for:** Direct questions, quick lookups
+- **Speed:** 8-15s (GPU) / 30-60s (CPU)
+- **Strategy:** Pure vector search with top-k retrieval
+- **Accuracy:** High for straightforward questions
+
+**Example:**
+```json
+{
+  "question": "What are the fitness standards?",
+  "mode": "simple"
+}
+```
+
+#### Adaptive Mode
+
+- **Use for:** Complex questions, multi-hop reasoning, research
+- **Speed:** 15-90s (varies by complexity)
+- **Strategy:** Query classification → Hybrid search → Re-ranking
+- **Accuracy:** Superior for complex, multi-faceted questions
+
+**Example:**
+```json
+{
+  "question": "Compare beard policies across different regulations",
+  "mode": "adaptive"
+}
+```
+
+**Re-ranking Presets:**
+
+| Preset | Speed | Accuracy | Best For |
+|--------|-------|----------|----------|
+| `speed` | Fastest | Good | High-volume queries, simple questions |
+| `balanced` | Medium | Better | General use (recommended) |
+| `quality` | Slowest | Best | Critical accuracy, research tasks |
+
+**Response:**
+
+```json
+{
+  "answer": "According to AFI 36-2903, Air Force members are generally prohibited from growing beards except for approved medical or religious accommodations...",
+  "sources": [
+    {
+      "content": "3.1.2. Beards. Beards are not authorized except for...",
+      "metadata": {
+        "source": "AFI_36-2903_Dress_and_Appearance.pdf",
+        "page": 12,
+        "chunk_id": "chunk_1234"
+      },
+      "relevance_score": 0.9234
+    }
+  ],
+  "metadata": {
+    "processing_time_ms": 12456,
+    "mode": "simple",
+    "cache_hit": false,
+    "query_type": "simple",
+    "strategy": "vector_search",
+    "retrieved_chunks": 7,
+    "model": "llama3.1:8b",
+    "gpu_accelerated": true
+  },
+  "explanation": null
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `answer` | string | Generated answer to the question |
+| `sources` | array | Retrieved source documents with relevance scores |
+| `sources[].content` | string | Relevant text excerpt from source document |
+| `sources[].metadata` | object | Document metadata (source file, page, chunk ID) |
+| `sources[].relevance_score` | number | Relevance score (0-1, higher is more relevant) |
+| `metadata` | object | Processing metadata and performance metrics |
+| `metadata.processing_time_ms` | number | Total processing time in milliseconds |
+| `metadata.mode` | string | Retrieval mode used |
+| `metadata.cache_hit` | boolean | Whether answer was served from cache |
+| `metadata.query_type` | string | Classified query complexity |
+| `metadata.strategy` | string | Retrieval strategy applied |
+| `metadata.retrieved_chunks` | number | Number of chunks retrieved |
+| `metadata.model` | string | LLM model used for generation |
+| `metadata.gpu_accelerated` | boolean | Whether GPU was used |
+| `explanation` | string\|null | Detailed explanation (adaptive mode only) |
+
+**cURL Example:**
+
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Can I grow a beard?",
+    "mode": "simple",
+    "use_context": false
+  }'
+```
+
+**Python Example:**
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/api/query",
+    json={
+        "question": "Can I grow a beard?",
+        "mode": "simple",
+        "use_context": False,
+        "rerank_preset": "balanced"
+    }
+)
+
+if response.status_code == 200:
+    result = response.json()
+    print(f"Answer: {result['answer']}")
+    print(f"\nSources ({len(result['sources'])}):")
+    for i, source in enumerate(result['sources'], 1):
+        print(f"{i}. {source['metadata']['source']} (score: {source['relevance_score']:.3f})")
+    print(f"\nProcessing time: {result['metadata']['processing_time_ms']}ms")
+    print(f"GPU accelerated: {result['metadata']['gpu_accelerated']}")
+else:
+    print(f"Error: {response.status_code} - {response.text}")
+```
+
+**JavaScript/TypeScript Example:**
+
+```typescript
+interface QueryResponse {
+  answer: string;
+  sources: Array<{
+    content: string;
+    metadata: {
+      source: string;
+      page?: number;
+      chunk_id: string;
+    };
+    relevance_score: number;
+  }>;
+  metadata: {
+    processing_time_ms: number;
+    mode: string;
+    cache_hit: boolean;
+    gpu_accelerated: boolean;
+  };
+}
+
+async function queryApollo(question: string): Promise<QueryResponse> {
+  const response = await fetch('http://localhost:8000/api/query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      mode: 'simple',
+      use_context: false
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
+// Usage
+const result = await queryApollo("Can I grow a beard?");
+console.log(`Answer: ${result.answer}`);
+console.log(`Processing time: ${result.metadata.processing_time_ms}ms`);
+```
+
+**Error Responses:**
+
+| Status Code | Meaning | Example |
+|-------------|---------|---------|
+| `400` | Bad Request | Invalid parameters, empty query |
+| `429` | Rate Limit Exceeded | More than 30 requests/minute |
+| `500` | Internal Server Error | RAG engine error, model failure |
+| `503` | Service Unavailable | System not initialized |
+
+**Example Error:**
+
+```json
+{
+  "detail": "Query cannot be empty or whitespace-only"
+}
+```
+
+---
+
+### Query Stream
+
+#### `POST /api/query/stream`
+
+Process a query with streaming response using Server-Sent Events (SSE).
+
+**Request Body:** Same as `/api/query`
+
+**Response Format:** `text/event-stream`
+
+Each event is a JSON object:
+
+```
+data: {"type":"token","content":"The"}
+data: {"type":"token","content":" Air"}
+data: {"type":"token","content":" Force"}
+...
+data: {"type":"sources","content":[...]}
+data: {"type":"metadata","content":{...}}
+data: {"type":"done"}
+```
+
+**Event Types:**
+
+| Type | Description | Content |
+|------|-------------|---------|
+| `token` | Generated text token | String: next word/phrase |
+| `sources` | Retrieved sources | Array: source documents |
+| `metadata` | Processing metadata | Object: performance metrics |
+| `done` | Generation complete | null |
+| `error` | Error occurred | String: error message |
+
+**cURL Example:**
+
+```bash
+curl -N -X POST http://localhost:8000/api/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Explain the chain of command",
+    "mode": "simple"
+  }'
+```
+
+**JavaScript Example (EventSource):**
+
+```javascript
+const eventSource = new EventSource(
+  'http://localhost:8000/api/query/stream?' + new URLSearchParams({
+    question: 'Explain the chain of command',
+    mode: 'simple'
+  })
+);
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.type) {
+    case 'token':
+      process.stdout.write(data.content);  // Stream text as it arrives
+      break;
+    case 'sources':
+      console.log('\n\nSources:', data.content);
+      break;
+    case 'metadata':
+      console.log('Metadata:', data.content);
+      break;
+    case 'done':
+      eventSource.close();
+      console.log('\n\nGeneration complete');
+      break;
+    case 'error':
+      console.error('Error:', data.content);
+      eventSource.close();
+      break;
+  }
+};
+```
+
+**Python Example (with `requests`):**
+
+```python
+import requests
+import json
+
+response = requests.post(
+    'http://localhost:8000/api/query/stream',
+    json={
+        'question': 'Explain the chain of command',
+        'mode': 'simple'
+    },
+    stream=True  # Enable streaming
+)
+
+for line in response.iter_lines():
+    if line:
+        # SSE format: "data: {json}\n\n"
+        if line.startswith(b'data: '):
+            event = json.loads(line[6:])  # Skip "data: " prefix
+
+            if event['type'] == 'token':
+                print(event['content'], end='', flush=True)
+            elif event['type'] == 'sources':
+                print(f"\n\nSources: {len(event['content'])} documents")
+            elif event['type'] == 'metadata':
+                print(f"\nProcessing time: {event['content']['processing_time_ms']}ms")
+            elif event['type'] == 'done':
+                print("\n\nComplete")
+                break
+```
+
+---
+
+### Clear Conversation
+
+#### `POST /api/conversation/clear`
+
+Clear conversation history and reset context.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversation memory cleared successfully"
+}
+```
+
+**cURL Example:**
+
+```bash
+curl -X POST http://localhost:8000/api/conversation/clear
+```
+
+**Python Example:**
+
+```python
+import requests
+
+response = requests.post('http://localhost:8000/api/conversation/clear')
+result = response.json()
+print(result['message'])
+```
+
+---
+
+## Rate Limiting
+
+Apollo enforces rate limiting to prevent abuse:
+
+- **Limit:** 30 requests per 60 seconds per IP address
+- **Response when exceeded:** HTTP 429 with error message
+
+**Rate Limit Headers:**
+
+Currently not implemented. Consider adding in production:
+
+```
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 25
+X-RateLimit-Reset: 1640995200
+```
+
+---
+
+## Security Features
+
+### Prompt Injection Detection
+
+Apollo automatically detects and logs potential prompt injection attempts:
+
+**Detected patterns:**
+- `ignore previous instructions`
+- `reveal your system prompt`
+- `you are now...`
+- Role markers: `[INST]`, `###system`, etc.
+
+**Behavior:** Logged but not blocked (configurable in production)
+
+### Input Sanitization
+
+All queries are sanitized:
+- Null bytes removed
+- Control characters stripped
+- Length validated (max 10,000 characters)
+
+### CORS Configuration
+
+For production, configure CORS in `docker-compose.yml`:
+
+```yaml
+environment:
+  - CORS_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+```
+
+---
+
+## Performance Optimization
+
+### Caching
+
+Apollo includes multi-layer caching:
+
+1. **Embedding Cache:** Stores vector embeddings for repeated queries
+2. **Response Cache:** Caches complete answers for identical questions
+3. **Collection Metadata Cache:** Optimized document metadata loading
+
+**Cache Hit Example:**
+
+```json
+{
+  "metadata": {
+    "processing_time_ms": 124,  // <-- 100x faster!
+    "cache_hit": true,
+    "cached_at": "2025-01-15T10:30:00Z"
+  }
+}
+```
+
+### GPU Acceleration
+
+When GPU is available, Apollo automatically:
+- Uses CUDA for embedding generation (10x faster)
+- Accelerates vector search operations
+- Batches embedding computations
+
+**GPU vs CPU Performance:**
+
+| Operation | GPU Time | CPU Time | Speedup |
+|-----------|----------|----------|---------|
+| Embedding (512 tokens) | 0.5s | 5.2s | **10.4x** |
+| Vector search (100k docs) | 0.1s | 3.4s | **34x** |
+| End-to-end query | 8-15s | 30-60s | **3-4x** |
+
+---
+
+## Code Examples
+
+### Conversation Flow
+
+```python
+import requests
+
+BASE_URL = "http://localhost:8000"
+
+# Start conversation with context
+response1 = requests.post(
+    f"{BASE_URL}/api/query",
+    json={
+        "question": "What are the beard grooming standards?",
+        "mode": "simple",
+        "use_context": True  # Enable context
+    }
+)
+print(response1.json()['answer'])
+
+# Follow-up question (references previous context)
+response2 = requests.post(
+    f"{BASE_URL}/api/query",
+    json={
+        "question": "What about mustaches?",  # Implicit reference
+        "mode": "simple",
+        "use_context": True  # Use previous context
+    }
+)
+print(response2.json()['answer'])
+
+# Clear when switching topics
+requests.post(f"{BASE_URL}/api/conversation/clear")
+```
+
+### Batch Queries
+
+```python
+questions = [
+    "Can I grow a beard?",
+    "What are the fitness standards?",
+    "Explain the chain of command"
+]
+
+results = []
+for question in questions:
+    response = requests.post(
+        "http://localhost:8000/api/query",
+        json={"question": question, "mode": "simple"}
+    )
+    results.append(response.json())
+
+# Process results
+for i, result in enumerate(results):
+    print(f"\nQ{i+1}: {questions[i]}")
+    print(f"A: {result['answer'][:200]}...")
+    print(f"Time: {result['metadata']['processing_time_ms']}ms")
+```
+
+### Error Handling
+
+```python
+import requests
+from requests.exceptions import RequestException
+
+def query_apollo_safe(question: str, mode: str = "simple"):
+    try:
+        response = requests.post(
+            "http://localhost:8000/api/query",
+            json={"question": question, "mode": mode},
+            timeout=120  # 2 minute timeout
+        )
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out after 2 minutes")
+        return None
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            print("Error: Rate limit exceeded. Wait before retrying.")
+        elif e.response.status_code == 503:
+            print("Error: Service unavailable. System may be starting up.")
+        else:
+            print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        return None
+
+    except RequestException as e:
+        print(f"Network error: {e}")
+        return None
+
+# Usage
+result = query_apollo_safe("Can I grow a beard?")
+if result:
+    print(result['answer'])
+```
+
+---
+
+<Callout type="success">
+  **Ready to integrate Apollo?** Check out the [interactive playground](/playground) to test queries in your browser.
+</Callout>
+
+## Next Steps
+
+- **[Quick Start](/getting-started/quick-start)** - Get Apollo running in 5 minutes
+- **[Architecture](/architecture)** - Understand how Apollo works
+- **[Benchmarks](/benchmarks)** - Performance comparisons

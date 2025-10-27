@@ -11,6 +11,10 @@ export default {
     "title": "Getting Started",
     "type": "page"
   },
+  "api-reference": {
+    "title": "API Reference",
+    "type": "page"
+  },
   "benchmarks": {
     "title": "Benchmarks",
     "type": "page"

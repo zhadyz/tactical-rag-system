@@ -1,0 +1,56 @@
+---
+title: Quick Start
+description: Get Apollo RAG running in 5 minutes
+---
+
+# Quick Start
+
+Get Apollo RAG up and running in under 5 minutes.
+
+## Prerequisites
+
+- **Docker** 20.10+ and Docker Compose 2.0+
+- **8GB RAM minimum** (16GB recommended)
+- **(Optional) NVIDIA GPU** with CUDA 11.8+ for 10x faster performance
+
+## Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/apollo-rag.git
+cd apollo-rag
+```
+
+## Configure Environment
+
+Create a `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Essential variables:
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+VECTOR_STORE=chroma
+```
+
+## Launch Apollo
+
+```bash
+docker compose up -d
+```
+
+## Make Your First Query
+
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is Apollo RAG?", "mode": "simple"}'
+```
+
+## Next Steps
+
+- [API Reference](/api-reference) - Complete endpoint documentation
+- [Architecture](/architecture) - How Apollo works

@@ -1,0 +1,343 @@
+---
+title: Quick Start
+description: Get Apollo RAG running in 5 minutes
+---
+
+import { Callout } from '@/components/Callout'
+
+# Quick Start
+
+Get Apollo RAG up and running in under 5 minutes. This guide assumes you have Docker installed.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- **Docker** 20.10+ and Docker Compose 2.0+
+- **8GB RAM minimum** (16GB recommended)
+- **(Optional) NVIDIA GPU** with CUDA 11.8+ for 10x faster performance
+
+<Callout type="info">
+  **Don't have Docker?** See the [installation guide](/getting-started/installation) for alternative methods.
+</Callout>
+
+## Step 1 - Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/apollo-rag.git
+cd apollo-rag
+```
+
+## Step 2 - Configure Environment
+
+Create a `.env` file with your configuration:
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit with your settings
+# Minimum required: OLLAMA_BASE_URL
+```
+
+**Essential Environment Variables:**
+
+```bash
+# Ollama LLM Configuration
+OLLAMA_BASE_URL=http://localhost:11434  # Your Ollama instance
+OLLAMA_MODEL=llama3.1:8b                # Model to use
+
+# Vector Store (choose one)
+VECTOR_STORE=chroma                      # or 'qdrant'
+CHROMA_PERSIST_DIR=./data/chroma         # Chroma storage path
+
+# GPU Acceleration (auto-detected if available)
+CUDA_VISIBLE_DEVICES=0                   # GPU device ID
+```
+
+<Callout type="warning">
+  **Using Qdrant?** Set `VECTOR_STORE=qdrant` and configure `QDRANT_URL` and `QDRANT_API_KEY`.
+</Callout>
+
+## Step 3 - Launch Apollo
+
+```bash
+# Start all services with Docker Compose
+docker compose up -d
+
+# Watch the logs (optional)
+docker compose logs -f apollo-backend
+```
+
+**What's Starting:**
+
+- **FastAPI Backend** (port 8000) - RAG API server with GPU support
+- **Redis** (port 6379) - High-performance caching layer
+- **Prometheus** (port 9090) - Metrics collection
+- **Grafana** (port 3000) - Performance dashboards
+
+Wait for the startup message:
+
+```
+INFO: Apollo RAG Engine initialized successfully
+INFO: GPU acceleration: ENABLED (NVIDIA RTX 4090)
+INFO: Vector store: Chroma (142,589 documents loaded)
+INFO: Application startup complete
+```
+
+## Step 4 - Verify Installation
+
+Test the health endpoint:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "healthy",
+  "version": "4.1.0",
+  "gpu_enabled": true,
+  "gpu_count": 1,
+  "gpu_name": "NVIDIA RTX 4090",
+  "vector_store": "chroma",
+  "document_count": 142589
+}
+```
+
+<Callout type="success">
+  **GPU Detected!** If `gpu_enabled: true`, Apollo will use GPU acceleration for 10x faster retrieval.
+</Callout>
+
+## Step 5 - Make Your First Query
+
+### Using cURL
+
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is Apollo RAG?",
+    "mode": "simple",
+    "use_context": false
+  }'
+```
+
+### Using Python
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/api/query",
+    json={
+        "question": "What is Apollo RAG?",
+        "mode": "simple",
+        "use_context": False
+    }
+)
+
+result = response.json()
+print(f"Answer: {result['answer']}")
+print(f"Sources: {len(result['sources'])} documents")
+print(f"Processing time: {result['metadata']['processing_time_ms']}ms")
+```
+
+### Using JavaScript/TypeScript
+
+```typescript
+const response = await fetch('http://localhost:8000/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    question: 'What is Apollo RAG?',
+    mode: 'simple',
+    use_context: false
+  })
+});
+
+const result = await response.json();
+console.log(`Answer: ${result.answer}`);
+console.log(`Processing time: ${result.metadata.processing_time_ms}ms`);
+```
+
+## Understanding Query Modes
+
+Apollo supports two retrieval modes optimized for different use cases:
+
+### Simple Mode (Fast)
+
+**Best for:** Direct questions, known documents, quick lookups
+
+**Performance:** 8-15 seconds with GPU, 30-60 seconds on CPU
+
+**Example:**
+
+```bash
+{
+  "question": "Can I grow a beard?",
+  "mode": "simple",
+  "use_context": false
+}
+```
+
+**How it works:**
+1. Vector search with FAISS/Chroma (GPU-accelerated)
+2. Retrieve top-k most relevant chunks (k=7)
+3. Generate answer with context
+
+### Adaptive Mode (Intelligent)
+
+**Best for:** Complex questions, multi-hop reasoning, research tasks
+
+**Performance:** Variable (15-90 seconds depending on complexity)
+
+**Example:**
+
+```bash
+{
+  "question": "Compare the beard policies across different AFIs",
+  "mode": "adaptive",
+  "use_context": false
+}
+```
+
+**How it works:**
+1. Query classification (simple/moderate/complex)
+2. Adaptive retrieval strategy selection
+3. Hybrid search (vector + BM25)
+4. Re-ranking with cross-encoder
+5. Multi-document synthesis
+
+<Callout type="info">
+  **Pro Tip:** Use `simple` mode for 90% of queries. Switch to `adaptive` when you need comprehensive answers or complex reasoning.
+</Callout>
+
+## Using Conversation Context
+
+Enable conversation memory for follow-up questions:
+
+```bash
+# First question
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What are the beard grooming standards?",
+    "mode": "simple",
+    "use_context": true
+  }'
+
+# Follow-up (references previous context)
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type": "application/json" \
+  -d '{
+    "question": "What about mustaches?",
+    "mode": "simple",
+    "use_context": true
+  }'
+
+# Clear conversation when switching topics
+curl -X POST http://localhost:8000/api/conversation/clear
+```
+
+## Streaming Responses
+
+For real-time feedback, use the streaming endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Explain the chain of command",
+    "mode": "simple",
+    "use_context": false
+  }'
+```
+
+**Response (Server-Sent Events):**
+
+```
+data: {"type":"token","content":"The"}
+data: {"type":"token","content":" chain"}
+data: {"type":"token","content":" of"}
+data: {"type":"token","content":" command"}
+...
+data: {"type":"sources","content":[...]}
+data: {"type":"metadata","content":{...}}
+data: {"type":"done"}
+```
+
+## Next Steps
+
+Now that Apollo is running, explore:
+
+1. **[API Reference](/api-reference)** - Complete endpoint documentation
+2. **[Architecture](/architecture)** - How Apollo works under the hood
+3. **[Benchmarks](/benchmarks)** - Performance comparisons
+4. **[Docker Deployment](/getting-started/docker-deployment)** - Production setup
+5. **[Configuration](/getting-started/configuration)** - Advanced tuning
+
+## Common Issues
+
+### GPU Not Detected
+
+If you have a GPU but Apollo runs on CPU:
+
+```bash
+# Check NVIDIA drivers
+nvidia-smi
+
+# Ensure Docker can access GPU
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+
+# Restart with GPU support
+docker compose down
+docker compose up -d
+```
+
+### Slow Queries (CPU Mode)
+
+If running on CPU and queries take >60 seconds:
+
+```bash
+# Reduce retrieval k value
+SIMPLE_K=3 docker compose up -d
+
+# Use simple mode only
+# Avoid adaptive mode on CPU
+```
+
+### Connection Refused
+
+If you get connection errors:
+
+```bash
+# Check if services are running
+docker compose ps
+
+# Check backend logs
+docker compose logs apollo-backend
+
+# Verify Ollama is accessible
+curl http://localhost:11434/api/tags
+```
+
+## Performance Expectations
+
+**With GPU (NVIDIA RTX 4090):**
+- Simple queries: 8-15 seconds
+- Adaptive queries: 15-45 seconds
+- Embedding generation: 2-5 seconds
+- Vector search: <1 second
+
+**Without GPU (CPU only):**
+- Simple queries: 30-60 seconds
+- Adaptive queries: 60-180 seconds
+- Embedding generation: 15-30 seconds
+- Vector search: 5-10 seconds
+
+<Callout type="success">
+  **You're all set!** Apollo is now running and ready to answer questions. Try the [interactive playground](/playground) to explore capabilities.
+</Callout>
