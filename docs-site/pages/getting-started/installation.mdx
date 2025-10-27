@@ -4,7 +4,6 @@ description: Install Apollo RAG and set up your development environment
 ---
 
 import { Callout } from '@/components/Callout'
-import { Tabs, TabsPanel } from '@/components/Tabs'
 
 # Installation
 
@@ -35,11 +34,7 @@ For optimal performance with GPU acceleration:
 
 ## Installation Methods
 
-<Tabs items={['Docker (Recommended)', 'pip Install', 'From Source']}>
-
-<TabsPanel value="Docker (Recommended)">
-
-### Docker Installation
+### Docker Installation (Recommended)
 
 The fastest way to get Apollo running is with Docker Compose:
 
@@ -65,10 +60,6 @@ The Docker setup includes:
 <Callout type="success">
   Docker Compose automatically detects NVIDIA GPUs and enables GPU acceleration if available.
 </Callout>
-
-</TabsPanel>
-
-<TabsPanel value="pip Install">
 
 ### pip Installation
 
@@ -102,10 +93,6 @@ pip install apollo-rag[monitoring]
 pip install apollo-rag[all]
 ```
 
-</TabsPanel>
-
-<TabsPanel value="From Source">
-
 ### Build from Source
 
 For development or customization:
@@ -135,19 +122,13 @@ pre-commit install
 pip install -e ".[dev,test,docs]"
 ```
 
-</TabsPanel>
-
-</Tabs>
-
 ## GPU Setup
 
 ### CUDA Installation
 
-If you have an NVIDIA GPU, install CUDA for optimal performance:
+If you have an NVIDIA GPU, install CUDA for optimal performance.
 
-<Tabs items={['Ubuntu/Debian', 'Windows', 'macOS']}>
-
-<TabsPanel value="Ubuntu/Debian">
+#### Ubuntu/Debian
 
 ```bash
 # Add NVIDIA package repositories
@@ -166,9 +147,7 @@ nvidia-smi
 nvcc --version
 ```
 
-</TabsPanel>
-
-<TabsPanel value="Windows">
+#### Windows
 
 1. Download [CUDA Toolkit 11.8](https://developer.nvidia.com/cuda-11-8-0-download-archive)
 2. Download [cuDNN 8.6](https://developer.nvidia.com/cudnn)
@@ -180,9 +159,7 @@ nvidia-smi
 nvcc --version
 ```
 
-</TabsPanel>
-
-<TabsPanel value="macOS">
+#### macOS
 
 <Callout type="warning">
   NVIDIA GPUs are not supported on modern macOS. Apollo can run on CPU or you can use Docker with
@@ -194,10 +171,6 @@ For Metal GPU acceleration (experimental):
 ```bash
 pip install apollo-rag[metal]
 ```
-
-</TabsPanel>
-
-</Tabs>
 
 ## Verify Installation
 

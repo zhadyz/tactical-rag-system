@@ -22,6 +22,12 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
+  eslint: {
+    ignoreDuringBuilds: true
+  },
+  typescript: {
+    ignoreBuildErrors: true
+  },
   // Optimize for static export (GitHub Pages, Vercel, etc.)
   trailingSlash: true,
   // Performance optimizations

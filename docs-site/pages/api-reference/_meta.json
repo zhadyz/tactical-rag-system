@@ -1,9 +1,0 @@
-{
-  "overview": "Overview",
-  "authentication": "Authentication",
-  "query": "Query API",
-  "upload": "Upload API",
-  "manage": "Management API",
-  "webhooks": "Webhooks",
-  "errors": "Error Handling"
-}
