@@ -1,6 +1,6 @@
 ---
-title: About Apollo - The God of Precision & Prophecy
-description: Why we named our RAG system after the ancient god of archery, prophecy, and light
+title: About Apollo - Why We Named It After a Greek God
+description: The story behind Apollo RAG and what we're building
 ---
 
 import { motion } from 'motion/react'
@@ -18,7 +18,9 @@ import { motion } from 'motion/react'
 
 ## Why Apollo?
 
-The name **Apollo** carries profound meaning that resonates with our mission to bring clarity, precision, and insight to information retrieval.
+Picture this: you're drowning in a sea of PDFs, technical docs, and meeting notes. You need *one* answer. Traditional search gives you 10,000 results. RAG systems hallucinate. Vector databases return vaguely related nonsense.
+
+We named this Apollo because we wanted something that actually **hits the target**.
 
 </motion.div>
 
@@ -29,29 +31,29 @@ The name **Apollo** carries profound meaning that resonates with our mission to 
   className="space-y-6"
 >
 
-### 🏹 God of Archery — Precision
+### 🏹 The Archer
 
-Apollo, master archer of Olympus, never misses his mark. Like his arrows that find their target with unwavering accuracy, our retrieval system cuts through vast document collections with **surgical precision**. Every query, a perfectly aimed shot. Every result, a bullseye.
+Apollo was known for his archery—every arrow, perfect aim. That's the vibe we're going for here.
 
-In a world drowning in data, precision isn't luxury—it's survival. Apollo RAG doesn't scatter information like buckshot. It delivers exactly what you need, when you need it, with the focused intensity of an archer's concentration.
+When you ask a question, you shouldn't get back "here's 47 possibly relevant chunks." You should get the *right answer*, sourced from the *right document*, at the *right level of detail*. Like an arrow finding its mark, not a shotgun blast hoping something sticks.
 
-### 🔮 God of Prophecy — Clairvoyance
+Precision matters when you're dealing with enterprise knowledge, legal docs, or technical specifications. Close enough isn't good enough.
 
-Apollo saw beyond the veil of present reality, perceiving patterns invisible to mortal eyes. Our system embodies this **prophetic vision**, using advanced embeddings and neural architectures to understand not just what you ask, but what you *mean*.
+### 🔮 The Oracle
 
-Like the Oracle at Delphi channeling Apollo's foresight, our RAG pipeline anticipates your information needs, surfaces relevant context before you realize you need it, and connects disparate knowledge into coherent understanding.
+Fun fact: Apollo ran the Oracle at Delphi. People would trek up a mountain to ask questions and get cryptic prophecies. We're doing that, minus the mountain and the cryptic part.
 
-### ⚖️ God of Order & Reason — Structure from Chaos
+Modern embeddings and neural reranking let us understand *intent*, not just keywords. You can ask "how do I prevent memory leaks in the inference pipeline?" and get actual answers about memory management—not every doc that mentions the word "pipeline."
 
-Where chaos reigns, Apollo brings **cosmic order**. Raw documents are entropy—unstructured, scattered, overwhelming. Apollo RAG transforms this chaos into crystalline knowledge graphs, semantic hierarchies, and intelligently indexed vectors.
+The system reads between the lines. That's the oracle energy.
 
-Reason triumphs over randomness. Structure emerges from noise. This is Apollo's gift: taking the cacophony of information and conducting it into a symphony of insight.
+### ☀️ The Light-Bringer
 
-### ☀️ God of Light — Clarity & Truth
+Apollo's other gig was being the sun god—bringing light, clarity, all that good stuff.
 
-Above all, Apollo is the bearer of light—**Phoebus Apollo**, the radiant one who banishes darkness and reveals truth. In the dim labyrinth of enterprise documents, technical manuals, and research papers, our system is the torch that illuminates the path forward.
+Ever tried finding a specific detail in a 500-page compliance manual at 2 AM? That's what we're solving. Shine light on the exact information you need, when you need it. No more ctrl+F through endless pages. No more "I know we documented this somewhere..."
 
-No more wandering in shadows of ambiguity. No more drowning in irrelevant results. Apollo RAG brings **clarity to complexity**, truth to confusion, and light to the darkest corners of your document repositories.
+Clear answers. Clear sources. Clear context. That's the whole point.
 
 </motion.div>
 
@@ -64,9 +66,11 @@ No more wandering in shadows of ambiguity. No more drowning in irrelevant result
 
 ### 🚀 Apollo 13 — "Houston, we have a solution"
 
-The spirit of Apollo 13 lives in our architecture. When catastrophic failure struck, when all seemed lost in the vacuum of space, the Apollo 13 crew and mission control transformed crisis into triumph through **ingenuity, precision, and unwavering focus**.
+Okay, we also *really* like the Apollo 13 reference. When everything goes wrong—oxygen tank explodes, power systems fail, CO₂ levels rising—you don't give up. You engineer a solution with duct tape and math.
 
-Our system embodies this same resilience. When traditional retrieval fails, when naive search crumbles, when semantic drift threatens accuracy—Apollo RAG adapts, recalibrates, and delivers. **Failure is not an option.**
+That's the philosophy here. When naive retrieval fails, when semantic search drifts, when GPU memory runs out—Apollo adapts. Hybrid search with neural reranking. Intelligent chunking. Memory-efficient inference. Query expansion. The works.
+
+**Failure is not an option.** (We had to.)
 
 </motion.div>
 
@@ -74,10 +78,12 @@ Our system embodies this same resilience. When traditional retrieval fails, when
   initial={{ opacity: 0, y: 20 }}
   animate={{ opacity: 1, y: 0 }}
   transition={{ duration: 0.6, delay: 0.6 }}
-  className="border-l-4 border-amber-500 pl-6 italic text-gray-700 dark:text-gray-300"
+  className="border-l-4 border-amber-500 pl-6 text-gray-700 dark:text-gray-300"
 >
 
-*"Through the mess of a thousand documents, Apollo's light reveals the single truth you seek. With the precision of an archer, the vision of a prophet, and the clarity of the sun itself—this is information retrieval elevated to divine art."*
+**TL;DR:** We built a RAG system that actually works. Named it after the god of accuracy and clarity because marketing is half the battle. Added GPU acceleration because waiting 30 seconds for answers is unacceptable.
+
+Ships with real-time inference, hybrid search, and a docs site that doesn't make you want to cry.
 
 </motion.div>
 
@@ -87,10 +93,14 @@ Our system embodies this same resilience. When traditional retrieval fails, when
 
 ## The Mission
 
-Apollo RAG isn't just software—it's a philosophy. A commitment to **precision over approximation**, **insight over information**, and **clarity over confusion**.
+Look, RAG is everywhere now. But most implementations are... let's be diplomatic and say "suboptimal."
 
-We believe that in the age of information overload, the most valuable capability isn't generating more data—it's finding signal in the noise, truth in the chaos, and answers in the void.
+We wanted to build something that:
+- **Actually retrieves the right documents** (not just semantically similar ones)
+- **Runs fast enough to feel instant** (GPU acceleration, optimized inference)
+- **Doesn't hallucinate** (proper grounding, source attribution)
+- **Scales to real workloads** (thousands of documents, concurrent users)
 
-Like the god who bears our name, we bring light where there was darkness, order where there was chaos, and precision where there was scatter.
+Apollo is what happens when you stop accepting "good enough" and start demanding "actually good."
 
-**This is Apollo. This is the future of retrieval.**
+This is what information retrieval should have been all along.
