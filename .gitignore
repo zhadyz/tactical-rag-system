@@ -12,6 +12,7 @@ src-tauri/target/
 
 # Models & Data (LARGE FILES - DO NOT COMMIT)
 models/
+!docs-site/public/models/
 data/
 documents/
 *.gguf
