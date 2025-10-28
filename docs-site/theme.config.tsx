@@ -40,7 +40,7 @@ const config: DocsThemeConfig = {
         />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#2563eb" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/apollo-logo.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
       </>
