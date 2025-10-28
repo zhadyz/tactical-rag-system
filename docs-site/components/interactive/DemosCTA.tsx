@@ -20,7 +20,7 @@ export function DemosCTA() {
           </svg>
         </a>
         <a
-          href="https://github.com/yourusername/apollo-rag"
+          href="https://github.com/zhadyz/tactical-rag-system"
           className="inline-flex items-center gap-2 rounded-xl border-2 border-gray-300 bg-white px-8 py-4 font-bold text-gray-900 shadow-lg transition-all hover:scale-105 hover:border-gray-400 hover:shadow-2xl dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:hover:border-gray-600"
         >
           <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">

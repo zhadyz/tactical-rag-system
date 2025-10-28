@@ -24,7 +24,7 @@ export function CTASection() {
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </a>
           <a
-            href="https://github.com/yourusername/apollo-rag"
+            href="https://github.com/zhadyz/tactical-rag-system"
             target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-2 rounded-xl border-2 border-gray-300 bg-white px-8 py-4 font-semibold text-gray-900 transition-all hover:border-gray-400 hover:shadow-lg dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:hover:border-gray-600"
