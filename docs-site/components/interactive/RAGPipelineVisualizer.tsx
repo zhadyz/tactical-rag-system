@@ -369,7 +369,7 @@ export function RAGPipelineVisualizer() {
       <div
         ref={pipelineRef}
         data-pipeline
-        className="relative overflow-x-auto rounded-3xl border border-black bg-black p-12 dark:border-black dark:bg-black"
+        className="relative overflow-x-auto rounded-3xl border border-gray-200 bg-gray-50 p-12 dark:border-gray-800 dark:bg-gray-950"
         style={{
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
