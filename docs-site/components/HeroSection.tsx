@@ -64,7 +64,7 @@ export function HeroSection() {
           </a>
 
           <a
-            href="https://github.com/yourusername/apollo-rag"
+            href="https://github.com/zhadyz/tactical-rag-system"
             target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-2 rounded-xl border-2 border-gray-700 bg-gray-900/50 px-8 py-4 font-semibold text-white backdrop-blur-sm transition-all hover:border-gray-600 hover:bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-950"
