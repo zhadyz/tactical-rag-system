@@ -43,6 +43,18 @@ backend/QDRANT_MIGRATION_GUIDE.md
 *_REPORT.md
 *_GUIDE.md
 *_SETUP.md
+*_ROADMAP*.md
+*_BUILD*.md
+*_COMPONENTS*.md
+*_DOCUMENTATION*.md
+*_IMPROVEMENTS*.md
+*_INNOVATIONS*.md
+*_IMPLEMENTATION*.md
+*_RESULTS*.md
+*_BLOCKER*.md
+*_COMPLETE*.md
+*_WIN_*.md
+methodology.md
 
 # Logs
 logs/
@@ -66,6 +78,21 @@ nul
 *.temp
 .cache/
 .serena/
+temp_*.txt
+temp_*.md
+mermaid-*.png
+mermaid-*.svg
+
+# AI Agent / MCP Tools (internal development only)
+.claude/
+.magg/
+.playwright-mcp/
+
+# Debug / Development artifacts
+docs-site/*.png
+docs-site/*.ps1
+docs-site/public/models/*.tsx
+docs-site/public/models/README.md
 
 # Testing & Development
 .pytest_cache/
