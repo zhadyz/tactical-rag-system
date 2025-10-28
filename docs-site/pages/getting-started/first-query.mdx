@@ -1,0 +1,259 @@
+---
+title: Your First Query
+description: Learn how to execute queries in Apollo RAG and understand the response format
+---
+
+import { Callout } from '../../components/Callout'
+
+# Your First Query
+
+This guide walks you through executing your first RAG query, understanding the 26-stage query pipeline, and exploring different retrieval modes.
+
+## Prerequisites
+
+Before making your first query, ensure:
+
+- Apollo backend is running (`docker compose up -d`)
+- At least one document has been indexed
+- Health check returns `healthy` status:
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+<Callout type="info">
+  The backend must be fully initialized before processing queries. Initial startup takes 20-30 seconds as models are loaded into memory.
+</Callout>
+
+## Basic Query (Simple Mode)
+
+The simplest way to query Apollo is using **Simple Mode**, which performs direct dense vector search without query transformations.
+
+### Request Format
+
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What are the key features of Apollo RAG?",
+    "mode": "simple",
+    "use_context": true
+  }'
+```
+
+### Expected Response
+
+```json
+{
+  "answer": "Apollo RAG is a high-performance retrieval system with the following key features:\n\n1. **Multi-stage caching** - Implements L1-L5 caching with exact, normalized, and semantic matching\n2. **Adaptive retrieval** - Routes queries through simple, hybrid, or advanced strategies\n3. **Hot model swapping** - Switch LLMs at runtime without restarting\n4. **GPU acceleration** - Uses llama.cpp for 80-100 tok/s inference\n5. **Dual vector stores** - Supports both ChromaDB and Qdrant\n\nThe system achieves 8-15 second query latency in simple mode and ~50ms for cache hits.",
+  "sources": [
+    {
+      "file_name": "backend_analysis.json",
+      "chunk_id": "chunk_12",
+      "content": "Apollo RAG features multi-stage caching...",
+      "relevance_score": 0.89
+    }
+  ],
+  "metadata": {
+    "processing_time_ms": 8340,
+    "cache_hit": false,
+    "strategy_used": "simple",
+    "query_type": "simple",
+    "confidence_score": 0.85
+  }
+}
+```
+
+### Response Timing
+
+- **Cache hit**: ~50-100ms (Redis lookup)
+- **Cache miss (Simple mode)**: 8-15 seconds
+- **Cache miss (Adaptive mode)**: 10-25 seconds
+
+<Callout type="tip">
+  Enable conversation memory with `use_context: true` to maintain context across multiple queries in a session.
+</Callout>
+
+## Understanding the Response
+
+### Answer Field
+The `answer` field contains the LLM-generated response based on retrieved context. It's formatted in markdown and includes citations to source documents.
+
+### Sources Array
+Each source includes:
+- `file_name`: Original document name
+- `chunk_id`: Unique chunk identifier
+- `content`: Relevant text passage (truncated for display)
+- `relevance_score`: Similarity score (0.0-1.0)
+
+### Metadata Object
+The `metadata` provides insights into query processing:
+- `processing_time_ms`: Total execution time in milliseconds
+- `cache_hit`: Whether result came from cache
+- `strategy_used`: Retrieval strategy applied (simple/hybrid/advanced)
+- `query_type`: Query classification (simple/moderate/complex)
+- `confidence_score`: Answer reliability (0.0-1.0)
+
+## Query Modes Explained
+
+Apollo supports three retrieval modes, each optimized for different query types:
+
+### Simple Mode
+**Best for**: Most queries, speed-critical applications
+
+```json
+{
+  "question": "What is the startup time?",
+  "mode": "simple"
+}
+```
+
+**Characteristics**:
+- Single dense vector search
+- No query transformations
+- Top-k: 3 documents
+- Latency: 8-15 seconds
+
+### Hybrid Mode
+**Best for**: Moderate complexity queries, balanced performance
+
+```json
+{
+  "question": "Compare the caching strategies in Apollo",
+  "mode": "adaptive"
+}
+```
+
+**Characteristics**:
+- Dense + sparse (BM25) retrieval
+- Reciprocal Rank Fusion (RRF)
+- Top-k: 20 documents
+- Latency: 10-18 seconds
+
+<Callout type="info">
+  Adaptive mode automatically selects Hybrid mode for queries classified as "moderate complexity".
+</Callout>
+
+### Advanced Mode
+**Best for**: Complex, ambiguous, or multi-faceted queries
+
+```json
+{
+  "question": "Explain the relationship between query transformations, reranking, and confidence scoring",
+  "mode": "adaptive"
+}
+```
+
+**Characteristics**:
+- HyDE (Hypothetical Document Embeddings)
+- Multi-query expansion (3-4 variants)
+- BGE reranker + LLM reranking
+- Cross-encoder scoring
+- Top-k: 15 documents
+- Latency: 15-25 seconds
+
+## Advanced Query Example
+
+Here's an example using all available parameters:
+
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How does Apollo achieve sub-second cache hits while maintaining high accuracy?",
+    "mode": "adaptive",
+    "use_context": true,
+    "rerank_preset": "quality"
+  }'
+```
+
+### Rerank Presets
+
+- `speed` (quick): Top 2 documents, minimal reranking
+- `quality` (balanced): Top 3 documents, BGE + LLM reranking
+- `deep`: Top 5 documents, full reranking pipeline
+
+<Callout type="warning">
+  Higher rerank presets increase latency but improve answer quality. Use `speed` for interactive applications.
+</Callout>
+
+## Query Pipeline Overview
+
+Apollo processes queries through a sophisticated 26-stage pipeline:
+
+### Core Stages
+
+- **Input Validation** - Sanitization, prompt injection detection
+- **Rate Limiting** - 30 requests per 60 seconds per IP
+- **Cache Lookup** - Three-tier cache check (exact → normalized → semantic)
+- **Query Classification** - Determines complexity (simple/moderate/complex)
+- **Embedding Generation** - 1024-dim vectors via BGE-large-en-v1.5
+- **Query Transformations** - HyDE, multi-query expansion (if adaptive)
+- **Vector Search** - Dense search via Qdrant/ChromaDB
+- **Sparse Retrieval** - BM25 keyword matching (if hybrid)
+- **RRF Fusion** - Merges dense and sparse results
+- **BGE Reranking** - Fast neural reranking (60ms for 32 docs)
+- **LLM Reranking** - Relevance scoring via LLM (if quality/deep preset)
+- **Context Enhancement** - Injects conversation memory
+- **Prompt Construction** - Builds RAG prompt with sources
+- **LLM Generation** - 80-100 tok/s via llama.cpp
+- **Confidence Scoring** - Evaluates answer reliability
+- **Cache Storage** - Stores result for future queries
+- **Conversation Memory** - Persists Q&A turn with 1-hour TTL
+
+<Callout type="tip">
+  View full pipeline details in the [Architecture section](/architecture/overview#query-pipeline).
+</Callout>
+
+## Troubleshooting Common Issues
+
+### "Backend not responding"
+**Cause**: Backend not fully initialized or crashed
+
+**Solution**:
+```bash
+# Check health status
+curl http://localhost:8000/api/health
+
+# View logs
+docker logs atlas-backend --tail 50
+
+# Restart if needed
+docker compose restart atlas-backend
+```
+
+### "No documents found"
+**Cause**: Vector database is empty
+
+**Solution**:
+```bash
+# Upload documents
+curl -X POST http://localhost:8000/api/documents/upload \
+  -F "file=@/path/to/document.pdf"
+
+# Trigger reindexing
+curl -X POST http://localhost:8000/api/documents/reindex
+```
+
+### "Query timeout after 30s"
+**Cause**: Complex query exceeding timeout threshold
+
+**Solution**:
+- Use `simple` mode instead of `adaptive`
+- Reduce `rerank_preset` to `speed`
+- Check if LLM is responding (test with short query)
+
+### Low confidence scores (less than 0.4)
+**Cause**: Insufficient relevant documents or poor query match
+
+**Solution**:
+- Rephrase query to be more specific
+- Add more relevant documents to the knowledge base
+- Try `adaptive` mode with HyDE for abstract queries
+
+## Next Steps
+
+- [API Reference](/api-reference) - Complete endpoint documentation
+- [Configuration](/getting-started/configuration) - Tune retrieval parameters
+- [Architecture](/architecture/overview) - Deep dive into the query pipeline
+- [Advanced Topics](/advanced/deployment) - Performance optimization and deployment

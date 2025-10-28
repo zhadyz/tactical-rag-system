@@ -1,0 +1,527 @@
+---
+title: Adaptive Retrieval
+description: Learn how Apollo RAG intelligently adapts retrieval strategies based on query complexity for optimal speed-accuracy balance
+---
+
+import { Callout } from 'nextra/components'
+
+# Adaptive Retrieval
+
+Apollo RAG features an intelligent **adaptive retrieval system** that automatically selects the optimal search strategy based on query complexity. The system balances speed and accuracy by choosing between three distinct modes: Simple, Hybrid, and Advanced.
+
+## Overview
+
+Traditional RAG systems use a single retrieval approach for all queries, leading to either slow performance or poor accuracy. Apollo's adaptive retrieval solves this by:
+
+- **Classifying query complexity** using LLM-based analysis
+- **Routing to appropriate strategy** (simple, hybrid, or advanced)
+- **Optimizing latency** while maintaining quality
+- **Providing manual overrides** when needed
+
+## Retrieval Modes
+
+### Simple Mode
+
+**Fast, single-pass retrieval for straightforward queries**
+
+Simple mode performs a single dense vector search without transformations or reranking, making it ideal for speed-critical applications.
+
+#### Characteristics
+
+```yaml
+Latency: 2-3 seconds (retrieval only)
+Top-k: 3 documents
+Strategy: Dense vector search only
+Use Case: Most queries, when speed is critical
+```
+
+#### Performance Breakdown
+
+- **Query Embedding**: 50ms (CPU, BGE-large-en-v1.5)
+- **Vector Search**: 100ms (Qdrant HNSW @ 1M docs)
+- **No Reranking**: Skipped
+- **Total Retrieval**: ~150ms
+
+#### When to Use
+
+<Callout type="info">
+Simple mode is ideal for:
+- Factual lookup queries ("What is X?")
+- Direct questions with clear intent
+- High-frequency queries requiring fast response
+- Queries where top results are typically sufficient
+</Callout>
+
+#### API Example
+
+```typescript
+const response = await fetch('http://localhost:8000/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    question: "What is the system architecture?",
+    mode: "simple",
+    use_context: true
+  })
+});
+```
+
+---
+
+### Hybrid Mode
+
+**Balanced retrieval with dense + sparse fusion**
+
+Hybrid mode combines dense vector search with sparse BM25 keyword matching, using Reciprocal Rank Fusion (RRF) to merge results. This provides better recall for queries with specific terminology.
+
+#### Characteristics
+
+```yaml
+Latency: 4-6 seconds (retrieval only)
+Top-k: 20 documents (fused to 3)
+Strategy: Dense + Sparse (BM25) with RRF
+Use Case: Moderate complexity queries
+```
+
+#### Performance Breakdown
+
+- **Query Embedding**: 50ms
+- **Dense Search**: 100ms (vector similarity)
+- **Sparse Search**: 80ms (BM25 keyword matching)
+- **RRF Fusion**: 120ms (merge + rank)
+- **Total Retrieval**: ~350ms
+
+#### Reciprocal Rank Fusion
+
+```python
+# RRF Formula
+score(doc) = sum(1 / (k + rank_i)) for each retrieval
+# where k=60 (constant), rank_i = position in retrieval i
+```
+
+**Advantages**:
+- Rank-based (no score normalization needed)
+- Simple and robust to outliers
+- Combines semantic and keyword signals
+
+#### When to Use
+
+<Callout type="success">
+Hybrid mode excels at:
+- Queries with technical jargon or acronyms
+- Domain-specific terminology searches
+- Queries requiring exact keyword matches
+- Cases where both semantic and lexical matching matter
+</Callout>
+
+#### API Example
+
+```typescript
+const response = await fetch('http://localhost:8000/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    question: "How does CUDA acceleration work in llama.cpp?",
+    mode: "hybrid",
+    use_context: true
+  })
+});
+```
+
+---
+
+### Advanced Mode
+
+**Comprehensive retrieval with transformations and reranking**
+
+Advanced mode employs the full retrieval pipeline: query classification, multi-query expansion, HyDE (Hypothetical Document Embeddings), and multi-stage reranking.
+
+#### Characteristics
+
+```yaml
+Latency: 8-12 seconds (retrieval only)
+Top-k: 15 documents (reranked to 3)
+Strategy: Multi-query + HyDE + BGE + LLM reranking
+Use Case: Complex/ambiguous queries
+```
+
+#### Performance Breakdown
+
+- **Query Classification**: 200ms (LLM determines complexity)
+- **Multi-Query Expansion**: 300ms (generates 3-4 variants)
+- **HyDE Generation**: 800ms (LLM creates hypothetical answer)
+- **Dense + Sparse Search**: 300ms
+- **BGE Reranking**: 60ms (GPU, 32 docs)
+- **LLM Reranking**: 400ms (top 3 docs)
+- **Cross-Encoder Scoring**: 100ms
+- **Total Retrieval**: ~2.2 seconds
+
+#### Query Transformations
+
+**1. Multi-Query Expansion**
+
+Generates 3-4 query variants from different angles to improve recall:
+
+```python
+Original: "How does caching improve performance?"
+
+Variants:
+- "What caching strategies reduce latency?"
+- "Explain the impact of cache layers on speed"
+- "How do multi-tier caches optimize queries?"
+```
+
+**2. HyDE (Hypothetical Document Embeddings)**
+
+Creates a fake answer to the query for better semantic matching:
+
+```python
+Query: "What is parallel initialization?"
+
+HyDE Output:
+"Parallel initialization is a technique where independent components
+load concurrently using asyncio.gather(), reducing startup time by
+3.4x (78s → 23s)."
+
+# Embed this hypothetical answer for better retrieval
+```
+
+**3. Multi-Stage Reranking**
+
+```yaml
+Stage 1 - BGE Reranker:
+  Model: BAAI/bge-reranker-v2-m3
+  Speed: 60ms for 32 docs (85% faster than LLM)
+  Device: CUDA
+  Purpose: Fast first-pass relevance scoring
+
+Stage 2 - LLM Reranker:
+  Speed: 400ms for 3 docs
+  Purpose: Semantic relevance verification
+  Presets: quick (2 docs), quality (3 docs), deep (5 docs)
+
+Stage 3 - Cross-Encoder:
+  Model: cross-encoder/ms-marco-MiniLM-L-12-v2
+  Device: CPU (PyTorch sm_120 workaround)
+  Purpose: Final confidence scoring
+```
+
+#### When to Use
+
+<Callout type="warning">
+Advanced mode is best for:
+- Ambiguous or complex questions
+- Queries requiring deep understanding
+- Cases where accuracy > speed
+- Research or exploratory queries
+- Multi-faceted questions
+</Callout>
+
+#### API Example
+
+```typescript
+const response = await fetch('http://localhost:8000/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    question: "Compare the performance implications of KV cache preservation vs. speculative decoding",
+    mode: "adaptive", // Let system decide, or use "advanced"
+    use_context: true,
+    rerank_preset: "deep" // Use 5 docs for LLM reranking
+  })
+});
+```
+
+---
+
+## Mode Comparison
+
+| Feature | Simple | Hybrid | Advanced |
+|---------|--------|--------|----------|
+| **Latency** | 50-100ms | 150-300ms | 400-800ms |
+| **Dense Search** | ✅ | ✅ | ✅ |
+| **Sparse (BM25)** | ❌ | ✅ | ✅ |
+| **RRF Fusion** | ❌ | ✅ | ✅ |
+| **Multi-Query** | ❌ | ❌ | ✅ |
+| **HyDE** | ❌ | ❌ | ✅ |
+| **BGE Reranking** | ❌ | ❌ | ✅ |
+| **LLM Reranking** | ❌ | ❌ | ✅ |
+| **Top-k Retrieved** | 3 | 20 → 3 | 15 → 3 |
+| **Accuracy** | Good | Better | Best |
+| **Cost** | Low | Medium | High |
+
+---
+
+## Automatic Mode Selection
+
+When `mode: "adaptive"` is specified, Apollo uses LLM-based query classification to automatically select the optimal strategy.
+
+### Classification Logic
+
+```python
+# backend/_src/query_transformations.py
+
+def classify_query(question: str) -> QueryType:
+    """
+    Classifies queries into: simple, moderate, complex
+    """
+    prompt = f"""
+    Classify this query's complexity:
+
+    Question: {question}
+
+    Categories:
+    - simple: Direct factual lookup, clear intent
+    - moderate: Requires context, some ambiguity
+    - complex: Multi-faceted, abstract, or ambiguous
+
+    Classification:
+    """
+
+    classification = llm.generate(prompt, temperature=0.0)
+    return parse_classification(classification)
+```
+
+### Routing Decision
+
+```yaml
+Simple Query Detection:
+  - Single fact lookup ("What is X?")
+  - Clear, unambiguous phrasing
+  - No comparative/analytical intent
+  → Route to Simple Mode
+
+Moderate Query Detection:
+  - Technical terminology present
+  - Requires contextual understanding
+  - Moderate ambiguity
+  → Route to Hybrid Mode
+
+Complex Query Detection:
+  - Multi-part questions
+  - Comparative analysis needed
+  - Abstract concepts
+  - "How" or "Why" questions with depth
+  → Route to Advanced Mode
+```
+
+### Example Classifications
+
+```typescript
+// Simple queries (→ Simple Mode)
+"What is the GPU acceleration model?"
+"List the caching layers"
+"Define HyDE"
+
+// Moderate queries (→ Hybrid Mode)
+"How does llama.cpp integrate with CUDA?"
+"What are the performance metrics for Qdrant?"
+"Explain the BM25 scoring algorithm"
+
+// Complex queries (→ Advanced Mode)
+"Compare the trade-offs between KV cache preservation and speculative decoding"
+"Why does adaptive retrieval outperform static strategies?"
+"How do the caching layers interact to optimize query latency?"
+```
+
+---
+
+## Manual Mode Override
+
+You can force a specific retrieval strategy by setting the `mode` parameter:
+
+```typescript
+// Force simple mode (fastest)
+await queryAPI({
+  question: "...",
+  mode: "simple"
+});
+
+// Force hybrid mode (balanced)
+await queryAPI({
+  question: "...",
+  mode: "hybrid"
+});
+
+// Force advanced mode (best quality)
+await queryAPI({
+  question: "...",
+  mode: "advanced",
+  rerank_preset: "deep" // Optional: deep reranking
+});
+
+// Let system decide (default)
+await queryAPI({
+  question: "...",
+  mode: "adaptive"
+});
+```
+
+---
+
+## Performance Trade-offs
+
+### Speed vs. Accuracy
+
+```yaml
+Simple Mode:
+  Speed: ⭐⭐⭐⭐⭐ (50-100ms)
+  Accuracy: ⭐⭐⭐ (Good for direct queries)
+  Best for: High-volume, latency-sensitive applications
+
+Hybrid Mode:
+  Speed: ⭐⭐⭐⭐ (150-300ms)
+  Accuracy: ⭐⭐⭐⭐ (Better recall)
+  Best for: Balanced use cases
+
+Advanced Mode:
+  Speed: ⭐⭐ (400-800ms)
+  Accuracy: ⭐⭐⭐⭐⭐ (Best quality)
+  Best for: Research, complex analysis
+```
+
+### Cache Impact
+
+All modes benefit from multi-level caching:
+
+```yaml
+L1 Query Cache (Redis):
+  Hit: less than 1ms (98% reduction)
+  Miss: Fall through to retrieval
+
+L2 Embedding Cache (Redis):
+  Hit: less than 1ms
+  Miss: 50-100ms (BGE-large computation)
+
+Cache Hit Rate: 60-80% in production
+```
+
+---
+
+## Configuration Examples
+
+### Default Configuration
+
+```python
+# backend/_src/config.py
+
+class RetrievalConfig:
+    # Simple mode
+    simple_top_k: int = 3
+
+    # Hybrid mode
+    hybrid_top_k: int = 20
+    hybrid_bm25_weight: float = 0.3
+    hybrid_dense_weight: float = 0.7
+
+    # Advanced mode
+    advanced_top_k: int = 15
+    multi_query_variants: int = 3
+    hyde_enabled: bool = True
+    hyde_temperature: float = 0.3
+
+    # Reranking
+    bge_rerank_top_n: int = 32
+    llm_rerank_presets: dict = {
+        "quick": 2,
+        "quality": 3,
+        "deep": 5
+    }
+```
+
+### Custom Configuration
+
+```typescript
+// Update settings via API
+await fetch('http://localhost:8000/api/settings', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    retrieval_settings: {
+      simple_top_k: 5,
+      hybrid_top_k: 30,
+      advanced_top_k: 20,
+      multi_query_variants: 4,
+      hyde_temperature: 0.5
+    }
+  })
+});
+```
+
+---
+
+## Use Case Recommendations
+
+### Chatbot / FAQ System
+
+```typescript
+// High volume, fast responses
+mode: "simple"
+use_context: true
+rerank_preset: "quick"
+```
+
+<Callout>
+**Rationale**: Users expect instant responses. Simple mode provides good accuracy for common questions with minimal latency.
+</Callout>
+
+### Technical Documentation Search
+
+```typescript
+// Technical terms, balanced speed
+mode: "hybrid"
+use_context: true
+rerank_preset: "quality"
+```
+
+<Callout>
+**Rationale**: Technical jargon benefits from BM25 keyword matching while maintaining reasonable speed.
+</Callout>
+
+### Research Assistant
+
+```typescript
+// Deep analysis, best quality
+mode: "advanced"
+use_context: true
+rerank_preset: "deep"
+```
+
+<Callout>
+**Rationale**: Research queries are complex and ambiguous. Advanced mode's multi-query expansion and HyDE improve recall significantly.
+</Callout>
+
+### Automatic (Recommended)
+
+```typescript
+// Let Apollo decide
+mode: "adaptive"
+use_context: true
+rerank_preset: "quality"
+```
+
+<Callout type="success">
+**Recommended**: For most applications, use adaptive mode to automatically balance speed and accuracy based on query complexity.
+</Callout>
+
+---
+
+## Next Steps
+
+- [Model Management](/core-concepts/model-management) - Learn about hot-swappable LLM models
+- [Caching Architecture](/core-concepts/caching) - Understand the L1-L5 cache layers
+- [API Reference](/api-reference) - Explore all query parameters
+
+---
+
+## Summary
+
+Apollo's adaptive retrieval system provides:
+
+- **Three distinct modes** (Simple, Hybrid, Advanced) optimized for different use cases
+- **Automatic classification** to select the best strategy per query
+- **Manual overrides** for fine-grained control
+- **Performance trade-offs** clearly documented (50ms to 800ms)
+- **Production-grade** caching and optimization
+
+Choose simple mode for speed, advanced mode for accuracy, or let the adaptive system decide for you.

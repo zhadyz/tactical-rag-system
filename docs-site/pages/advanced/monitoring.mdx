@@ -1,0 +1,513 @@
+---
+title: Monitoring & Observability
+description: Comprehensive guide to monitoring Apollo RAG performance, health, and system metrics for production deployments
+---
+
+import { Callout } from 'nextra/components'
+
+# Monitoring & Observability
+
+Apollo RAG includes built-in monitoring and observability features designed for production deployments. This guide covers metrics collection, health checks, performance profiling, and alerting strategies.
+
+## Monitoring Overview
+
+Apollo provides multi-layered observability across three critical dimensions:
+
+- **System Health**: Component status, resource usage, service availability
+- **Performance Metrics**: Query latency, throughput, cache hit rates
+- **Application Logs**: Structured JSON logs with timing breakdowns
+
+<Callout type="info">
+**Production Readiness**: Apollo uses structured JSON logging and rotating file handlers for offline analysis and field debugging.
+</Callout>
+
+## Metrics Collection
+
+### Key Metrics to Track
+
+Apollo automatically tracks performance metrics across the entire request pipeline:
+
+```typescript
+interface QueryMetrics {
+  // Timing Metrics
+  total_time_ms: number;           // End-to-end query latency
+  retrieval_time_ms: number;       // Document search time
+  generation_time_ms: number;      // LLM inference time
+  confidence_scoring_ms: number;   // Answer validation time
+
+  // Cache Metrics
+  cache_hit: boolean;              // Whether query hit cache
+  cache_latency_ms: number;        // Cache lookup time (typically less than 1ms)
+
+  // Retrieval Metrics
+  num_sources: number;             // Documents retrieved
+  retrieval_mode: string;          // simple | adaptive
+  rerank_preset: string;           // quick | quality | deep
+
+  // Quality Metrics
+  confidence_score: number;        // Answer confidence (0-1)
+  retrieval_quality: number;       // Source relevance score
+}
+```
+
+### Performance Breakdown
+
+Apollo's `StageTimer` tracks timing at each pipeline stage:
+
+```python
+# backend/app/utils/timing.py
+class StageTimer:
+    """Track timing for different processing stages"""
+
+    def get_breakdown(self) -> Dict:
+        """Get timing breakdown with percentages"""
+        return {
+            "total_ms": 8542.3,
+            "stages": {
+                "cache_lookup": {"time_ms": 0.86, "percentage": 0.01},
+                "embedding": {"time_ms": 52.4, "percentage": 0.61},
+                "vector_search": {"time_ms": 103.2, "percentage": 1.21},
+                "reranking": {"time_ms": 487.5, "percentage": 5.71},
+                "generation": {"time_ms": 7842.1, "percentage": 91.8},
+                "confidence": {"time_ms": 56.3, "percentage": 0.66}
+            },
+            "unaccounted_ms": 0.0,
+            "unaccounted_percentage": 0.0
+        }
+```
+
+### Cache Performance Metrics
+
+Monitor cache effectiveness to optimize memory usage:
+
+```python
+# L1 Query Cache Metrics
+{
+  "cache_hits": 847,
+  "cache_misses": 153,
+  "hit_rate": 0.847,          # 84.7% hit rate
+  "avg_hit_latency_ms": 0.86,
+  "cache_size_mb": 45.2,
+  "ttl_seconds": 604800       # 7 days
+}
+
+# L2 Embedding Cache Metrics
+{
+  "cache_hits": 2456,
+  "cache_misses": 544,
+  "hit_rate": 0.819,          # 81.9% hit rate
+  "avg_hit_latency_ms": 0.42,
+  "latency_reduction": 0.98,  # 98% faster than compute
+  "cache_size_mb": 128.7
+}
+```
+
+<Callout type="tip">
+**Target Hit Rates**: Aim for 60-80% query cache hit rate and 70-90% embedding cache hit rate in production.
+</Callout>
+
+## Health Check Endpoints
+
+### `/api/health` - System Health
+
+The primary health check endpoint returns component status:
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+```json
+{
+  "status": "healthy",  // healthy | degraded | unhealthy | initializing
+  "message": "All components operational",
+  "components": {
+    "vectorstore": "ready",
+    "llm": "ready",
+    "bm25_retriever": "ready",
+    "cache": "ready",
+    "conversation_memory": "ready"
+  }
+}
+```
+
+### Component Status States
+
+| Status | Description | Action Required |
+|--------|-------------|-----------------|
+| `ready` | Component fully operational | None |
+| `degraded` | Component working with reduced functionality | Monitor closely |
+| `offline` | Component unavailable | Restart required |
+| `initializing` | Component starting up | Wait 20-30 seconds |
+
+### Docker Health Checks
+
+Health checks are configured in `docker-compose.atlas.yml`:
+
+```yaml
+services:
+  atlas-backend:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 15s        # Check every 15 seconds
+      timeout: 5s          # Timeout after 5 seconds
+      start_period: 45s    # Grace period for startup
+      retries: 3           # Mark unhealthy after 3 failures
+```
+
+## Performance Profiling
+
+### Identifying Bottlenecks
+
+Use the timing breakdown to identify performance bottlenecks:
+
+```python
+# Example: Analyze query timing
+timing_breakdown = response.metadata.timing
+
+# Find slowest stage
+slowest_stage = max(
+    timing_breakdown["stages"].items(),
+    key=lambda x: x[1]["time_ms"]
+)
+
+print(f"Bottleneck: {slowest_stage[0]} took {slowest_stage[1]['time_ms']}ms")
+# Output: Bottleneck: generation took 7842.1ms (91.8%)
+```
+
+### Common Bottlenecks and Solutions
+
+| Bottleneck | Typical % | Optimization Strategy |
+|------------|-----------|----------------------|
+| **LLM Generation** | 85-95% | Use smaller models, enable KV cache preservation, enable speculative decoding |
+| **Reranking** | 5-15% | Use BGE reranker instead of LLM, reduce rerank_preset to "quick" |
+| **Vector Search** | 1-3% | Optimize HNSW parameters, add more RAM, enable embedding cache |
+| **Embedding** | 0.5-2% | Enable embedding cache (98% latency reduction) |
+
+### Query Latency Targets
+
+```yaml
+Cache Hit:
+  Target: less than 100ms
+  Actual: 50-100ms
+  Status: ✓ On target
+
+Cache Miss (Simple Mode):
+  Target: less than 15s
+  Actual: 8-15s
+  Status: ✓ On target
+
+Cache Miss (Adaptive Mode):
+  Target: less than 25s
+  Actual: 10-25s
+  Status: ✓ On target
+```
+
+## GPU Monitoring
+
+### NVIDIA GPU Metrics
+
+Monitor GPU utilization and VRAM usage:
+
+```bash
+# Real-time GPU monitoring
+nvidia-smi --query-gpu=timestamp,name,utilization.gpu,utilization.memory,memory.used,memory.total --format=csv -l 1
+
+# Example output:
+# timestamp, name, utilization.gpu [%], utilization.memory [%], memory.used [MiB], memory.total [MiB]
+# 2025/10/28 15:30:42, NVIDIA GeForce RTX 5080, 98%, 87%, 14234 MiB, 16384 MiB
+```
+
+### VRAM Usage Patterns
+
+```yaml
+Idle State:
+  VRAM: 6GB (model loaded)
+  GPU Util: less than 5%
+
+Active Query (Simple):
+  VRAM: 6-7GB
+  GPU Util: 90-100%
+  Duration: 8-12s
+
+Active Query (Adaptive):
+  VRAM: 8-10GB
+  GPU Util: 85-95%
+  Duration: 10-15s
+
+Model Switch:
+  VRAM Peak: 14GB (old + new model briefly)
+  GPU Util: 60-80%
+  Duration: 15-30s
+```
+
+<Callout type="warning">
+**VRAM Monitoring**: If VRAM usage exceeds 90%, model swaps may fail. Monitor `nvidia-smi` during model switching operations.
+</Callout>
+
+### GPU Monitoring Script
+
+```python
+# Monitor GPU metrics programmatically
+import subprocess
+import json
+from datetime import datetime
+
+def get_gpu_metrics():
+    """Query GPU metrics using nvidia-smi"""
+    result = subprocess.run([
+        'nvidia-smi',
+        '--query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu',
+        '--format=csv,noheader,nounits'
+    ], capture_output=True, text=True)
+
+    metrics = result.stdout.strip().split(', ')
+
+    return {
+        "timestamp": datetime.utcnow().isoformat() + 'Z',
+        "gpu_utilization_percent": int(metrics[0]),
+        "memory_utilization_percent": int(metrics[1]),
+        "memory_used_mb": int(metrics[2]),
+        "memory_total_mb": int(metrics[3]),
+        "temperature_celsius": int(metrics[4])
+    }
+```
+
+## Logging Architecture
+
+### Structured JSON Logging
+
+Apollo uses structured JSON logging for production deployments:
+
+```json
+{
+  "timestamp": "2025-10-28T15:30:42.123Z",
+  "level": "INFO",
+  "service": "atlas-protocol-backend",
+  "environment": "production",
+  "process_id": 42,
+  "thread_id": 140235,
+  "source": {
+    "file": "/app/app/core/rag_engine.py",
+    "line": 487,
+    "function": "query"
+  },
+  "message": "Query processed successfully",
+  "metadata": {
+    "query_length": 45,
+    "cache_hit": false,
+    "mode": "simple",
+    "total_time_ms": 8542.3
+  }
+}
+```
+
+### Log Files
+
+```bash
+logs/
+├── atlas-protocol.log          # All logs (rotating, 100MB per file, 10 backups)
+├── atlas-protocol-errors.log   # Errors only (rotating, 50MB per file, 5 backups)
+└── performance-metrics.jsonl   # Performance metrics (append-only)
+```
+
+### Performance Metrics Logging
+
+```python
+# backend/app/core/logging_config.py
+from app.core.logging_config import get_performance_logger
+
+perf_logger = get_performance_logger()
+
+# Log query performance
+perf_logger.log_query_performance(
+    query="What is RAG?",
+    response_time=8.542,
+    retrieval_time=0.156,
+    generation_time=7.842,
+    cache_hit=False,
+    num_sources=3,
+    mode="simple",
+    metadata={
+        "confidence_score": 0.87,
+        "model": "llama-8b-q5"
+    }
+)
+
+# Log system health
+perf_logger.log_system_health(
+    memory_usage_mb=12345,
+    cpu_percent=45.2,
+    gpu_memory_mb=8192,
+    active_connections=12,
+    cache_size_mb=173.9,
+    metadata={
+        "gpu_temp_celsius": 68,
+        "cache_hit_rate": 0.847
+    }
+)
+```
+
+## Alerting Strategies
+
+### Critical Alerts (Immediate Response)
+
+```yaml
+Component Down:
+  Trigger: Health check returns "offline" for any component
+  Threshold: 3 consecutive failures
+  Response: Restart container, check logs
+
+VRAM Exhaustion:
+  Trigger: GPU memory > 90%
+  Threshold: Sustained for 30 seconds
+  Response: Cancel in-flight queries, restart service
+
+API Errors:
+  Trigger: 5xx error rate > 5%
+  Threshold: Over 5-minute window
+  Response: Check logs, restart if needed
+```
+
+### Warning Alerts (Monitor Closely)
+
+```yaml
+High Latency:
+  Trigger: p95 query latency > 30s
+  Threshold: Over 15-minute window
+  Response: Review slow query logs, check GPU utilization
+
+Cache Hit Rate Drop:
+  Trigger: Query cache hit rate < 40%
+  Threshold: Over 1-hour window
+  Response: Check cache TTL, Redis memory
+
+Resource Pressure:
+  Trigger: RAM usage > 80% or CPU > 90%
+  Threshold: Sustained for 5 minutes
+  Response: Scale resources or optimize queries
+```
+
+## Dashboard Integration
+
+### Prometheus Metrics (Future)
+
+Apollo is designed for Prometheus integration:
+
+```python
+# Example Prometheus metrics (to be implemented)
+from prometheus_client import Counter, Histogram, Gauge
+
+# Query metrics
+query_total = Counter('apollo_queries_total', 'Total queries processed', ['mode', 'cache_hit'])
+query_latency = Histogram('apollo_query_latency_seconds', 'Query latency', ['mode'])
+cache_hit_rate = Gauge('apollo_cache_hit_rate', 'Cache hit rate')
+
+# System metrics
+gpu_memory_used = Gauge('apollo_gpu_memory_mb', 'GPU memory usage in MB')
+active_connections = Gauge('apollo_active_connections', 'Active connections')
+```
+
+### Grafana Dashboard Example
+
+```json
+{
+  "dashboard": {
+    "title": "Apollo RAG Monitoring",
+    "panels": [
+      {
+        "title": "Query Latency (p50, p95, p99)",
+        "targets": ["apollo_query_latency_seconds"],
+        "type": "graph"
+      },
+      {
+        "title": "Cache Hit Rate",
+        "targets": ["apollo_cache_hit_rate"],
+        "type": "stat"
+      },
+      {
+        "title": "GPU Utilization",
+        "targets": ["nvidia_gpu_utilization"],
+        "type": "gauge"
+      },
+      {
+        "title": "Component Health",
+        "targets": ["apollo_component_status"],
+        "type": "stat"
+      }
+    ]
+  }
+}
+```
+
+## Troubleshooting with Metrics
+
+### Scenario: High Query Latency
+
+**Symptoms**: p95 latency > 30s, slow user experience
+
+**Investigation**:
+- Check timing breakdown: `response.metadata.timing`
+- Identify bottleneck stage (usually generation)
+- Check GPU utilization: `nvidia-smi`
+- Review model size and quantization
+
+**Solution**:
+```bash
+# Option 1: Switch to smaller/faster model
+curl -X POST http://localhost:8000/api/models/select \
+  -H "Content-Type: application/json" \
+  -d '{"model_id": "llama-8b-q5"}'  # Faster than qwen-14b-q8
+
+# Option 2: Enable speculative decoding (40% speedup)
+# Requires draft model configuration in backend
+
+# Option 3: Reduce rerank preset
+# Change from "deep" to "quality" or "quick"
+```
+
+### Scenario: Low Cache Hit Rate
+
+**Symptoms**: Cache hit rate < 40%, high query latency
+
+**Investigation**:
+- Check cache TTL: Default 7 days may be too short
+- Review query patterns: Are queries truly similar?
+- Check Redis memory: Cache may be evicting entries
+
+**Solution**:
+```python
+# Increase cache TTL
+cache_manager.config.query_cache_ttl_seconds = 1209600  # 14 days
+
+# Adjust semantic similarity threshold
+cache_manager.config.semantic_similarity_threshold = 0.90  # More lenient
+```
+
+### Scenario: Component Degraded
+
+**Symptoms**: Health check returns "degraded" status
+
+**Investigation**:
+- Check component status: `curl http://localhost:8000/api/health`
+- Review logs: `tail -f logs/atlas-protocol-errors.log`
+- Check dependencies: Redis, Qdrant connections
+
+**Solution**:
+```bash
+# Restart Redis
+docker-compose restart redis
+
+# Restart Qdrant
+docker-compose restart qdrant
+
+# Restart backend
+docker-compose restart atlas-backend
+```
+
+---
+
+## Next Steps
+
+- [Deployment Guide](/advanced/deployment) - Production deployment strategies
+- [Configuration Guide](/getting-started/configuration) - Fine-tuning for maximum speed
+- [Troubleshooting](/advanced/troubleshooting) - Common issues and solutions

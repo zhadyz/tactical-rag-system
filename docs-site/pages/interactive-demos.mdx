@@ -3,14 +3,30 @@ title: Interactive Demos - Apollo RAG
 description: Experience Apollo's revolutionary capabilities through stunning interactive demonstrations
 ---
 
-import { PerformanceRace } from '@/components/interactive/PerformanceRace'
-import { BenchmarkExplorer } from '@/components/interactive/BenchmarkExplorer'
-import { RAGPipelineVisualizer } from '@/components/interactive/RAGPipelineVisualizer'
+import dynamic from 'next/dynamic'
 import { DemosCTA } from '@/components/interactive/DemosCTA'
+import { Footer } from '@/components/Footer'
+import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 
-# Interactive Demonstrations
+export const PerformanceRace = dynamic(
+  () => import('@/components/interactive/PerformanceRace').then(mod => ({ default: mod.PerformanceRace })),
+  { ssr: false, loading: () => <LoadingSkeleton /> }
+)
 
-Experience the power of Apollo RAG through revolutionary interactive visualizations that showcase our GPU-accelerated capabilities.
+export const BenchmarkExplorer = dynamic(
+  () => import('@/components/interactive/BenchmarkExplorer').then(mod => ({ default: mod.BenchmarkExplorer })),
+  { ssr: false, loading: () => <LoadingSkeleton /> }
+)
+
+export const RAGPipelineVisualizer = dynamic(
+  () => import('@/components/interactive/RAGPipelineVisualizer').then(mod => ({ default: mod.RAGPipelineVisualizer })),
+  { ssr: false, loading: () => <LoadingSkeleton /> }
+)
+
+export const GPUVisualizer = dynamic(
+  () => import('@/components/interactive/GPUVisualizer').then(mod => ({ default: mod.GPUVisualizer })),
+  { ssr: false, loading: () => <LoadingSkeleton /> }
+)
 
 <PerformanceRace />
 
@@ -18,6 +34,10 @@ Experience the power of Apollo RAG through revolutionary interactive visualizati
 
 <RAGPipelineVisualizer />
 
+<GPUVisualizer />
+
 ---
 
 <DemosCTA />
+
+<Footer />

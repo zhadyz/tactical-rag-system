@@ -3,39 +3,25 @@ import { DocsThemeConfig } from 'nextra-theme-docs'
 import { useRouter } from 'next/router'
 import { useConfig } from 'nextra-theme-docs'
 import { Zap, Github, Twitter } from 'lucide-react'
+import { CustomNavbar } from './components/CustomNavbar'
+import { Callout } from './components/Callout'
 
 const config: DocsThemeConfig = {
   logo: (
-    <div className="flex items-center gap-2 font-bold">
-      <Zap className="h-6 w-6 text-blue-600" />
-      <span className="text-xl">Apollo RAG</span>
-      <span className="ml-2 rounded-md bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+    <div className="flex items-center gap-3 font-bold">
+      <img src="/apollo-logo.png" alt="Apollo" className="h-16 w-16" />
+      <span className="text-xl">Apollo</span>
+      <span className="ml-2 rounded-md bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
         GPU
       </span>
     </div>
   ),
   project: {
-    link: 'https://github.com/yourusername/apollo-rag'
+    link: 'https://github.com/zhadyz/tactical-rag-system/tree/v4.2-production'
   },
-  chat: {
-    link: 'https://discord.gg/apollo-rag' // Update with your Discord
-  },
-  docsRepositoryBase: 'https://github.com/yourusername/apollo-rag/tree/main/docs-site',
+  docsRepositoryBase: 'https://github.com/zhadyz/tactical-rag-system/tree/v4.2-production/docs-site',
   footer: {
-    text: (
-      <div className="flex w-full flex-col items-center sm:items-start">
-        <div className="mb-2 flex items-center gap-2">
-          <Zap className="h-5 w-5 text-blue-600" />
-          <span className="font-semibold">Apollo RAG</span>
-        </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          GPU-Accelerated Document Intelligence © {new Date().getFullYear()}
-        </p>
-        <p className="mt-1 text-xs text-gray-500">
-          Built with Next.js + Nextra • Powered by CUDA
-        </p>
-      </div>
-    )
+    text: null
   },
   head: () => {
     const { asPath, defaultLocale, locale } = useRouter()
@@ -74,21 +60,7 @@ const config: DocsThemeConfig = {
   },
   // Navigation
   navbar: {
-    extraContent: () => {
-      return (
-        <div className="flex items-center gap-3">
-          <a
-            href="https://github.com/yourusername/apollo-rag"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-            aria-label="GitHub"
-          >
-            <Github className="h-5 w-5" />
-          </a>
-        </div>
-      )
-    }
+    extraContent: () => <CustomNavbar />
   },
   sidebar: {
     titleComponent({ title, type }) {
@@ -107,7 +79,7 @@ const config: DocsThemeConfig = {
       return (
         <div className="mt-8 border-t border-gray-200 pt-4 text-xs text-gray-600 dark:border-gray-800 dark:text-gray-400">
           <a
-            href="https://github.com/yourusername/apollo-rag/issues/new"
+            href="https://github.com/zhadyz/tactical-rag-system/issues/new"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-blue-600 dark:hover:text-blue-400"
@@ -143,14 +115,14 @@ const config: DocsThemeConfig = {
       </a>
     )
   },
-  // Git timestamp
-  gitTimestamp: ({ timestamp }) => (
-    <div className="text-xs text-gray-600 dark:text-gray-400">
-      Last updated: {timestamp.toLocaleDateString()}
-    </div>
-  ),
+  // Git timestamp - disabled
+  gitTimestamp: null,
   // Favicon
-  faviconGlyph: '⚡'
+  faviconGlyph: '⚡',
+  // MDX Components
+  components: {
+    Callout
+  }
 }
 
 export default config

@@ -1,0 +1,653 @@
+---
+title: Production Deployment
+description: Deploy Apollo RAG with Docker Compose, multi-stage builds, and GPU acceleration
+---
+
+import { Callout } from '@/components/Callout'
+
+# Production Deployment
+
+Deploy Apollo RAG to production with Docker Compose orchestration, GPU acceleration, and production-grade monitoring.
+
+<Callout type="warning">
+**Production Prerequisites**: Ensure you have Docker 24+, Docker Compose 2.20+, NVIDIA Container Toolkit, and at least 48GB RAM + 16GB GPU VRAM.
+</Callout>
+
+---
+
+## Deployment Overview
+
+Apollo's production deployment uses a **multi-container architecture** orchestrated via Docker Compose:
+
+- **atlas-backend**: FastAPI + RAG pipeline with GPU acceleration
+- **qdrant**: Vector database for semantic search
+- **redis**: Multi-tier caching layer
+- **prometheus**: Metrics collection and alerting
+- **grafana**: Visualization dashboards
+- **cadvisor**: Container resource monitoring
+
+### Architecture Benefits
+
+```yaml
+High Availability:
+  - Health checks with auto-restart
+  - Graceful degradation on component failure
+  - Service dependency management
+
+Performance:
+  - GPU-accelerated inference (80-100 tok/s)
+  - Multi-stage caching (98% latency reduction)
+  - Resource isolation and limits
+
+Observability:
+  - Prometheus metrics collection
+  - Grafana dashboards
+  - Structured JSON logging
+  - Container resource tracking
+```
+
+---
+
+## Docker Compose Setup
+
+### Service Architecture
+
+The complete stack is defined in `backend/docker-compose.atlas.yml`:
+
+```yaml
+# Network Configuration
+networks:
+  atlas-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# Persistent Storage
+volumes:
+  qdrant_storage:     # Vector database
+  redis_data:         # Cache persistence
+  prometheus_data:    # Metrics history
+  grafana_data:       # Dashboards
+
+services:
+  # Core RAG Service
+  atlas-backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.atlas
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - qdrant
+    deploy:
+      resources:
+        limits:
+          cpus: '14'
+          memory: 48G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+```
+
+### Starting the Stack
+
+```bash
+# Production deployment
+cd backend
+docker-compose -f docker-compose.atlas.yml up -d
+
+# View logs
+docker-compose logs -f atlas-backend
+
+# Check service health
+docker-compose ps
+curl http://localhost:8000/api/health
+
+# Stop all services
+docker-compose down
+
+# Stop with volume cleanup
+docker-compose down -v
+```
+
+<Callout type="info">
+**First Startup**: Initial startup takes 20-30 seconds for model loading and component initialization. Subsequent restarts are faster due to cached models.
+</Callout>
+
+---
+
+## Multi-Stage Docker Builds
+
+Apollo uses a **5-stage Dockerfile** for optimal caching and minimal image size (9GB, 52% reduction from baseline).
+
+### Build Stages
+
+```dockerfile
+# STAGE 1: Base Dependencies
+FROM python:3.11-slim-bookworm AS base
+# - System packages (gcc-12, CUDA toolkit)
+# - NVIDIA CUDA 12.1 repository
+# - CUDA stubs for Docker linking
+
+# STAGE 2: Python Dependencies
+FROM base AS python-deps
+# - PyTorch with CUDA 12.1 support
+# - llama-cpp-python (built from source with GPU)
+# - Application dependencies
+
+# STAGE 3: Model Pre-Caching
+FROM python-deps AS model-cache
+# - BGE-large-en-v1.5 (embeddings)
+# - BGE-reranker-large (reranking)
+# - Saves 15-20s startup time
+
+# STAGE 4: Application Code
+FROM model-cache AS app
+# - FastAPI application
+# - RAG engine and retrievers
+# - GGUF models (5.4GB + 771MB)
+
+# STAGE 5: Runtime Configuration
+FROM app AS runtime
+# - Python bytecode compilation
+# - Health checks
+# - Uvicorn ASGI server
+```
+
+### Build Performance
+
+```bash
+# Build the image
+docker build -f backend/Dockerfile.atlas \
+  -t atlas-protocol-backend:v4.0 \
+  --build-arg BUILDKIT_INLINE_CACHE=1 \
+  .
+
+# Build metrics:
+# First build:  ~10 minutes (downloads models)
+# Rebuild:      ~30 seconds (cached layers)
+# Image size:   ~9GB (includes pre-cached models)
+```
+
+### CUDA Configuration
+
+Critical optimizations for GPU acceleration:
+
+```dockerfile
+# Install CUDA components for compilation
+RUN apt-get install -y \
+    cuda-nvcc-12-1 \
+    cuda-cudart-dev-12-1 \
+    libcublas-dev-12-1
+
+# Configure stub linking (build-time only)
+RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so \
+          /usr/local/cuda/lib64/stubs/libcuda.so.1
+
+# Build llama-cpp-python with CUDA
+ENV CMAKE_ARGS="-DGGML_CUDA=ON \
+                -DCMAKE_CUDA_ARCHITECTURES=all-major \
+                -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"
+RUN pip install llama-cpp-python==0.3.2 --no-binary llama-cpp-python
+
+# WSL2 driver path for runtime
+ENV LD_LIBRARY_PATH=/usr/lib/wsl/drivers:$LD_LIBRARY_PATH
+```
+
+<Callout type="warning">
+**CUDA Compatibility**: Requires gcc-12 or older. Newer gcc versions (13+) are incompatible with CUDA 12.1. The Dockerfile automatically configures gcc-12 via update-alternatives.
+</Callout>
+
+---
+
+## Environment Configuration
+
+### Core Configuration
+
+```yaml
+# .env file for docker-compose
+# LLM Configuration
+LLM_BACKEND=llamacpp
+MODEL_PATH=/app/models/llama-3.1-8b-instruct.Q5_K_M.gguf
+GPU_LAYERS=33
+CONTEXT_LENGTH=8192
+TEMPERATURE=0.7
+
+# Vector Store
+VECTOR_STORE=qdrant
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+QDRANT_COLLECTION=atlas_knowledge_base
+
+# Cache Configuration
+RAG_CACHE__USE_REDIS=true
+RAG_CACHE__REDIS_HOST=redis
+RAG_CACHE__REDIS_PORT=6379
+RAG_CACHE__TTL=3600
+
+# Embeddings & Reranking
+EMBEDDING_MODEL=BAAI/bge-large-en-v1.5
+EMBEDDING_DIMENSION=1024
+RERANKER_MODEL=BAAI/bge-reranker-large
+RERANKER_TOP_K=10
+
+# Performance
+WORKERS=4
+MAX_CONCURRENT_REQUESTS=100
+REQUEST_TIMEOUT=120
+
+# Monitoring
+ENABLE_METRICS=true
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+```
+
+### Security Configuration
+
+```yaml
+# Production Security Settings
+CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+RATE_LIMIT_QUERIES=30  # per minute
+RATE_LIMIT_GENERAL=100 # per minute
+ENABLE_AUTH=true
+JWT_SECRET_KEY=<your-secure-secret>
+REDIS_PASSWORD=<your-redis-password>
+```
+
+---
+
+## Volume Management
+
+### Data Persistence
+
+```yaml
+services:
+  atlas-backend:
+    volumes:
+      # Document storage (read-only)
+      - ./documents:/app/documents:ro
+
+      # Model files (read-only)
+      - ../models:/app/models:ro
+
+      # Configuration (read-only)
+      - ./config.yml:/app/config.yml:ro
+
+      # Application logs (read-write)
+      - ./logs:/app/logs
+
+      # Temporary files (tmpfs, 4GB)
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 4G
+
+  qdrant:
+    volumes:
+      # Vector database storage
+      - qdrant_storage:/qdrant/storage
+
+      # Database snapshots
+      - ./data/qdrant:/qdrant/snapshots
+
+  redis:
+    volumes:
+      # Cache persistence
+      - redis_data:/data
+```
+
+### Backup Strategy
+
+```bash
+# Backup Qdrant snapshots
+docker exec atlas-qdrant \
+  curl -X POST http://localhost:6333/collections/atlas_knowledge_base/snapshots
+
+# Copy snapshot
+docker cp atlas-qdrant:/qdrant/snapshots ./backups/qdrant/
+
+# Backup Redis RDB
+docker exec atlas-redis redis-cli BGSAVE
+docker cp atlas-redis:/data/dump.rdb ./backups/redis/
+
+# Restore Qdrant from snapshot
+docker cp ./backups/qdrant/snapshot.tar atlas-qdrant:/qdrant/snapshots/
+curl -X PUT http://localhost:6333/collections/atlas_knowledge_base/snapshots/upload \
+  -F "snapshot=@snapshot.tar"
+
+# Restore Redis
+docker cp ./backups/redis/dump.rdb atlas-redis:/data/
+docker restart atlas-redis
+```
+
+---
+
+## GPU Container Configuration
+
+### NVIDIA Runtime Setup
+
+```yaml
+# docker-compose.atlas.yml
+services:
+  atlas-backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - FORCE_TORCH_CPU=1  # Force embeddings to CPU (sm_120 workaround)
+```
+
+### GPU Verification
+
+```bash
+# Check GPU access inside container
+docker exec atlas-backend nvidia-smi
+
+# Expected output:
+# +-----------------------------------------------------------------------------+
+# | NVIDIA-SMI 550.54       Driver Version: 550.54       CUDA Version: 12.1   |
+# |-------------------------------+----------------------+----------------------+
+# | GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+# |   0  RTX 5080           On   | 00000000:01:00.0  On |                  N/A |
+```
+
+<Callout type="info">
+**CPU Fallback**: If embeddings fail to use GPU (PyTorch sm_120 incompatibility), they automatically fall back to CPU. LLM inference via llama.cpp still uses GPU.
+</Callout>
+
+---
+
+## Network Configuration
+
+### Service Communication
+
+```yaml
+networks:
+  atlas-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# Static IP Assignment
+services:
+  qdrant:
+    networks:
+      atlas-network:
+        ipv4_address: 172.28.0.2
+
+  redis:
+    networks:
+      atlas-network:
+        ipv4_address: 172.28.0.3
+
+  atlas-backend:
+    networks:
+      atlas-network:
+        ipv4_address: 172.28.0.10
+```
+
+### Port Mapping
+
+```yaml
+services:
+  atlas-backend:    8000:8000  # REST API
+  qdrant:          6333:6333  # HTTP API
+  redis:           6379:6379  # Cache
+  prometheus:      9090:9090  # Metrics
+  grafana:         3001:3000  # Dashboards
+  cadvisor:        8081:8080  # Container metrics
+```
+
+---
+
+## Health Checks & Readiness
+
+### Service Health Configuration
+
+```yaml
+# Backend Health Check
+atlas-backend:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 60s
+
+# Qdrant Health Check
+qdrant:
+  healthcheck:
+    test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/6333'"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+
+# Redis Health Check
+redis:
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 10s
+    timeout: 3s
+    retries: 3
+    start_period: 10s
+```
+
+### Health Check Response
+
+```json
+// GET /api/health
+{
+  "status": "healthy",
+  "components": {
+    "vectorstore": "ready",
+    "llm": "ready",
+    "bm25_retriever": "ready",
+    "cache": "ready",
+    "conversation_memory": "ready"
+  },
+  "version": "4.0.0",
+  "uptime_seconds": 1234
+}
+```
+
+---
+
+## Scaling Strategies
+
+### Vertical Scaling
+
+```yaml
+# Resource Allocation (RTX 5080 + 96GB RAM)
+services:
+  atlas-backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '14'
+          memory: 48G
+        reservations:
+          cpus: '8'
+          memory: 24G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  qdrant:
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+```
+
+### Horizontal Scaling
+
+<Callout type="warning">
+**GPU Limitation**: Each atlas-backend instance requires dedicated GPU access. Scale horizontally by deploying multiple GPU nodes with load balancer.
+</Callout>
+
+```nginx
+# nginx.conf - Load Balancer
+upstream apollo_backend {
+    least_conn;
+    server 192.168.1.10:8000 weight=1;  # GPU Node 1
+    server 192.168.1.11:8000 weight=1;  # GPU Node 2
+    server 192.168.1.12:8000 weight=1;  # GPU Node 3
+}
+
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+
+    location / {
+        proxy_pass http://apollo_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+---
+
+## Backup & Recovery
+
+### Automated Backup Script
+
+```bash
+#!/bin/bash
+# backup.sh - Daily backup automation
+
+BACKUP_DIR=/backups/apollo/$(date +%Y%m%d)
+mkdir -p $BACKUP_DIR
+
+# Backup Qdrant
+echo "Backing up Qdrant..."
+docker exec atlas-qdrant \
+  curl -X POST http://localhost:6333/collections/atlas_knowledge_base/snapshots
+docker cp atlas-qdrant:/qdrant/snapshots/ $BACKUP_DIR/qdrant/
+
+# Backup Redis
+echo "Backing up Redis..."
+docker exec atlas-redis redis-cli BGSAVE
+sleep 5
+docker cp atlas-redis:/data/dump.rdb $BACKUP_DIR/redis/
+
+# Backup application logs
+echo "Backing up logs..."
+cp -r backend/logs/ $BACKUP_DIR/logs/
+
+# Backup configuration
+echo "Backing up configuration..."
+cp backend/config.yml $BACKUP_DIR/
+cp backend/.env $BACKUP_DIR/
+
+# Compress and archive
+tar -czf $BACKUP_DIR.tar.gz $BACKUP_DIR
+rm -rf $BACKUP_DIR
+
+echo "Backup complete: $BACKUP_DIR.tar.gz"
+```
+
+### Disaster Recovery
+
+```bash
+# 1. Stop all services
+docker-compose down
+
+# 2. Restore volumes
+tar -xzf backup-20250128.tar.gz
+docker volume rm atlas-protocol_qdrant_storage
+docker volume create atlas-protocol_qdrant_storage
+docker cp backup-20250128/qdrant/ atlas-qdrant:/qdrant/storage/
+
+# 3. Restart stack
+docker-compose up -d
+
+# 4. Verify health
+curl http://localhost:8000/api/health
+```
+
+---
+
+## Production Checklist
+
+Before deploying to production:
+
+### Security
+- [ ] Configure CORS to production domains only
+- [ ] Enable authentication middleware (JWT/OAuth)
+- [ ] Set Redis password in docker-compose
+- [ ] Enable TLS/SSL via reverse proxy
+- [ ] Configure rate limiting with Redis backend
+- [ ] Review and harden security headers
+- [ ] Enable audit logging
+
+### Performance
+- [ ] Optimize GPU layers based on VRAM
+- [ ] Configure Redis maxmemory policy
+- [ ] Set appropriate worker count
+- [ ] Enable model pre-caching
+- [ ] Configure query timeout limits
+- [ ] Tune Qdrant HNSW parameters
+
+### Monitoring
+- [ ] Configure Prometheus scraping
+- [ ] Set up Grafana dashboards
+- [ ] Configure alerting rules
+- [ ] Enable structured logging
+- [ ] Set up log aggregation (ELK/Loki)
+- [ ] Monitor GPU utilization
+
+### Reliability
+- [ ] Configure health checks
+- [ ] Set resource limits and reservations
+- [ ] Enable automatic restarts
+- [ ] Configure backup automation
+- [ ] Test disaster recovery procedures
+- [ ] Document runbook procedures
+
+### Compliance
+- [ ] Review data retention policies
+- [ ] Configure log rotation
+- [ ] Enable encryption at rest
+- [ ] Document security controls
+- [ ] Conduct security audit
+
+---
+
+## Next Steps
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+  <a href="/advanced/customization" className="card-link">
+    <div className="card">
+      <h3>Customization →</h3>
+      <p>Customize retrieval strategies, prompts, and model configurations</p>
+    </div>
+  </a>
+  <a href="/troubleshooting" className="card-link">
+    <div className="card">
+      <h3>Troubleshooting →</h3>
+      <p>Diagnose and resolve common deployment issues</p>
+    </div>
+  </a>
+</div>

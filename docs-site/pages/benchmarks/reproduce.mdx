@@ -1,0 +1,387 @@
+---
+title: Reproduce Benchmarks
+description: Step-by-step guide to reproduce Apollo RAG performance benchmarks
+---
+
+import { Callout } from '@/components/Callout'
+
+# Reproduce Benchmarks
+
+This guide provides detailed instructions to reproduce Apollo RAG's benchmark results independently. Follow these steps to verify the reported performance metrics on your own hardware.
+
+## Prerequisites
+
+<Callout type="warning">
+  **Hardware Requirements**: Benchmarks require NVIDIA GPU with CUDA support. Results will vary based on GPU model. Reference benchmarks use NVIDIA A100 40GB, but any CUDA-capable GPU (RTX 3090, 4090, 5090, A100, H100) will work.
+</Callout>
+
+### Minimum Requirements
+
+- **GPU**: NVIDIA GPU with 8GB+ VRAM (CUDA 12.1+)
+- **CPU**: 8+ cores recommended
+- **RAM**: 32GB minimum, 64GB recommended
+- **Storage**: 100GB free space (NVMe SSD preferred)
+- **OS**: Ubuntu 22.04 / Debian Bookworm / Windows 11 with WSL2
+- **Software**: Docker 24+, Docker Compose 2.20+, Git
+
+### Recommended Configuration
+
+- **GPU**: NVIDIA A100 40GB or RTX 5090 24GB
+- **CPU**: AMD EPYC 7763 / Intel Xeon Gold 6348 (16+ cores)
+- **RAM**: 128GB DDR4
+- **Storage**: 500GB NVMe SSD
+- **Network**: 10Gbps for dataset downloads
+
+## Step 1: Clone Repository
+
+Clone the Apollo RAG repository with benchmark scripts:
+
+```bash
+# Clone main repository
+git clone https://github.com/yourusername/apollo-rag.git
+cd apollo-rag
+
+# Checkout v4.2 production branch
+git checkout v4.2-production
+
+# Verify Docker Compose files
+ls backend/docker-compose.atlas.yml
+```
+
+## Step 2: Prepare Test Data
+
+### Download 100K Document Corpus
+
+The benchmark uses a standardized corpus of 100,000 documents (15GB):
+
+```bash
+# Create data directory
+mkdir -p backend/documents/benchmark
+
+# Download benchmark dataset (Wikipedia subset)
+wget https://benchmark-data.apollo-rag.io/wiki-100k.tar.gz
+
+# Extract to documents directory
+tar -xzf wiki-100k.tar.gz -C backend/documents/benchmark/
+
+# Verify extraction (should show 100,000 files)
+ls -1 backend/documents/benchmark/*.txt | wc -l
+```
+
+### Generate Synthetic Queries
+
+Create a realistic query workload:
+
+```bash
+# Run query generator (creates 10,000 test queries)
+python scripts/generate_benchmark_queries.py \
+  --corpus backend/documents/benchmark/ \
+  --output backend/benchmark_queries.json \
+  --count 10000 \
+  --complexity-mix simple:50,medium:30,complex:20
+```
+
+## Step 3: Configure Environment
+
+### Set Hardware-Specific Settings
+
+Create benchmark configuration file:
+
+```bash
+# Copy template
+cp backend/.env.benchmark.template backend/.env.benchmark
+
+# Edit for your GPU
+nano backend/.env.benchmark
+```
+
+Configuration example for RTX 5080:
+
+```env
+# Model settings
+MODEL_PATH=/models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+GPU_LAYERS=33  # Adjust based on your VRAM
+N_BATCH=512    # Increase for more VRAM
+N_CTX=8192
+
+# Performance settings
+FORCE_TORCH_CPU=1  # Required for RTX 50-series
+RAG_CACHE__ENABLED=true
+RAG_CACHE__REDIS_HOST=redis
+
+# Vector store
+VECTOR_STORE=qdrant
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+
+# Benchmark-specific
+BENCHMARK_MODE=true
+LOG_LEVEL=INFO
+```
+
+### Download Required Models
+
+```bash
+# Create models directory
+mkdir -p models
+
+# Download Llama 3.1 8B Q5_K_M (5.4GB)
+wget -P models/ \
+  https://huggingface.co/TheBloke/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+
+# Verify download
+ls -lh models/*.gguf
+```
+
+## Step 4: Build Docker Images
+
+Build the multi-stage Docker image with CUDA support:
+
+```bash
+cd backend
+
+# Build with CUDA 12.1 support
+docker build -f Dockerfile.atlas -t apollo-backend:benchmark .
+
+# Verify build (should be ~9GB)
+docker images apollo-backend:benchmark
+```
+
+Expected build time: **10-15 minutes** (first build)
+
+## Step 5: Start Docker Compose Stack
+
+Launch all services (Qdrant, Redis, Apollo backend):
+
+```bash
+# Start services in detached mode
+docker-compose -f docker-compose.atlas.yml up -d
+
+# Verify all containers are healthy
+docker-compose -f docker-compose.atlas.yml ps
+
+# Check backend logs for initialization
+docker-compose -f docker-compose.atlas.yml logs -f atlas-backend
+```
+
+Wait for initialization message: **"RAG Engine initialized in 20-30 seconds"**
+
+### Verify System Health
+
+```bash
+# Health check
+curl http://localhost:8000/api/health
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "components": {
+#     "vectorstore": "ready",
+#     "llm": "ready",
+#     "cache": "ready"
+#   }
+# }
+```
+
+## Step 6: Index Benchmark Corpus
+
+Process and index all 100K documents:
+
+```bash
+# Trigger reindexing via API
+curl -X POST http://localhost:8000/api/documents/reindex
+
+# Monitor indexing progress (logs)
+docker-compose logs -f atlas-backend | grep "Processing"
+```
+
+**Expected indexing time**: 45-90 minutes depending on GPU
+
+Progress indicators:
+- Processed: 1000/100000 documents (1%)
+- Processed: 10000/100000 documents (10%)
+- ...
+- Indexing complete: 100000 chunks in 87 minutes
+
+## Step 7: Run Benchmark Suite
+
+### Latency Benchmark
+
+Measure P50, P95, P99 latency across query complexity levels:
+
+```bash
+# Run latency benchmark (5,000 queries)
+python scripts/benchmark_latency.py \
+  --api-url http://localhost:8000 \
+  --queries backend/benchmark_queries.json \
+  --iterations 5000 \
+  --modes simple,adaptive \
+  --output results/latency_results.json
+```
+
+### Throughput Benchmark
+
+Test concurrent query handling:
+
+```bash
+# Run throughput benchmark (50 concurrent users)
+python scripts/benchmark_throughput.py \
+  --api-url http://localhost:8000 \
+  --queries backend/benchmark_queries.json \
+  --concurrent-users 50 \
+  --duration 600 \
+  --output results/throughput_results.json
+```
+
+### Accuracy Benchmark
+
+Evaluate retrieval quality with ground truth dataset:
+
+```bash
+# Run accuracy benchmark (1,000 queries with known answers)
+python scripts/benchmark_accuracy.py \
+  --api-url http://localhost:8000 \
+  --ground-truth backend/ground_truth.json \
+  --output results/accuracy_results.json
+```
+
+### GPU Utilization Monitor
+
+Track GPU metrics during benchmarks:
+
+```bash
+# Monitor in separate terminal
+nvidia-smi dmon -s pucvmet -d 1 > results/gpu_utilization.log
+```
+
+## Step 8: Collect Metrics
+
+### Export Results
+
+Generate comprehensive benchmark report:
+
+```bash
+# Consolidate all results
+python scripts/generate_report.py \
+  --latency results/latency_results.json \
+  --throughput results/throughput_results.json \
+  --accuracy results/accuracy_results.json \
+  --gpu-log results/gpu_utilization.log \
+  --output report.html
+
+# View report
+open report.html  # macOS
+xdg-open report.html  # Linux
+```
+
+### Key Metrics to Verify
+
+Expected results on NVIDIA A100:
+
+- **P95 Latency**: 127ms (simple), 250ms (adaptive)
+- **Throughput**: 450 queries/second
+- **Accuracy**: 94.2% context relevance
+- **GPU Utilization**: 88% average
+- **Cache Hit Rate**: 60-80%
+
+## Step 9: Compare Results
+
+### Baseline Comparison
+
+Compare your results against reference benchmarks:
+
+```bash
+# Run comparison tool
+python scripts/compare_benchmarks.py \
+  --your-results report.html \
+  --baseline benchmarks/reference_a100.json \
+  --output comparison.html
+```
+
+### Result Interpretation
+
+<Callout type="info">
+  Results will vary based on hardware. RTX 5080 achieves ~80% of A100 performance, RTX 4090 ~65%, RTX 3090 ~50%.
+</Callout>
+
+Performance scaling factors:
+- **A100 40GB**: 1.0x (baseline)
+- **RTX 5090 24GB**: 0.9x
+- **RTX 5080 16GB**: 0.8x
+- **RTX 4090 24GB**: 0.65x
+- **RTX 3090 24GB**: 0.50x
+
+## Troubleshooting
+
+### Issue: Slow Indexing
+
+**Symptom**: Indexing takes more than 2 hours
+
+**Solution**:
+```bash
+# Increase batch size for more VRAM
+export EMBEDDING_BATCH_SIZE=128
+
+# Check CUDA availability
+docker exec apollo-backend python -c "import torch; print(torch.cuda.is_available())"
+```
+
+### Issue: Out of Memory Errors
+
+**Symptom**: CUDA OOM during queries
+
+**Solution**:
+```bash
+# Reduce GPU layers
+export GPU_LAYERS=25  # From 33
+
+# Reduce batch size
+export N_BATCH=256    # From 512
+
+# Restart stack
+docker-compose down
+docker-compose up -d
+```
+
+### Issue: Low GPU Utilization
+
+**Symptom**: GPU utilization less than 50%
+
+**Solution**:
+```bash
+# Check if embeddings are on CPU (RTX 50-series workaround)
+docker-compose logs atlas-backend | grep "FORCE_TORCH_CPU"
+
+# Verify CUDA version match
+nvidia-smi  # Should show CUDA 12.1+
+```
+
+### Issue: Cache Misses
+
+**Symptom**: Cache hit rate less than 30%
+
+**Solution**:
+```bash
+# Verify Redis connection
+docker exec atlas-backend redis-cli -h redis ping
+
+# Check cache TTL settings
+curl http://localhost:8000/api/cache/stats
+```
+
+## Next Steps
+
+- **Analyze Results**: Review [benchmark methodology](/benchmarks/methodology) to understand metrics
+- **Optimize Performance**: See [configuration guide](/getting-started/configuration) for tuning tips
+- **Share Results**: Submit your benchmark results via [GitHub Discussions](https://github.com/yourusername/apollo-rag/discussions)
+
+<Callout type="success">
+  Successfully reproduced benchmarks? Share your results with the community! We track performance across different GPU configurations.
+</Callout>
+
+## Additional Resources
+
+- **Docker Compose Reference**: `backend/docker-compose.atlas.yml`
+- **Benchmark Scripts**: `scripts/benchmark_*.py`
+- **Configuration Guide**: `/guides/configuration`
+- **Performance Tuning**: `/guides/performance-optimization`

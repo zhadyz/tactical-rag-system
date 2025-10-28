@@ -12,7 +12,9 @@ import { KeyFeatures } from '@/components/KeyFeatures'
 import { ArchitectureOverview } from '@/components/ArchitectureOverview'
 import { WhyApollo } from '@/components/WhyApollo'
 import { BenchmarksTable } from '@/components/BenchmarksTable'
+import { CommunitySection } from '@/components/CommunitySection'
 import { CTASection } from '@/components/CTASection'
+import { Footer } from '@/components/Footer'
 import { Zap, Cpu, Database, Lock, Gauge, Box, ArrowRight, Github, Sparkles } from 'lucide-react'
 
 <HeroSection />
@@ -34,8 +36,8 @@ Get Apollo running in under 5 minutes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+git clone https://github.com/zhadyz/tactical-rag-system.git
+cd tactical-rag-system
 
 # Launch with Docker Compose (includes GPU support)
 docker compose up -d
@@ -51,7 +53,7 @@ curl -X POST http://localhost:8000/query \
   -d '{"query": "What is the main topic?"}'
 ```
 
-See the [Getting Started](/getting-started) guide for detailed instructions.
+See the [Getting Started](/getting-started/quick-start) guide for detailed instructions.
 
 </div>
 
@@ -61,21 +63,10 @@ See the [Getting Started](/getting-started) guide for detailed instructions.
 
 <BenchmarksTable />
 
-<div className="mx-auto max-w-4xl">
-
-## Community & Support
-
-- **Documentation**: You're reading it! Comprehensive guides for every use case
-- **GitHub**: [Report issues](https://github.com/yourusername/apollo-rag/issues) and contribute
-- **Discord**: Join our [community](https://discord.gg/apollo-rag) for real-time help
-- **Enterprise**: Contact us for SLA, custom features, and dedicated support
-
-## License
-
-Apollo RAG is open source under the [MIT License](https://github.com/yourusername/apollo-rag/blob/main/LICENSE).
-
-</div>
+<CommunitySection />
 
 ---
 
 <CTASection />
+
+<Footer />

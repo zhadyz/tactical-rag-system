@@ -9,6 +9,9 @@ export function HeroSection() {
       <div className="absolute inset-0 bg-grid-pattern opacity-20" />
       <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-gray-950/50" />
 
+      {/* Gradient fade to next section */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-white dark:to-gray-950" />
+
       {/* Animated GPU particles */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="gpu-particle gpu-particle-1" />
@@ -37,18 +40,18 @@ export function HeroSection() {
         <p className="mx-auto mb-10 max-w-3xl text-lg leading-relaxed text-gray-300 md:text-xl animate-fade-in-up animation-delay-300">
           Production-ready RAG system with <span className="font-semibold text-white">CUDA optimization</span>,
           adaptive retrieval strategies, and enterprise-grade deployment.
-          Built for <span className="font-semibold text-blue-300">speed</span>,
-          <span className="font-semibold text-purple-300">scale</span>, and
+          Built for <span className="font-semibold text-blue-300">speed</span>,{' '}
+          <span className="font-semibold text-purple-300">scale</span>, and{' '}
           <span className="font-semibold text-green-300">precision</span>.
         </p>
 
         {/* CTA Buttons */}
         <div className="flex flex-wrap justify-center gap-4 animate-fade-in-up animation-delay-400">
           <a
-            href="/getting-started"
+            href="/interactive-demos"
             className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-4 font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:scale-105 hover:shadow-xl hover:shadow-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950"
           >
-            Get Started
+            View Demo
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </a>
 

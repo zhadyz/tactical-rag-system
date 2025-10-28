@@ -30,6 +30,14 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    opacity: 0;
+    animation: fadeIn 0.3s ease-in forwards;
+  }
+
+  @keyframes fadeIn {
+    to {
+      opacity: 1;
+    }
   }
 
   /* Custom scrollbar */
@@ -134,6 +142,31 @@
   /* Smooth transitions for interactive elements */
   .transition-smooth {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Prevent layout shift during load */
+  img, svg, video, canvas, iframe {
+    @apply will-change-auto;
+  }
+
+  /* Smooth loading for animated components */
+  .will-animate {
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+
+  /* Reduce motion for accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   /* Link hover effects */
@@ -295,6 +328,74 @@
 /* Radial Gradient */
 .bg-gradient-radial {
   background: radial-gradient(circle at center, var(--tw-gradient-stops));
+}
+
+/* Hide Nextra footer completely - Nuclear approach */
+.nextra-footer,
+footer.nextra-footer,
+footer._bg-gray-100,
+footer._pb-\[env\(safe-area-inset-bottom\)\],
+[class*="footer"] > a[href*="nextra"],
+footer a[href*="shuding"],
+body > div:first-child > div > main ~ footer:not(:has(a[href*="linkedin"])),
+/* Target footer by Nextra's specific classes */
+footer[class*="_bg-gray"],
+footer[class*="_pb-"],
+footer[class*="dark:_bg-neutral"],
+/* Specific selector for Nextra's layout footer */
+body > div > div > main ~ footer,
+div[class*="container"] > footer:not(:has(a[href*="linkedin"])) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Navbar Layout - Keep logo on left, custom nav in center, GitHub on right */
+.nextra-nav-container-blur {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* Ensure custom navbar is positioned correctly */
+.custom-navbar-wrapper {
+  display: flex !important;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  justify-content: center;
+  margin: 0 2rem;
+}
+
+/* Keep GitHub link on the far right */
+.nextra-nav-container nav {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+}
+
+/* Position GitHub icon container to the right */
+.nextra-nav-container nav > div:last-child {
+  margin-left: auto !important;
+}
+
+/* Hide default Nextra navigation links - keep only custom dropdowns */
+/* Target Nextra's default nav links, but not our custom dropdown menu links */
+.nextra-nav-container nav a[href^="/getting-started"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/core-concepts"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/api-reference"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/architecture"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/benchmarks"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/advanced"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/interactive-demos"]:not(.custom-navbar-wrapper a),
+.nextra-nav-container nav a[href^="/about"]:not(.custom-navbar-wrapper a) {
+  display: none !important;
 }
 
 /* Print styles */

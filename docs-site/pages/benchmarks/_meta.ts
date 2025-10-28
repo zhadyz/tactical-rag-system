@@ -1,4 +1,6 @@
 export default {
-  "overview": "Overview"
+  "overview": "Overview",
+  "results": "Benchmark Results",
+  "reproduce": "Reproduce Benchmarks"
 }
 

@@ -204,7 +204,7 @@ export function BenchmarkExplorer() {
         className="mb-12 text-center"
       >
         <h2 className="mb-4 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl">
-          Interactive Benchmark Explorer
+          Framework Breakdown
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
           Explore comprehensive performance metrics across leading RAG frameworks
@@ -216,19 +216,19 @@ export function BenchmarkExplorer() {
         initial={{ opacity: 0, y: 10 }}
         animate={isInView ? { opacity: 1, y: 0 } : {}}
         transition={{ duration: 0.6, delay: 0.2 }}
-        className="mb-8 flex justify-center gap-2"
+        className="mb-8 flex justify-end gap-2"
       >
-        {(['cards', 'bar', 'radar'] as const).map((view) => (
+        {(['cards', 'bar', 'radar'] as const).map((view, index) => (
           <button
             key={view}
             onClick={() => setActiveView(view)}
-            className={`rounded-lg px-6 py-2 font-semibold transition-all ${
+            className={`rounded-lg px-3 py-1 text-xs font-medium transition-all ${
               activeView === view
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/50'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
             }`}
           >
-            {view === 'cards' ? 'Cards' : view === 'bar' ? 'Bar Chart' : 'Radar Chart'}
+            {index + 1}
           </button>
         ))}
       </motion.div>

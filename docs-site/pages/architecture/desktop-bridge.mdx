@@ -1,0 +1,751 @@
+---
+title: Desktop Bridge Layer
+description: Tauri 2.9 native runtime with Rust backend for type-safe IPC and OS integration
+---
+
+import { Callout } from '../../components/Callout'
+
+# Desktop Bridge Layer
+
+The Desktop Bridge Layer connects Apollo's React frontend to native OS capabilities through **Tauri 2.9**, a Rust-based desktop runtime. It provides type-safe IPC communication, backend lifecycle management, and native integrations while maintaining a small memory footprint.
+
+## Bridge Architecture
+
+Apollo uses a **hybrid dual-protocol architecture** for optimal performance:
+
+```
++-------------------------------------------------------------+
+|                   React 19 Frontend                         |
+|                   (WebView2/WebKit)                         |
++-------------+-----------------------+-----------------------+
+              |                       |
+              | Tauri IPC             | Direct HTTP
+              | (Native Features)     | (Data Endpoints)
+              |                       |
++-------------v-----------------------v-----------------------+
+|            Tauri 2.9 Bridge (Rust Native Binary)            |
+|  * IPC Command Handlers                                     |
+|  * Backend Health Monitoring                                |
+|  * HTTP Proxy to FastAPI                                    |
+|  * Native OS Integration (dialogs, shell)                   |
++-----------------------------+-------------------------------+
+                              |
+                              | HTTP/REST (reqwest)
+                              | localhost:8000
+                              |
++-----------------------------v-------------------------------+
+|                   FastAPI Backend                           |
+|                   (Docker Containers)                       |
++-------------------------------------------------------------+
+```
+
+### Why Dual Protocol?
+
+- **Tauri IPC**: Native features (health checks, model switching, file dialogs, notifications)
+- **Direct HTTP**: High-throughput data operations (queries, document upload, SSE streaming)
+
+This hybrid approach optimizes for both performance and developer ergonomics.
+
+## IPC Communication Pattern
+
+### Type-Safe Boundaries
+
+Tauri uses **serde** (Rust) and **JSON** to provide type-safe bidirectional communication:
+
+```rust
+// src-tauri/src/commands.rs
+use serde::{Deserialize, Serialize};
+use tauri::State;
+
+/// Health status response (auto-serialized to JSON)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthStatus {
+    pub status: String,
+    pub backend: String,
+    pub version: String,
+    pub models: ModelsStatus,
+    pub cache: CacheStatus,
+}
+
+/// Tauri command - exposed to frontend via invoke()
+#[tauri::command]
+pub async fn check_atlas_health(
+    state: State<'_, Arc<Mutex<AppState>>>
+) -> Result<HealthStatus, String> {
+    let state = state.lock().await;
+    let url = format!("{}/api/health", state.backend_url);
+
+    let response = state.http_client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Backend unreachable: {}", e))?;
+
+    let health: HealthStatus = response
+        .json()
+        .await
+        .map_err(|e| format!("Invalid response format: {}", e))?;
+
+    Ok(health)
+}
+```
+
+### Frontend Integration
+
+The frontend calls Rust commands using the `invoke()` API:
+
+```typescript
+// src/services/backendService.ts
+import { invoke } from '@tauri-apps/api/core';
+
+interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'down';
+  backend: string;
+  version: string;
+  models: {
+    llm: string;
+    embeddings: string;
+    vector_db: string;
+  };
+  cache: {
+    redis_connected: boolean;
+    hit_rate: number;
+  };
+}
+
+export const checkHealth = async (): Promise<HealthStatus> => {
+  // Tauri IPC call - serialized via serde/JSON
+  return await invoke<HealthStatus>('check_atlas_health');
+};
+```
+
+<Callout type="info">
+**Type Generation**: Tauri's `generate_handler!` macro automatically generates TypeScript types from Rust structs, ensuring compile-time type safety across the IPC boundary.
+</Callout>
+
+### Invoke vs Emit
+
+Tauri provides two IPC patterns:
+
+| Pattern | Direction | Use Case | Example |
+|---------|-----------|----------|---------|
+| **invoke()** | Frontend → Backend | Request-response operations | Health checks, model switching |
+| **emit()** | Backend → Frontend | Event notifications | Progress updates, status changes |
+
+```rust
+// src-tauri/src/sidecar.rs
+use tauri::Manager;
+
+// Emit event to frontend
+app.emit_all("backend-status-changed", BackendStatus {
+    running: true,
+    healthy: true,
+    last_checked: chrono::Utc::now(),
+});
+```
+
+```typescript
+// src/hooks/useBackendStatus.ts
+import { listen } from '@tauri-apps/api/event';
+
+useEffect(() => {
+  const unlisten = listen('backend-status-changed', (event) => {
+    setStatus(event.payload as BackendStatus);
+  });
+
+  return () => {
+    unlisten.then(fn => fn());
+  };
+}, []);
+```
+
+## Security Model
+
+### Capabilities-Based Permissions
+
+Tauri 2.x uses a **deny-by-default** security model with explicit permission grants:
+
+```json
+// src-tauri/capabilities/default.json
+{
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:path:default",
+    "core:event:default",
+    "core:webview:default",
+    "core:window:default",
+    "shell:allow-open",    // Opens URLs only, no arbitrary commands
+    "dialog:default"       // File picker dialogs
+  ]
+}
+```
+
+<Callout type="warning">
+**Security Boundaries**:
+- Frontend cannot execute arbitrary Rust code
+- Only registered commands in `generate_handler!` are exposed
+- HTTP client isolated to backend (not exposed to frontend)
+- Shell access restricted to `open::that()` only (no command injection)
+- File system access scoped via `tauri-plugin-fs`
+</Callout>
+
+### CSP Configuration
+
+```json
+// src-tauri/tauri.conf.json
+{
+  "security": {
+    "csp": null,  // DEVELOPMENT ONLY
+    // PRODUCTION: "default-src 'self'; connect-src 'self' http://localhost:8000"
+    "assetProtocol": {
+      "enabled": true,
+      "scope": ["**"]
+    }
+  }
+}
+```
+
+<Callout type="error">
+**Production Recommendation**: Enable CSP with `script-src 'self'` and `connect-src` limited to backend URL. Current `null` value is for development only.
+</Callout>
+
+## Native OS Capabilities
+
+### File System Access
+
+Tauri's `fs` plugin provides scoped file system operations:
+
+```rust
+// src-tauri/src/lib.rs
+.plugin(tauri_plugin_fs::init())
+```
+
+```typescript
+// Frontend: Scoped file operations
+import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
+
+// Read file (requires permission)
+const contents = await readTextFile('documents/readme.txt');
+
+// Write file (requires permission)
+await writeTextFile('logs/output.log', 'Log data');
+```
+
+<Callout type="info">
+File paths are scoped to allowed directories defined in capabilities. Attempts to access paths outside the scope will fail with a permission error.
+</Callout>
+
+### Native File Dialogs
+
+```typescript
+// src/components/Documents/DocumentUpload.tsx
+import { open } from '@tauri-apps/plugin-dialog';
+
+const handleFileSelect = async () => {
+  const file = await open({
+    multiple: false,
+    filters: [{
+      name: 'Documents',
+      extensions: ['pdf', 'txt', 'docx', 'doc', 'md']
+    }]
+  });
+
+  if (file) {
+    // Process file...
+  }
+};
+```
+
+### Shell Integration
+
+```rust
+// src-tauri/src/commands.rs
+use open;
+
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    // Opens URL in default browser
+    open::that(&url)
+        .map_err(|e| format!("Failed to open URL: {}", e))
+}
+```
+
+<Callout type="warning">
+Shell access is restricted to `shell:allow-open` permission only. This prevents command injection attacks by limiting operations to opening URLs/files in default applications.
+</Callout>
+
+## File Upload Pipeline
+
+### Native → Backend Flow
+
+```
++---------------------------------------------------------------+
+| 1. User selects file via native dialog (tauri-plugin-dialog)  |
++-----------------------+---------------------------------------+
+                        |
+                        v
++-----------------------+---------------------------------------+
+| 2. Frontend validates (size, type) and prepares FormData      |
++-----------------------+---------------------------------------+
+                        |
+                        v
++-----------------------+---------------------------------------+
+| 3. Direct HTTP POST to /api/documents/upload                  |
+|    (Bypasses Tauri for performance)                           |
++-----------------------+---------------------------------------+
+                        |
+                        v
++-----------------------+---------------------------------------+
+| 4. Backend: Sanitize, compute SHA256, save to documents/      |
++-----------------------+---------------------------------------+
+                        |
+                        v
++-----------------------+---------------------------------------+
+| 5. User triggers reindexing (Tauri IPC or HTTP)               |
++---------------------------------------------------------------+
+```
+
+### Why Direct HTTP?
+
+Large file uploads bypass Tauri IPC for performance:
+- **IPC**: Limited to ~5MB practical payload size
+- **Direct HTTP**: Supports 50MB files with streaming
+
+```typescript
+// src/services/api.ts
+export const uploadDocument = async (file: File): Promise<UploadResponse> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  // Direct HTTP, not Tauri IPC
+  const response = await fetch('http://localhost:8000/api/documents/upload', {
+    method: 'POST',
+    body: formData
+  });
+
+  return await response.json();
+};
+```
+
+## Backend Lifecycle Management
+
+### Sidecar Pattern
+
+The Rust bridge manages the FastAPI backend as a **sidecar process**:
+
+```rust
+// src-tauri/src/sidecar.rs
+pub struct BackendSidecar {
+    status: Arc<Mutex<BackendStatus>>,
+    health_monitor_task: Option<JoinHandle<()>>,
+}
+
+impl BackendSidecar {
+    pub fn new(app_handle: AppHandle) -> Self {
+        Self {
+            status: Arc::new(Mutex::new(BackendStatus::default())),
+            health_monitor_task: None,
+        }
+    }
+
+    pub fn start_health_monitor(&mut self, backend_url: String) {
+        let status = Arc::clone(&self.status);
+
+        // Background tokio task for health monitoring
+        self.health_monitor_task = Some(tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+
+                let health_check = reqwest::get(format!("{}/api/health", backend_url))
+                    .await;
+
+                let mut status_lock = status.lock().unwrap();
+                match health_check {
+                    Ok(response) if response.status().is_success() => {
+                        status_lock.running = true;
+                        status_lock.healthy = true;
+                        status_lock.error = None;
+                    },
+                    Ok(response) => {
+                        status_lock.running = true;
+                        status_lock.healthy = false;
+                        status_lock.error = Some(format!("HTTP {}", response.status()));
+                    },
+                    Err(e) => {
+                        status_lock.running = false;
+                        status_lock.healthy = false;
+                        status_lock.error = Some(e.to_string());
+                    }
+                }
+                status_lock.last_checked = Some(chrono::Utc::now());
+            }
+        }));
+    }
+}
+```
+
+### Health Monitoring
+
+Background health checks run every 10 seconds:
+
+```rust
+// src-tauri/src/commands.rs
+#[tauri::command]
+pub async fn get_backend_status(
+    state: State<'_, Arc<Mutex<Option<BackendSidecar>>>>
+) -> Result<BackendStatus, String> {
+    let sidecar = state.lock().unwrap();
+
+    match sidecar.as_ref() {
+        Some(s) => Ok(s.get_status()),
+        None => Err("Backend sidecar not initialized".to_string())
+    }
+}
+```
+
+## Window Management
+
+### Configuration
+
+```json
+// src-tauri/tauri.conf.json
+{
+  "windows": [
+    {
+      "title": "Tactical RAG - Document Intelligence",
+      "width": 1400,
+      "height": 900,
+      "minWidth": 1024,
+      "minHeight": 768,
+      "resizable": true,
+      "fullscreen": false,
+      "decorations": true,
+      "alwaysOnTop": false,
+      "center": true
+    }
+  ]
+}
+```
+
+### Programmatic Control
+
+```rust
+// src-tauri/src/commands.rs
+use tauri::{Manager, Window};
+
+#[tauri::command]
+pub async fn set_fullscreen(window: Window, fullscreen: bool) -> Result<(), String> {
+    window.set_fullscreen(fullscreen)
+        .map_err(|e| format!("Failed to set fullscreen: {}", e))
+}
+
+#[tauri::command]
+pub async fn minimize_window(window: Window) -> Result<(), String> {
+    window.minimize()
+        .map_err(|e| format!("Failed to minimize: {}", e))
+}
+```
+
+## State Management
+
+### Arc/Mutex Pattern
+
+Tauri uses `Arc<Mutex<T>>` for thread-safe shared state:
+
+```rust
+// src-tauri/src/lib.rs
+pub struct AppState {
+    pub backend_url: String,
+    pub http_client: reqwest::Client,
+}
+
+impl AppState {
+    pub fn new(backend_url: String) -> Self {
+        Self {
+            backend_url,
+            http_client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("Failed to create HTTP client"),
+        }
+    }
+}
+
+// Register state
+let app_state = Arc::new(tokio::sync::Mutex::new(
+    commands::AppState::new(backend_url)
+));
+app.manage(app_state);
+```
+
+### State Injection
+
+Commands receive state via the `State<'_, T>` parameter:
+
+```rust
+#[tauri::command]
+pub async fn check_backend_connected(
+    state: State<'_, Arc<Mutex<AppState>>>
+) -> Result<bool, String> {
+    let state = state.lock().await;
+    // Access state.backend_url, state.http_client
+}
+```
+
+<Callout type="info">
+**Async Mutex**: Tauri uses `tokio::sync::Mutex` for async operations (HTTP requests, file I/O) and `std::sync::Mutex` for sync operations (state updates).
+</Callout>
+
+## Rust Backend Commands
+
+### Command Registration
+
+```rust
+// src-tauri/src/lib.rs
+.invoke_handler(tauri::generate_handler![
+    // Backend lifecycle
+    sidecar::start_backend,
+    sidecar::stop_backend,
+    sidecar::get_backend_status,
+
+    // ATLAS protocol
+    commands::check_atlas_health,
+    commands::check_backend_connected,
+    commands::get_cache_stats,
+    commands::get_available_models,
+
+    // Model hotswap
+    commands::get_models_list,
+    commands::get_current_model,
+    commands::switch_model,
+
+    // System integration
+    commands::open_url,
+    commands::show_notification,
+
+    // Ollama integration
+    ollama::get_ollama_status,
+    ollama::pull_qwen_model,
+    ollama::verify_qwen,
+])
+```
+
+### Model Hotswap Command
+
+```rust
+// src-tauri/src/commands.rs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelSwitchResponse {
+    pub success: bool,
+    pub message: String,
+    pub previous_model: Option<String>,
+    pub current_model: Option<String>,
+}
+
+#[tauri::command]
+pub async fn switch_model(
+    model_id: String,
+    state: State<'_, Arc<Mutex<AppState>>>
+) -> Result<ModelSwitchResponse, String> {
+    let state = state.lock().await;
+    let url = format!("{}/api/models/switch", state.backend_url);
+
+    #[derive(Serialize)]
+    struct SwitchRequest {
+        model_id: String,
+    }
+
+    let response = state.http_client
+        .post(&url)
+        .json(&SwitchRequest { model_id })
+        .send()
+        .await
+        .map_err(|e| format!("Failed to switch model: {}", e))?;
+
+    let switch_response: ModelSwitchResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Invalid response: {}", e))?;
+
+    Ok(switch_response)
+}
+```
+
+## Performance Considerations
+
+### Async Runtime
+
+All Tauri commands use **tokio** async runtime:
+
+```rust
+// Async command (non-blocking)
+#[tauri::command]
+pub async fn check_health(state: State<'_, T>) -> Result<HealthStatus, String> {
+    // tokio::spawn, await, etc.
+}
+
+// Sync command (blocks Tauri thread pool)
+#[tauri::command]
+pub fn get_config() -> String {
+    "config".to_string()
+}
+```
+
+<Callout type="warning">
+**Avoid Sync Commands for I/O**: Use `async fn` for HTTP requests, file I/O, or any operation that might block. Sync commands block the Tauri thread pool.
+</Callout>
+
+### HTTP Client Reuse
+
+The `reqwest::Client` is reused for all requests:
+
+```rust
+pub struct AppState {
+    pub http_client: reqwest::Client,  // Connection pooling
+}
+```
+
+This enables HTTP/2 multiplexing and connection pooling for faster requests.
+
+### Memory Footprint
+
+| Component | Memory Usage |
+|-----------|--------------|
+| Rust binary | ~5-10 MB |
+| WebView2 (Windows) | ~50-80 MB |
+| Frontend assets | ~20-30 MB |
+| **Total Desktop App** | **~75-120 MB** |
+
+Compare to Electron (~200-300 MB baseline).
+
+## Code Examples
+
+### Complete IPC Handler
+
+```rust
+// src-tauri/src/commands.rs
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheStats {
+    pub hit_rate: f64,
+    pub total_requests: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub avg_latency_ms: f64,
+}
+
+#[tauri::command]
+pub async fn get_cache_stats(
+    state: State<'_, Arc<Mutex<AppState>>>
+) -> Result<CacheStats, String> {
+    let state = state.lock().await;
+    let url = format!("{}/api/cache/metrics", state.backend_url);
+
+    let response = state.http_client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch cache stats: {}", e))?;
+
+    let stats: CacheStats = response
+        .json()
+        .await
+        .map_err(|e| format!("Invalid response: {}", e))?;
+
+    Ok(stats)
+}
+```
+
+### Frontend Hook
+
+```typescript
+// src/hooks/useCacheStats.ts
+import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useState } from 'react';
+
+interface CacheStats {
+  hit_rate: number;
+  total_requests: number;
+  cache_hits: number;
+  cache_misses: number;
+  avg_latency_ms: number;
+}
+
+export const useCacheStats = () => {
+  const [stats, setStats] = useState<CacheStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const data = await invoke<CacheStats>('get_cache_stats');
+        setStats(data);
+        setError(null);
+      } catch (err) {
+        setError(err as string);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { stats, loading, error };
+};
+```
+
+## Build Configuration
+
+### Multi-Stage Build
+
+```json
+// src-tauri/tauri.conf.json
+{
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    }
+  }
+}
+```
+
+### Build Process
+
+- **npm run build** → Vite builds React app to `dist/`
+- **cargo build --release** → Compiles Rust binary
+- **tauri-build** generates context and resources
+- **NSIS** packages binary, frontend, and icons
+- **Output**: `Tactical-RAG-Desktop_4.0.0_x64-setup.exe` (~20-30MB)
+
+## Next: Integration Patterns
+
+Continue to [Integration Layer](/architecture/integration) to see how the bridge layer orchestrates communication between frontend, backend, and native OS.
+
+---
+
+**Key Files**:
+- `src-tauri/src/main.rs` - Entry point (minimal)
+- `src-tauri/src/lib.rs` - Application logic and Tauri builder
+- `src-tauri/src/commands.rs` - ATLAS backend integration
+- `src-tauri/src/sidecar.rs` - Backend process lifecycle
+- `src-tauri/capabilities/default.json` - Permission definitions

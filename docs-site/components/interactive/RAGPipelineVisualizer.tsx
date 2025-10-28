@@ -138,6 +138,28 @@ function StageNode({ stage, index, selected, setSelected, active }: StageNodePro
   const Icon = stage.icon
   const isSelected = selected === stage.id
 
+  const handleClick = () => {
+    setSelected(stage.id)
+
+    // Auto-center the clicked card
+    const stageEl = document.getElementById(stage.id)
+    const pipelineEl = stageEl?.closest('[data-pipeline]')
+    if (stageEl && pipelineEl) {
+      const stageRect = stageEl.getBoundingClientRect()
+      const pipelineRect = pipelineEl.getBoundingClientRect()
+
+      // Calculate position to center the card
+      const stageCenterX = stageRect.left + stageRect.width / 2
+      const pipelineCenterX = pipelineRect.left + pipelineRect.width / 2
+      const scrollOffset = stageCenterX - pipelineCenterX
+
+      pipelineEl.scrollBy({
+        left: scrollOffset,
+        behavior: 'smooth'
+      })
+    }
+  }
+
   return (
     <motion.div
       id={stage.id}
@@ -147,7 +169,7 @@ function StageNode({ stage, index, selected, setSelected, active }: StageNodePro
       className="relative z-10"
     >
       <motion.div
-        onClick={() => setSelected(stage.id)}
+        onClick={handleClick}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         animate={{
@@ -225,52 +247,109 @@ function StageNode({ stage, index, selected, setSelected, active }: StageNodePro
 
 export function RAGPipelineVisualizer() {
   const [selected, setSelected] = useState<string | null>(null)
-  const [activeStages, setActiveStages] = useState<Set<number>>(new Set())
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [isLocked, setIsLocked] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
+  const pipelineRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: false, amount: 0.3 })
 
-  // Apple-style scroll-triggered progressive animation
+  // Track which stages are centered
+  const [activeStages, setActiveStages] = useState<Set<string>>(new Set())
+
+  // Apple-style scroll-jacking: page scroll position drives horizontal movement
   useEffect(() => {
-    if (!isInView || !sectionRef.current) return
-
     const handleScroll = () => {
-      if (!sectionRef.current) return
+      if (!sectionRef.current || !pipelineRef.current) return
 
-      const section = sectionRef.current
-      const rect = section.getBoundingClientRect()
+      const pipeline = pipelineRef.current
+      const stickyContainer = sectionRef.current
+      const parentContainer = stickyContainer.parentElement
+      if (!parentContainer) return
+
+      const parentRect = parentContainer.getBoundingClientRect()
+      const stickyRect = stickyContainer.getBoundingClientRect()
       const windowHeight = window.innerHeight
 
-      // Calculate how much of the section is in view
-      const scrollProgress = Math.max(
-        0,
-        Math.min(
-          1,
-          (windowHeight - rect.top) / (windowHeight + rect.height)
-        )
-      )
+      // Parent container has height: 350vh
+      // Sticky container becomes sticky when parent reaches top of viewport
+      // It stays sticky for 250vh of scroll (350vh - 100vh for sticky itself)
+      const scrollRange = windowHeight * 2.5 // 250vh range for animation (longer, slower scroll)
 
-      // Activate stages progressively based on scroll
-      const stagesToActivate = Math.floor(scrollProgress * (pipelineStages.length + 1))
-      const newActiveStages = new Set<number>()
+      // When parentRect.top = 0, sticky just engaged (start of animation)
+      // When parentRect.top = -250vh, animation complete (sticky about to release)
+      const scrolledDistance = Math.max(0, -parentRect.top)
 
-      for (let i = 0; i < Math.min(stagesToActivate, pipelineStages.length); i++) {
-        newActiveStages.add(i)
-      }
+      // Progress from 0 to 1
+      let progress = scrolledDistance / scrollRange
+
+      // Clamp progress between 0 and 1
+      progress = Math.max(0, Math.min(1, progress))
+
+      setScrollProgress(progress)
+
+      // Apply easing for smooth animation
+      const easedProgress = easeInOutQuad(progress)
+
+      // Drive horizontal scroll based on eased progress
+      const maxScroll = pipeline.scrollWidth - pipeline.clientWidth
+      pipeline.scrollLeft = easedProgress * maxScroll
+
+      // Lock state: locked when sticky is engaged (stickyRect.top === 0)
+      const isSticky = stickyRect.top === 0
+      setIsLocked(isSticky)
+
+      // Calculate which stages are centered in viewport
+      const pipelineRect = pipeline.getBoundingClientRect()
+      const viewportCenterX = pipelineRect.left + pipelineRect.width / 2
+
+      const newActiveStages = new Set<string>()
+      pipelineStages.forEach((stage) => {
+        const stageEl = document.getElementById(stage.id)
+        if (stageEl) {
+          const stageRect = stageEl.getBoundingClientRect()
+          const stageCenterX = stageRect.left + stageRect.width / 2
+
+          // Stage is active if it's within 100px of viewport center
+          const distanceFromCenter = Math.abs(stageCenterX - viewportCenterX)
+          if (distanceFromCenter < 150) {
+            newActiveStages.add(stage.id)
+          }
+        }
+      })
 
       setActiveStages(newActiveStages)
     }
 
-    handleScroll() // Initial check
+    // Initial calculation
+    handleScroll()
+
+    // Listen to scroll events
     window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [isInView])
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  // Easing function for smooth animation (ease-in-out quadratic - gentler than cubic)
+  const easeInOutQuad = (t: number): number => {
+    return t < 0.5
+      ? 2 * t * t
+      : 1 - Math.pow(-2 * t + 2, 2) / 2
+  }
 
   const selectedStage = selected ? pipelineStages.find(s => s.id === selected) : null
 
   return (
-    <div ref={sectionRef} className="mx-auto my-32 max-w-7xl px-4">
-      <div ref={ref}>
+    <div className="relative" style={{ height: '350vh' }}>
+      {/* Sticky container that locks in viewport during scroll */}
+      <div
+        ref={sectionRef}
+        className="sticky top-0 mx-auto max-w-7xl px-4"
+        style={{ height: '100vh', display: 'flex', alignItems: 'center' }}
+      >
+        <div ref={ref} className="w-full">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -279,44 +358,55 @@ export function RAGPipelineVisualizer() {
           className="mb-12 text-center"
         >
         <h2 className="mb-4 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl">
-          RAG Pipeline Visualizer
+          The Architecture
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
           Scroll down to see the data flow through Apollo's pipeline, or click any stage to explore
         </p>
       </motion.div>
 
-      {/* Pipeline Visualization */}
-      <div className="relative overflow-x-auto rounded-3xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50 p-12 dark:border-gray-800 dark:from-gray-900 dark:to-gray-800/50">
-        <div className="min-w-max">
+      {/* Pipeline Visualization - Horizontal Scroll Container */}
+      <div
+        ref={pipelineRef}
+        data-pipeline
+        className="relative overflow-x-auto rounded-3xl border border-black bg-black p-12 dark:border-black dark:bg-black"
+        style={{
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        } as React.CSSProperties}
+      >
+        <style jsx>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+        <div className="flex min-w-max items-center justify-start gap-6" style={{ width: 'max-content', paddingLeft: 'calc(50% - 100px)', paddingRight: 'calc(50% - 100px)' }}>
           {/* Connection lines */}
           {pipelineStages.slice(0, -1).map((stage, index) => (
             <AnimatedBeam
               key={`beam-${index}`}
               from={stage.id}
               to={pipelineStages[index + 1].id}
-              active={activeStages.has(index) && activeStages.has(index + 1)}
+              active={activeStages.has(stage.id) && activeStages.has(pipelineStages[index + 1].id)}
               delay={0}
             />
           ))}
 
           {/* Stage nodes */}
-          <div className="flex items-center justify-start gap-6">
-            {pipelineStages.map((stage, index) => (
-              <React.Fragment key={stage.id}>
-                <StageNode
-                  stage={stage}
-                  index={index}
-                  selected={selected}
-                  setSelected={setSelected}
-                  active={activeStages.has(index)}
-                />
-                {index < pipelineStages.length - 1 && (
-                  <ArrowRight className="h-6 w-6 flex-shrink-0 text-gray-400" />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
+          {pipelineStages.map((stage, index) => (
+            <React.Fragment key={stage.id}>
+              <StageNode
+                stage={stage}
+                index={index}
+                selected={selected}
+                setSelected={setSelected}
+                active={activeStages.has(stage.id)}
+              />
+              {index < pipelineStages.length - 1 && (
+                <ArrowRight className="h-6 w-6 flex-shrink-0 text-gray-400" />
+              )}
+            </React.Fragment>
+          ))}
         </div>
       </div>
 
@@ -325,12 +415,19 @@ export function RAGPipelineVisualizer() {
         {selectedStage && (
           <motion.div
             key={selectedStage.id}
-            initial={{ opacity: 0, y: 20, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: -20, height: 0 }}
-            transition={{ duration: 0.4 }}
-            className="mt-8 overflow-hidden rounded-2xl border-2 bg-white p-8 shadow-xl dark:border-gray-800 dark:bg-gray-900"
-            style={{ borderColor: selectedStage.color }}
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            transition={{
+              duration: 0.35,
+              ease: [0.16, 1, 0.3, 1] // Custom easing for smooth feel
+            }}
+            className="mt-8 overflow-hidden rounded-3xl border p-8 shadow-2xl backdrop-blur-xl bg-white/40 dark:bg-gray-900/40"
+            style={{
+              borderColor: `${selectedStage.color}30`,
+              backdropFilter: 'blur(20px) saturate(150%)',
+              boxShadow: `0 20px 60px -15px ${selectedStage.color}10, 0 0 0 1px rgba(255,255,255,0.1)`
+            }}
           >
             <div className="flex items-start gap-6">
               <div
@@ -368,6 +465,7 @@ export function RAGPipelineVisualizer() {
           </motion.div>
         )}
       </AnimatePresence>
+        </div>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ export function WhyApollo() {
     <div className="mx-auto my-20 max-w-7xl px-4">
       <div className="mb-16 text-center">
         <h2 className="mb-3 text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
-          Why Choose Apollo
+          Why Apollo
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
           Four core principles that set us apart from traditional RAG frameworks

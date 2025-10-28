@@ -1,0 +1,531 @@
+---
+title: Troubleshooting Guide
+description: Comprehensive guide to diagnosing and fixing common issues in Apollo RAG
+---
+
+import { Callout } from '../../components/Callout'
+
+# Troubleshooting Guide
+
+Comprehensive guide for diagnosing and resolving common issues with Apollo RAG.
+
+## Troubleshooting Overview
+
+Apollo is a complex system with multiple layers (Frontend, Tauri, Backend). Issues can arise at any layer. This guide helps you:
+
+- Identify which layer is causing problems
+- Use diagnostic commands to gather information
+- Apply fixes systematically
+- Know when to escalate issues
+
+### Quick Diagnostics
+
+```bash
+# Check backend health
+curl http://localhost:8000/api/health
+
+# Check Docker containers
+docker ps
+docker logs atlas-backend --tail 50
+
+# Check GPU availability
+nvidia-smi
+
+# Monitor resource usage
+docker stats
+```
+
+## Common Issues by Category
+
+### Startup Issues
+
+#### Docker Container Won't Start
+
+**Symptoms**: `docker-compose up` fails or containers exit immediately
+
+<Callout type="error">
+**Quick Fix**: Check Docker daemon is running and you have sufficient resources (48GB RAM, 16GB VRAM minimum)
+</Callout>
+
+**Diagnostic Steps**:
+
+```bash
+# Check container status
+docker-compose -f backend/docker-compose.atlas.yml ps
+
+# View detailed logs
+docker-compose -f backend/docker-compose.atlas.yml logs atlas-backend
+
+# Check resource limits
+docker stats --no-stream
+```
+
+**Common Causes**:
+
+- **Insufficient VRAM**: Model loading requires 6-14GB depending on model
+   - Error: `CUDA out of memory`
+   - Fix: Reduce `GPU_LAYERS` or switch to smaller model
+
+- **Port conflicts**: Another service using 8000, 6333, or 6379
+   - Error: `bind: address already in use`
+   - Fix: `lsof -i :8000` to find conflicting process
+
+- **Missing models**: GGUF files not in `/models/`
+   - Error: `FileNotFoundError: models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf`
+   - Fix: Download models from HuggingFace
+
+#### CUDA Not Detected
+
+**Symptoms**: Backend starts but uses CPU, very slow inference (8-12 tok/s)
+
+```bash
+# Check CUDA installation
+docker exec atlas-backend nvcc --version
+
+# Check GPU visibility
+docker exec atlas-backend nvidia-smi
+
+# Verify CUDA libraries
+docker exec atlas-backend ldconfig -p | grep cuda
+```
+
+**Common Causes**:
+
+- **NVIDIA runtime not configured**:
+   ```bash
+   # Fix: Install nvidia-docker2
+   sudo apt-get install nvidia-docker2
+   sudo systemctl restart docker
+   ```
+
+- **WSL2 driver path missing** (Windows):
+   - Error: `libcuda.so.1: cannot open shared object file`
+   - Fix: Add to `docker-compose.yml`:
+     ```yaml
+     environment:
+       LD_LIBRARY_PATH: /usr/lib/wsl/drivers:$LD_LIBRARY_PATH
+     ```
+
+#### Model Loading Timeout
+
+**Symptoms**: Container health check fails, backend stuck at "Loading model..."
+
+<Callout type="warning">
+**Expected**: Model loading takes 10-30 seconds. Health check has 45s start period.
+</Callout>
+
+```bash
+# Monitor loading progress
+docker logs atlas-backend -f | grep -i "loading\|model\|initialized"
+
+# Check VRAM during load
+watch -n 1 nvidia-smi
+```
+
+**Fix**: Increase health check `start_period` in `docker-compose.atlas.yml`:
+```yaml
+healthcheck:
+  start_period: 90s  # Increase from 45s
+```
+
+### Performance Issues
+
+#### Slow Query Response (more than 30s)
+
+**Expected latency**: 8-15s (simple mode), 10-25s (adaptive mode)
+
+**Diagnostic Steps**:
+
+```bash
+# Check current mode and settings
+curl http://localhost:8000/api/settings
+
+# Monitor query timing breakdown
+# Look for "timing" in query response
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question":"test","mode":"simple"}'
+```
+
+**Common Causes**:
+
+- **Cache disabled**: Redis not running or misconfigured
+   - Check: `docker ps | grep redis`
+   - Fix: Ensure Redis container healthy
+
+- **CPU embeddings bottleneck**: RTX 5080 incompatibility forces CPU mode
+   - Expected: 50-100ms embedding time
+   - If more than 500ms: Check `FORCE_TORCH_CPU=1` is set
+
+- **Reranking overhead**: Using `quality` preset with many documents
+   - Fix: Switch to `quick` preset or reduce `top_k` values
+
+<Callout type="tip">
+**Performance Tuning**: Cache hit rate of 60-80% is normal. Check `/api/cache/stats` for current hit rate.
+</Callout>
+
+#### Memory Leaks
+
+**Symptoms**: Gradual RAM/VRAM increase over time, eventual OOM
+
+```bash
+# Monitor memory over time
+watch -n 5 'docker stats --no-stream | grep atlas-backend'
+
+# Check Python memory usage
+docker exec atlas-backend python -c "
+import psutil
+process = psutil.Process()
+print(f'RAM: {process.memory_info().rss / 1024**3:.2f} GB')
+"
+```
+
+**Common Causes**:
+
+- **Conversation memory not clearing**: Ring buffer grows unbounded
+   - Fix: Call `/api/conversation/clear` periodically
+   - Automatic fix: Set TTL in Redis
+
+- **Embedding cache unbounded growth**:
+   - Check: `redis-cli INFO memory`
+   - Fix: Redis `maxmemory-policy: allkeys-lru` configured correctly
+
+- **Model hotswap residual VRAM**:
+   - Symptom: VRAM not released after switch
+   - Fix: Explicit cleanup in `model_manager.py` (already implemented)
+
+### GPU Issues
+
+#### Out of Memory (OOM)
+
+**Symptoms**: `CUDA out of memory` error during query or reindexing
+
+```bash
+# Check VRAM usage
+nvidia-smi --query-gpu=memory.used,memory.total --format=csv
+
+# Monitor during operation
+watch -n 1 nvidia-smi
+```
+
+**Immediate Fixes**:
+
+- **Reduce GPU layers**:
+   ```yaml
+   environment:
+     GPU_LAYERS: 25  # Reduce from 33
+   ```
+
+- **Switch to smaller model**:
+   - Llama 3.1 8B Q5: 5.4GB VRAM
+   - Llama 3.2 1B Q4: 771MB VRAM (draft model)
+
+- **Clear GPU cache**:
+   ```bash
+   docker exec atlas-backend python -c "
+   import torch
+   torch.cuda.empty_cache()
+   print('GPU cache cleared')
+   "
+   ```
+
+<Callout type="error">
+**Critical**: Reindexing uses embedding model + reranker simultaneously (10GB VRAM). Ensure 16GB VRAM available.
+</Callout>
+
+#### GPU Not Utilized (0% Usage)
+
+**Symptoms**: GPU idle while backend running, slow inference
+
+```bash
+# Check GPU process
+nvidia-smi pmon -c 1
+
+# Verify llama.cpp CUDA build
+docker exec atlas-backend python -c "
+from llama_cpp import Llama
+print('CUDA available:', Llama.supports_cuda())
+"
+```
+
+**Fix**: Rebuild llama-cpp-python with CUDA:
+```bash
+docker-compose down
+docker-compose build --no-cache atlas-backend
+docker-compose up -d
+```
+
+### Cache Issues
+
+#### Stale Cache Responses
+
+**Symptoms**: Reindexed documents but queries return old results
+
+<Callout type="warning">
+**Automatic Behavior**: Cache cleared on reindex. If not, manual clear needed.
+</Callout>
+
+```bash
+# Clear all caches
+curl -X POST http://localhost:8000/api/conversation/clear
+
+# Verify Redis empty
+docker exec redis redis-cli FLUSHALL
+
+# Check cache stats
+curl http://localhost:8000/api/cache/stats
+```
+
+#### Redis Connection Failed
+
+**Symptoms**: `ConnectionError: Error 111 connecting to redis:6379. Connection refused.`
+
+```bash
+# Check Redis container
+docker ps | grep redis
+
+# Test Redis connectivity from backend
+docker exec atlas-backend redis-cli -h redis ping
+
+# Check Redis logs
+docker logs redis --tail 50
+```
+
+**Fix**: Restart Redis container:
+```bash
+docker-compose restart redis
+```
+
+### Network Issues
+
+#### Backend Not Reachable from Tauri
+
+**Symptoms**: Frontend shows "Offline" indicator, health checks fail
+
+```bash
+# Test from host machine
+curl http://localhost:8000/api/health
+
+# Check Docker network
+docker network inspect atlas-network
+
+# Verify backend listening
+docker exec atlas-backend netstat -tuln | grep 8000
+```
+
+**Common Causes**:
+
+- **Firewall blocking localhost**: Windows Firewall or antivirus
+   - Fix: Add exception for port 8000
+
+- **Docker network isolation**: Backend in custom network
+   - Fix: Use host network mode (not recommended) or verify port mapping
+
+- **Backend crash loop**: Check logs for Python errors
+   ```bash
+   docker logs atlas-backend --tail 100 -f
+   ```
+
+#### Timeout on Long Queries
+
+**Symptoms**: Query aborts after 60 seconds with timeout error
+
+<Callout type="info">
+**Expected**: Long queries (adaptive mode, cold start) can take 25+ seconds
+</Callout>
+
+**Fix**: Increase timeout in frontend:
+```typescript
+// src/services/api.ts
+const TIMEOUTS = {
+  QUERY: 120000,  // Increase from 60000
+};
+```
+
+## Debug Mode & Logging
+
+### Enable Debug Logging
+
+```yaml
+# docker-compose.atlas.yml
+environment:
+  LOG_LEVEL: DEBUG  # Change from INFO
+```
+
+Restart backend:
+```bash
+docker-compose restart atlas-backend
+```
+
+### Log Locations
+
+```bash
+# Backend application logs
+docker logs atlas-backend
+
+# Persistent logs (if volume mounted)
+cat backend/logs/backend.log
+
+# Redis logs
+docker logs redis
+
+# Qdrant logs
+docker logs qdrant
+```
+
+### Structured Logging
+
+Backend uses structured JSON logging:
+```json
+{
+  "timestamp": "2025-10-28T10:30:45Z",
+  "level": "INFO",
+  "component": "rag_engine",
+  "message": "Query processed",
+  "metadata": {
+    "query_time_ms": 8234,
+    "cache_hit": false,
+    "strategy": "simple"
+  }
+}
+```
+
+Search logs efficiently:
+```bash
+docker logs atlas-backend | jq 'select(.level == "ERROR")'
+docker logs atlas-backend | jq 'select(.component == "llm_engine")'
+```
+
+## Log Analysis Patterns
+
+### Common Error Patterns
+
+**Model loading failure**:
+```
+ERROR:llm_engine_llamacpp:Failed to load model: CUDA out of memory
+```
+**Fix**: Reduce GPU_LAYERS or switch model
+
+**Vector DB connection error**:
+```
+ERROR:vector_store_qdrant:Failed to connect to Qdrant at qdrant:6333
+```
+**Fix**: Check Qdrant container health
+
+**Prompt injection detected**:
+```
+WARNING:api.query:Prompt injection attempt detected: ignore previous instructions...
+```
+**Info**: Logged but not blocked. Monitor for abuse patterns.
+
+### Performance Indicators
+
+Look for timing breakdown in logs:
+```
+INFO:rag_engine:Query timing: cache_lookup=0.9ms, retrieval=145ms, generation=8234ms
+```
+
+**Good**: Cache hit less than 1ms, retrieval less than 200ms, generation 8-15s
+**Bad**: Retrieval more than 500ms (indexing issue), generation more than 30s (GPU not used)
+
+## Health Check Diagnostics
+
+### Interpreting Health Response
+
+```bash
+curl http://localhost:8000/api/health | jq
+```
+
+```json
+{
+  "status": "healthy",
+  "components": {
+    "vectorstore": "ready",
+    "llm": "ready",
+    "bm25_retriever": "ready",
+    "cache": "ready",
+    "conversation_memory": "ready"
+  }
+}
+```
+
+**Component Status**:
+- `ready`: Component operational
+- `error`: Component failed initialization
+- `null`: Component not initialized yet
+
+<Callout type="error">
+**Degraded Mode**: If `status: "degraded"`, queries may still work but some features disabled (e.g., caching, BM25)
+</Callout>
+
+## Getting Help
+
+### Information to Collect
+
+When reporting issues, include:
+
+- **System info**:
+   ```bash
+   docker version
+   nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
+   ```
+
+- **Backend logs**:
+   ```bash
+   docker logs atlas-backend --tail 200 > backend.log
+   ```
+
+- **Health check**:
+   ```bash
+   curl http://localhost:8000/api/health > health.json
+   ```
+
+- **Settings**:
+   ```bash
+   curl http://localhost:8000/api/settings > settings.json
+   ```
+
+- **Docker stats**:
+   ```bash
+   docker stats --no-stream > stats.txt
+   ```
+
+### GitHub Issues
+
+Open issues at: [GitHub Repository]
+
+**Template**:
+```markdown
+## Environment
+- OS: Windows 11 / Ubuntu 22.04 / macOS
+- Docker version:
+- GPU: RTX 5080 / RTX 4090 / etc
+- VRAM: 16GB
+
+## Problem Description
+[Clear description of the issue]
+
+## Steps to Reproduce
+1.
+2.
+3.
+
+## Expected Behavior
+[What should happen]
+
+## Actual Behavior
+[What actually happens]
+
+## Logs
+[Attach backend.log, health.json, stats.txt]
+```
+
+### Community Support
+
+- **Discord**: [Link]
+- **Documentation**: [https://docs.apollo-rag.com](/)
+- **Email**: z@onyxlab.ai
+
+---
+
+**Need more help?** Check the [Configuration Guide](/getting-started/configuration) or [API Reference](/api-reference).

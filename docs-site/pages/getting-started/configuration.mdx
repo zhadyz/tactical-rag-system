@@ -1,0 +1,530 @@
+---
+title: Configuration
+description: Configure Apollo RAG for optimal performance
+---
+
+import { Callout } from '../../components/Callout'
+
+# Configuration
+
+Apollo RAG offers extensive configuration options to optimize performance for your hardware and use case. This guide covers essential settings for production deployments.
+
+## Configuration Overview
+
+Apollo uses a **multi-layer configuration system**:
+- **Environment variables** (`.env` file) - Service connections and paths
+- **config.yml** - Main configuration file for RAG components
+- **Runtime API** - Dynamic settings updates via `/api/settings`
+
+<Callout type="info">
+Apollo automatically searches for `config.yml` in standard locations: `./config.yml`, `../config.yml`, `/app/config.yml`
+</Callout>
+
+## Environment Variables
+
+Create a `.env` file in your project root:
+
+```bash
+# ============================================================
+# CUDA & GPU Settings
+# ============================================================
+CUDA_HOME=/usr/local/cuda
+PATH=/usr/local/cuda/bin:$PATH
+LD_LIBRARY_PATH=/usr/lib/wsl/drivers:/usr/local/cuda/lib64
+
+# ============================================================
+# Model Cache (HuggingFace)
+# ============================================================
+HF_HOME=/root/.cache/huggingface
+TRANSFORMERS_CACHE=/root/.cache/huggingface
+
+# ============================================================
+# Storage Paths
+# ============================================================
+RAG_DOCUMENTS_DIR=/app/documents
+RAG_VECTOR_DB_DIR=/app/chroma_db
+RAG_QDRANT_DIR=/app/qdrant_storage
+RAG_CACHE_DIR=/app/.cache
+
+# ============================================================
+# Vector Store Selection
+# ============================================================
+VECTOR_STORE=qdrant  # Options: "chromadb" | "qdrant"
+
+# ============================================================
+# LLM Backend Selection
+# ============================================================
+LLM_BACKEND=llamacpp  # Options: "llamacpp" | "ollama"
+OLLAMA_HOST=http://ollama:11434  # Only if using Ollama
+
+# ============================================================
+# Cache Configuration (Redis)
+# ============================================================
+RAG_CACHE__REDIS_HOST=redis
+RAG_CACHE__REDIS_PORT=6379
+RAG_CACHE__REDIS_DB=0
+RAG_CACHE__REDIS_PASSWORD=  # Optional
+
+# ============================================================
+# API Configuration
+# ============================================================
+API_HOST=0.0.0.0
+API_PORT=8000
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# ============================================================
+# Logging
+# ============================================================
+LOG_LEVEL=INFO
+LOG_DIR=/app/logs
+```
+
+<Callout type="warning">
+**Production Security**: Never commit `.env` files to version control. Use secrets management for production deployments.
+</Callout>
+
+## Model Configuration
+
+### LLM Backend: llama.cpp (Recommended)
+
+llama.cpp provides **80-100 tok/s** inference speed with GPU acceleration:
+
+```yaml
+# config.yml
+llm_backend: llamacpp
+
+llamacpp:
+  model_path: ./models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+
+  # GPU Configuration
+  n_gpu_layers: 33        # Full GPU offload for 8B models
+  n_ctx: 8192            # Context window size
+  n_batch: 512           # Batch size (optimal for RTX 5080)
+  n_threads: 8           # CPU threads for processing
+
+  # Memory Management
+  use_mlock: true        # Lock model in RAM (prevents swapping)
+  use_mmap: true         # Memory-mapped file access
+
+  # Generation Parameters
+  temperature: 0.0       # Deterministic output
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+  max_tokens: 2048
+
+  # Advanced: Speculative Decoding (40% faster TTFT)
+  enable_speculative_decoding: false
+  draft_model_path: ./models/Llama-3.2-1B-Instruct-Q4_K_M.gguf
+  n_gpu_layers_draft: 33
+  num_draft: 5
+```
+
+<Callout type="tip">
+**Performance Tip**: Enable `enable_speculative_decoding: true` with a draft model for 40% faster time-to-first-token (500ms → 300ms).
+</Callout>
+
+### LLM Backend: Ollama (Fallback)
+
+```yaml
+llm_backend: ollama
+ollama_host: http://ollama:11434
+
+llm:
+  model_name: qwen2.5:14b-instruct-q4_K_M
+  temperature: 0.0
+  num_ctx: 8192
+  timeout: 120
+```
+
+### Embedding Model
+
+```yaml
+embedding:
+  model_name: BAAI/bge-large-en-v1.5
+  model_type: huggingface
+  dimension: 1024
+  batch_size: 64
+  cache_embeddings: true
+  normalize_embeddings: true
+```
+
+## Caching Configuration (ATLAS Protocol)
+
+Apollo uses a **5-layer caching architecture** for optimal performance:
+
+### L1: Query Cache (NextGenCacheManager)
+
+```yaml
+cache:
+  redis_host: redis
+  redis_port: 6379
+  redis_db: 0
+  ttl: 604800              # 7 days (seconds)
+  max_cache_size: 10000
+```
+
+**Features**:
+- **Exact match**: 0.86ms average latency
+- **Normalized match**: Case/whitespace insensitive
+- **Semantic match**: 0.95 similarity threshold
+
+### L2: Embedding Cache
+
+Automatically enabled when `embedding.cache_embeddings: true`
+
+**Performance Impact**:
+- 60-80% cache hit rate
+- 98% latency reduction (50-100ms → less than 1ms)
+- 7-day TTL
+
+### L3: Conversation Memory
+
+```yaml
+# In-memory ring buffer (no config needed)
+# Capacity: 10 exchanges
+# Auto-summarization at 5 exchanges
+```
+
+### L4: Model Cache
+
+Automatically managed by HuggingFace. Models cached at:
+- `/root/.cache/huggingface` (Docker)
+- `~/.cache/huggingface` (local)
+
+### L5: Query Prefetcher (Experimental)
+
+```python
+# Disabled by default - experimental feature
+# Predictive prefetching based on query patterns
+```
+
+<Callout type="info">
+**Cache Performance**: With optimal settings, cache hits reduce query latency from 8-15s to less than 1ms.
+</Callout>
+
+## Retrieval Configuration
+
+### Basic Retrieval
+
+```yaml
+retrieval:
+  initial_k: 100           # Initial candidates
+  rerank_k: 30            # After first rerank
+  final_k: 8              # Final context for LLM
+  similarity_threshold: 0.5
+
+  # Hybrid Search Weights
+  dense_weight: 0.5       # Vector search weight
+  sparse_weight: 0.5      # BM25 keyword weight
+```
+
+### Query Transformations
+
+```yaml
+query_transformation:
+  # HyDE (Hypothetical Document Embeddings)
+  enable_hyde: true
+  hyde_include_original: true
+  hyde_temperature: 0.3
+
+  # Multi-Query Rewriting
+  enable_multiquery_rewrite: true
+  multiquery_num_variants: 3
+  rewrite_temperature: 0.5
+
+  # Query Classification
+  enable_classification: true  # Routes to simple/adaptive mode
+```
+
+### Advanced Reranking
+
+```yaml
+advanced_reranking:
+  # BGE Reranker v2-m3 (85% faster than LLM)
+  enable_bge_reranker: true
+  bge_reranker_device: cuda
+  bge_reranker_batch_size: 32
+
+  # LLM Reranking (fallback)
+  enable_llm_reranking: true
+  llm_rerank_top_n: 3      # Quick Win: Reduced from 5→3
+
+  # Rerank Preset (quick/quality/deep)
+  rerank_preset: quality   # Options: quick(2 docs), quality(3 docs), deep(5 docs)
+
+  # Cross-encoder weight
+  hybrid_rerank_alpha: 0.7
+```
+
+<Callout type="tip">
+**Performance vs Quality**: Use `rerank_preset: quick` for faster responses (2 docs) or `deep` for highest quality (5 docs).
+</Callout>
+
+## Document Processing
+
+### Semantic Chunking (Recommended)
+
+```yaml
+semantic_chunking:
+  enable_semantic_chunking: true
+  buffer_size: 1                    # Sentence context
+  breakpoint_threshold: 0.75        # Similarity threshold for splits
+  min_chunk_size: 200              # Minimum characters
+  max_chunk_size: 2000             # Maximum characters
+```
+
+### Fixed-Size Chunking
+
+```yaml
+chunking:
+  strategy: fixed          # or "hybrid"
+  chunk_size: 1200
+  chunk_overlap: 400
+  min_chunk_size: 100
+```
+
+## GPU Settings
+
+### NVIDIA GPU Configuration
+
+For **CUDA 12.1** on RTX 5080/5090:
+
+```dockerfile
+# Dockerfile.atlas
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV LD_LIBRARY_PATH=/usr/lib/wsl/drivers:/usr/local/cuda/lib64
+```
+
+```yaml
+# docker-compose.atlas.yml
+services:
+  atlas-backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']      # GPU device ID
+              capabilities: [gpu]
+```
+
+### GPU Memory Allocation
+
+**For 8B models (Q5_K_M)**:
+- VRAM: ~5.4GB
+- System RAM: 8-16GB
+- `n_gpu_layers: 33` (full offload)
+
+**For 14B models (Q8_0)**:
+- VRAM: ~14.8GB
+- System RAM: 16-32GB
+- `n_gpu_layers: 40` (full offload)
+
+<Callout type="warning">
+**Memory Limits**: Ensure `n_gpu_layers` × layer_size fits in VRAM. Exceeding VRAM causes severe slowdowns.
+</Callout>
+
+## Vector Store Selection
+
+### Qdrant (Recommended)
+
+```yaml
+vector_store: qdrant
+qdrant_db_dir: ./qdrant_storage
+
+# Qdrant optimizations
+# - HNSW indexing: 3-5ms search latency
+# - Hybrid search: Dense + sparse vectors
+# - Scales to 100M+ documents
+```
+
+**Connection**: `http://localhost:6333` (HTTP API)
+
+### ChromaDB (Legacy)
+
+```yaml
+vector_store: chromadb
+vector_db_dir: ./chroma_db
+
+# Good for less than 100K documents
+# SQLite-based persistence
+```
+
+## Advanced Options
+
+### Rate Limiting
+
+Configured in `app/main.py`:
+
+```python
+# General endpoints: 100 req/min
+# Query endpoint: 30 req/min
+```
+
+For production, use **Redis-based distributed rate limiting**.
+
+### CORS Configuration
+
+```bash
+# .env
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+```
+
+### Health Checks
+
+```yaml
+# docker-compose.atlas.yml
+healthcheck:
+  test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+  interval: 15s
+  timeout: 5s
+  start_period: 45s
+  retries: 3
+```
+
+## Complete config.yml Example
+
+```yaml
+# ============================================================
+# Apollo RAG - Production Configuration
+# ============================================================
+
+# Storage Paths
+documents_dir: ./documents
+vector_db_dir: ./chroma_db
+qdrant_db_dir: ./qdrant_storage
+cache_dir: ./.cache
+
+# Vector Store
+vector_store: qdrant
+
+# LLM Backend
+llm_backend: llamacpp
+ollama_host: http://ollama:11434
+
+# API Configuration
+api_host: 0.0.0.0
+api_port: 8000
+
+# ============================================================
+# Embedding Model
+# ============================================================
+embedding:
+  model_name: BAAI/bge-large-en-v1.5
+  model_type: huggingface
+  dimension: 1024
+  batch_size: 64
+  cache_embeddings: true
+  normalize_embeddings: true
+
+# ============================================================
+# LLM Configuration (llama.cpp)
+# ============================================================
+llamacpp:
+  model_path: ./models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+  n_gpu_layers: 33
+  n_ctx: 8192
+  n_batch: 512
+  n_threads: 8
+  use_mlock: true
+  use_mmap: true
+  temperature: 0.0
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+  max_tokens: 2048
+  verbose: false
+
+# ============================================================
+# Retrieval Configuration
+# ============================================================
+retrieval:
+  initial_k: 100
+  rerank_k: 30
+  final_k: 8
+  dense_weight: 0.5
+  sparse_weight: 0.5
+  similarity_threshold: 0.5
+  use_reranking: true
+
+# ============================================================
+# Query Transformations
+# ============================================================
+query_transformation:
+  enable_hyde: true
+  enable_multiquery_rewrite: true
+  enable_classification: true
+  hyde_include_original: true
+  multiquery_num_variants: 3
+  hyde_temperature: 0.3
+  rewrite_temperature: 0.5
+
+# ============================================================
+# Advanced Reranking
+# ============================================================
+advanced_reranking:
+  enable_bge_reranker: true
+  bge_reranker_device: cuda
+  bge_reranker_batch_size: 32
+  enable_llm_reranking: true
+  llm_rerank_top_n: 3
+  rerank_preset: quality
+  hybrid_rerank_alpha: 0.7
+  llm_scoring_temperature: 0.0
+
+# ============================================================
+# Semantic Chunking
+# ============================================================
+semantic_chunking:
+  enable_semantic_chunking: true
+  buffer_size: 1
+  breakpoint_threshold: 0.75
+  min_chunk_size: 200
+  max_chunk_size: 2000
+
+# ============================================================
+# Cache Configuration
+# ============================================================
+cache:
+  redis_host: redis
+  redis_port: 6379
+  redis_db: 0
+  redis_password: null
+  ttl: 604800
+  max_cache_size: 10000
+```
+
+## Performance Tuning
+
+### For Speed (Lower Latency)
+
+```yaml
+advanced_reranking:
+  rerank_preset: quick          # 2 docs instead of 3
+query_transformation:
+  enable_hyde: false            # Skip HyDE transformation
+retrieval:
+  final_k: 5                    # Fewer context chunks
+```
+
+### For Quality (Higher Accuracy)
+
+```yaml
+advanced_reranking:
+  rerank_preset: deep           # 5 docs for reranking
+query_transformation:
+  enable_hyde: true
+  enable_multiquery_rewrite: true
+retrieval:
+  final_k: 10                   # More context
+```
+
+## Next Steps
+
+Now that you've configured Apollo RAG, you're ready to make your first query:
+
+- [Making Your First Query](/getting-started/first-query) - Query the API
+- [API Reference](/api-reference) - Complete endpoint documentation
+- [Advanced Topics](/advanced/monitoring) - Monitoring and optimization tips

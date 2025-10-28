@@ -29,12 +29,17 @@ function ParticleCanvas({ active, color }: { active: boolean; color: string }) {
     size: number
   }>>([])
   const animationFrameRef = useRef<number>()
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext('2d', { alpha: true })
+    const ctx = canvas.getContext('2d', {
+      alpha: true,
+      desynchronized: true, // Hint for GPU acceleration
+      willReadFrequently: false
+    })
     if (!ctx) return
 
     // Set canvas size
@@ -45,6 +50,13 @@ function ParticleCanvas({ active, color }: { active: boolean; color: string }) {
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
     }
     updateSize()
+
+    // GPU warm-up: render a single frame to initialize GPU pipeline
+    ctx.fillStyle = 'rgba(0,0,0,0)'
+    ctx.fillRect(0, 0, 1, 1)
+
+    // Small delay to let GPU initialize
+    setTimeout(() => setIsReady(true), 50)
 
     // Initialize particles - fewer, slower, more faded
     const initParticles = () => {
@@ -61,6 +73,8 @@ function ParticleCanvas({ active, color }: { active: boolean; color: string }) {
 
     // Animation loop
     const animate = () => {
+      if (!isReady) return // Don't animate until GPU is ready
+
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       particlesRef.current.forEach((particle) => {
@@ -99,13 +113,18 @@ function ParticleCanvas({ active, color }: { active: boolean; color: string }) {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [active, color])
+  }, [active, color, isReady])
 
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 pointer-events-none"
-      style={{ width: '100%', height: '100%' }}
+      className="absolute inset-0 pointer-events-none will-animate"
+      style={{
+        width: '100%',
+        height: '100%',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
     />
   )
 }
@@ -179,7 +198,7 @@ export function PerformanceRace() {
   }
 
   return (
-    <div ref={ref} className="mx-auto my-32 max-w-7xl px-4">
+    <div ref={ref} className="mx-auto my-32 max-w-7xl px-4 will-animate">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -188,10 +207,10 @@ export function PerformanceRace() {
         className="mb-16 text-center"
       >
         <h2 className="mb-4 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl">
-          GPU vs CPU: Live Performance Race
+          The Performance Gap
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-          Watch Apollo's GPU acceleration process 100,000 documents in real-time
+          Watch Apollo's GPU acceleration process 100,000 documents in real-time to witness the power of GPU acceleration
         </p>
       </motion.div>
 
@@ -230,14 +249,16 @@ export function PerformanceRace() {
 
           {/* Progress Bar */}
           <div className="relative h-12 overflow-hidden rounded-xl bg-white/50 dark:bg-gray-900/50">
-            <motion.div
-              className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 shadow-lg shadow-blue-500/50"
-              initial={{ width: '0%' }}
-              animate={{ width: `${metrics.gpu.progress}%` }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 shadow-lg shadow-blue-500/50 will-animate"
+              style={{
+                width: `${metrics.gpu.progress}%`,
+                transform: 'translateZ(0)',
+                willChange: 'width'
+              }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
-            </motion.div>
+            </div>
             <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-900 dark:text-white">
               {Math.floor(metrics.gpu.progress)}%
             </div>
@@ -287,11 +308,13 @@ export function PerformanceRace() {
 
           {/* Progress Bar */}
           <div className="relative h-12 overflow-hidden rounded-xl bg-white/50 dark:bg-gray-900/50">
-            <motion.div
-              className="h-full bg-gradient-to-r from-gray-400 via-gray-500 to-gray-600"
-              initial={{ width: '0%' }}
-              animate={{ width: `${metrics.cpu.progress}%` }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
+            <div
+              className="h-full bg-gradient-to-r from-gray-400 via-gray-500 to-gray-600 will-animate"
+              style={{
+                width: `${metrics.cpu.progress}%`,
+                transform: 'translateZ(0)',
+                willChange: 'width'
+              }}
             />
             <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-900 dark:text-white">
               {Math.floor(metrics.cpu.progress)}%
