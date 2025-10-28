@@ -225,76 +225,46 @@ function StageNode({ stage, index, selected, setSelected, active }: StageNodePro
 
 export function RAGPipelineVisualizer() {
   const [selected, setSelected] = useState<string | null>(null)
-  const [playing, setPlaying] = useState(false)
-  const [activeStage, setActiveStage] = useState<number>(-1)
-  const [scrollProgress, setScrollProgress] = useState(0)
+  const [activeStages, setActiveStages] = useState<Set<number>>(new Set())
   const ref = useRef<HTMLDivElement>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, amount: 0.2 })
+  const isInView = useInView(ref, { once: false, amount: 0.3 })
 
-  // Apple-style scroll-driven horizontal navigation
+  // Apple-style scroll-triggered progressive animation
   useEffect(() => {
+    if (!isInView || !sectionRef.current) return
+
     const handleScroll = () => {
-      if (!sectionRef.current || !scrollContainerRef.current) return
+      if (!sectionRef.current) return
 
       const section = sectionRef.current
-      const container = scrollContainerRef.current
       const rect = section.getBoundingClientRect()
       const windowHeight = window.innerHeight
 
-      // Calculate when section is centered in viewport
-      const sectionCenter = rect.top + rect.height / 2
-      const viewportCenter = windowHeight / 2
-      const distanceFromCenter = sectionCenter - viewportCenter
+      // Calculate how much of the section is in view
+      const scrollProgress = Math.max(
+        0,
+        Math.min(
+          1,
+          (windowHeight - rect.top) / (windowHeight + rect.height)
+        )
+      )
 
-      // If section is roughly centered, use scroll to drive horizontal movement
-      if (Math.abs(distanceFromCenter) < windowHeight * 0.3) {
-        // Calculate scroll progress (0 to 1) based on vertical scroll position
-        const scrollRange = windowHeight * 0.6 // Range where horizontal scroll is active
-        const progress = Math.max(0, Math.min(1, 0.5 - distanceFromCenter / scrollRange))
+      // Activate stages progressively based on scroll
+      const stagesToActivate = Math.floor(scrollProgress * (pipelineStages.length + 1))
+      const newActiveStages = new Set<number>()
 
-        setScrollProgress(progress)
-
-        // Drive horizontal scroll based on vertical scroll
-        const maxScrollLeft = container.scrollWidth - container.clientWidth
-        container.scrollLeft = progress * maxScrollLeft
-
-        // Prevent default scroll if we're in the "locked" range
-        if (progress > 0 && progress < 1 && rect.top < viewportCenter && rect.bottom > viewportCenter) {
-          // Section is locked, user must scroll through horizontal content first
-          document.body.style.overflowY = progress >= 0.99 ? 'auto' : 'hidden'
-        } else {
-          document.body.style.overflowY = 'auto'
-        }
-      } else {
-        document.body.style.overflowY = 'auto'
+      for (let i = 0; i < Math.min(stagesToActivate, pipelineStages.length); i++) {
+        newActiveStages.add(i)
       }
+
+      setActiveStages(newActiveStages)
     }
 
-    window.addEventListener('scroll', handleScroll, { passive: false })
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      document.body.style.overflowY = 'auto'
-    }
-  }, [])
-
-  const playAnimation = () => {
-    setPlaying(true)
-    setActiveStage(0)
-
-    pipelineStages.forEach((_, index) => {
-      setTimeout(() => {
-        setActiveStage(index)
-        if (index === pipelineStages.length - 1) {
-          setTimeout(() => {
-            setPlaying(false)
-            setActiveStage(-1)
-          }, 2000)
-        }
-      }, index * 1500)
-    })
-  }
+    handleScroll() // Initial check
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [isInView])
 
   const selectedStage = selected ? pipelineStages.find(s => s.id === selected) : null
 
@@ -312,40 +282,12 @@ export function RAGPipelineVisualizer() {
           RAG Pipeline Visualizer
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-          Click any stage to explore or watch the data flow through Apollo's pipeline
+          Scroll down to see the data flow through Apollo's pipeline, or click any stage to explore
         </p>
       </motion.div>
 
-      {/* Play Button */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={isInView ? { opacity: 1 } : {}}
-        transition={{ delay: 0.3 }}
-        className="mb-8 flex justify-center"
-      >
-        <button
-          onClick={playAnimation}
-          disabled={playing}
-          className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-2xl disabled:opacity-50 disabled:hover:scale-100"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-purple-700 opacity-0 transition-opacity group-hover:opacity-100" />
-          <span className="relative flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            {playing ? 'Processing...' : 'Animate Data Flow'}
-          </span>
-        </button>
-      </motion.div>
-
       {/* Pipeline Visualization */}
-      <div
-        ref={scrollContainerRef}
-        className="relative overflow-x-auto rounded-3xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50 p-12 dark:border-gray-800 dark:from-gray-900 dark:to-gray-800/50 scroll-smooth"
-        style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          WebkitOverflowScrolling: 'touch'
-        } as React.CSSProperties}
-      >
+      <div className="relative overflow-x-auto rounded-3xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50 p-12 dark:border-gray-800 dark:from-gray-900 dark:to-gray-800/50">
         <div className="min-w-max">
           {/* Connection lines */}
           {pipelineStages.slice(0, -1).map((stage, index) => (
@@ -353,8 +295,8 @@ export function RAGPipelineVisualizer() {
               key={`beam-${index}`}
               from={stage.id}
               to={pipelineStages[index + 1].id}
-              active={playing && activeStage >= index}
-              delay={index * 1.5}
+              active={activeStages.has(index) && activeStages.has(index + 1)}
+              delay={0}
             />
           ))}
 
@@ -367,7 +309,7 @@ export function RAGPipelineVisualizer() {
                   index={index}
                   selected={selected}
                   setSelected={setSelected}
-                  active={playing && activeStage === index}
+                  active={activeStages.has(index)}
                 />
                 {index < pipelineStages.length - 1 && (
                   <ArrowRight className="h-6 w-6 flex-shrink-0 text-gray-400" />
