@@ -2,7 +2,7 @@ import React from 'react'
 import { AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type CalloutType = 'info' | 'warning' | 'error' | 'success'
+type CalloutType = 'info' | 'warning' | 'error' | 'success' | 'tip'
 
 interface CalloutProps {
   type?: CalloutType
@@ -15,7 +15,8 @@ const icons: Record<CalloutType, React.ReactNode> = {
   info: <Info className="h-5 w-5" />,
   warning: <AlertTriangle className="h-5 w-5" />,
   error: <AlertCircle className="h-5 w-5" />,
-  success: <CheckCircle2 className="h-5 w-5" />
+  success: <CheckCircle2 className="h-5 w-5" />,
+  tip: <Info className="h-5 w-5" />
 }
 
 const styles: Record<CalloutType, string> = {
@@ -25,14 +26,17 @@ const styles: Record<CalloutType, string> = {
   error:
     'border-red-200/50 bg-gradient-to-br from-red-50 to-red-100/30 text-red-900 dark:border-red-800/30 dark:from-red-950/30 dark:to-red-900/20 dark:text-red-100',
   success:
-    'border-green-200/50 bg-gradient-to-br from-green-50 to-green-100/30 text-green-900 dark:border-green-800/30 dark:from-green-950/30 dark:to-green-900/20 dark:text-green-100'
+    'border-green-200/50 bg-gradient-to-br from-green-50 to-green-100/30 text-green-900 dark:border-green-800/30 dark:from-green-950/30 dark:to-green-900/20 dark:text-green-100',
+  tip:
+    'border-purple-200/50 bg-gradient-to-br from-purple-50 to-purple-100/30 text-purple-900 dark:border-purple-800/30 dark:from-purple-950/30 dark:to-purple-900/20 dark:text-purple-100'
 }
 
 const iconStyles: Record<CalloutType, string> = {
   info: 'text-blue-600 dark:text-blue-400',
   warning: 'text-yellow-600 dark:text-yellow-400',
   error: 'text-red-600 dark:text-red-400',
-  success: 'text-green-600 dark:text-green-400'
+  success: 'text-green-600 dark:text-green-400',
+  tip: 'text-purple-600 dark:text-purple-400'
 }
 
 export function Callout({ type = 'info', emoji, children, title }: CalloutProps) {
