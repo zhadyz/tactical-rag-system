@@ -13,7 +13,15 @@ export const Footer = () => {
         <div className="flex flex-col items-center justify-between gap-6 text-sm md:flex-row">
           <div className="flex flex-col items-center gap-2 text-gray-600 dark:text-gray-400 md:items-start">
             <div className="flex items-center gap-2">
-              <img src="/icon.png" alt="ONYX" className="h-8 w-8" />
+              <a
+                href="https://onyxlab.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-transform hover:scale-110"
+                aria-label="Visit Onyxlab website"
+              >
+                <img src="/icon.png" alt="ONYX" className="h-8 w-8" />
+              </a>
               <span>© {new Date().getFullYear()} Onyxlab. All rights reserved.</span>
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-500">
