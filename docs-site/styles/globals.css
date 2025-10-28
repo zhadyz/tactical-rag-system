@@ -4,18 +4,32 @@
 
 @layer base {
   :root {
-    --nextra-primary-hue: 215deg;
-    --nextra-navbar-height: 4rem;
+    --nextra-primary-hue: 217deg;
+    --nextra-primary-saturation: 91%;
+    --nextra-primary-lightness: 60%;
+    --nextra-navbar-height: 64px;
     --nextra-menu-height: 3.75rem;
     --nextra-banner-height: 2.5rem;
+    --nextra-bg: 255, 255, 255;
+  }
+
+  .dark {
+    --nextra-primary-hue: 217deg;
+    --nextra-primary-saturation: 91%;
+    --nextra-primary-lightness: 65%;
+    --nextra-bg: 9, 9, 11;
   }
 
   html {
     @apply scroll-smooth;
+    font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
   }
 
   body {
     @apply bg-white text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   /* Custom scrollbar */
@@ -33,6 +47,11 @@
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-400 dark:bg-gray-600;
+  }
+
+  /* Hide scrollbar for RAG Pipeline Visualizer */
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -58,13 +77,28 @@
     @apply border-green-500 bg-green-50 dark:border-green-500/50 dark:bg-green-950/30;
   }
 
-  /* Code block enhancements */
+  /* Code block enhancements - World-class syntax highlighting */
   pre {
-    @apply my-6 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800;
+    @apply my-6 overflow-x-auto rounded-xl border border-gray-200/50 bg-gradient-to-br from-gray-50 to-gray-100 p-6 shadow-sm dark:border-gray-800/50 dark:from-gray-900 dark:to-gray-950;
+    position: relative;
+  }
+
+  pre code {
+    @apply block font-mono text-sm leading-relaxed;
+    text-shadow: 0 0 0.5px rgba(0, 0, 0, 0.3);
   }
 
   code {
-    @apply font-mono text-sm;
+    @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm dark:bg-gray-800;
+  }
+
+  /* Code block copy button */
+  pre:hover .copy-button {
+    opacity: 1;
+  }
+
+  .copy-button {
+    @apply absolute right-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-700 opacity-0 shadow-sm transition-all hover:bg-white hover:shadow-md dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-800;
   }
 
   /* Card component */
@@ -96,6 +130,21 @@
   .focus-ring {
     @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900;
   }
+
+  /* Smooth transitions for interactive elements */
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Link hover effects */
+  a:not(.no-hover) {
+    @apply transition-colors duration-200;
+  }
+
+  /* Button press effect */
+  .btn-press:active {
+    transform: scale(0.98);
+  }
 }
 
 /* Nextra theme overrides */
@@ -107,11 +156,15 @@
   @apply border-b border-gray-200 dark:border-gray-800;
 }
 
-/* Animation utilities */
-@keyframes fadeIn {
+/* ============================================
+   ANIMATION SYSTEM - World-Class Micro-interactions
+   ============================================ */
+
+/* Fade in with stagger support */
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -121,6 +174,127 @@
 
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animation-delay-100 { animation-delay: 0.1s; }
+.animation-delay-200 { animation-delay: 0.2s; }
+.animation-delay-300 { animation-delay: 0.3s; }
+.animation-delay-400 { animation-delay: 0.4s; }
+.animation-delay-500 { animation-delay: 0.5s; }
+
+/* GPU Gradient Text Effect */
+@keyframes gpuGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gpu-gradient-text {
+  background: linear-gradient(
+    90deg,
+    #3b82f6 0%,
+    #8b5cf6 25%,
+    #06b6d4 50%,
+    #3b82f6 75%,
+    #8b5cf6 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gpuGradient 6s linear infinite;
+}
+
+/* Animated GPU Particles */
+@keyframes gpuParticle {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.gpu-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  animation: gpuParticle var(--duration, 8s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+.gpu-particle-1 {
+  top: 10%;
+  left: 10%;
+  --duration: 7s;
+  --delay: 0s;
+  --tx: 300px;
+  --ty: 400px;
+}
+
+.gpu-particle-2 {
+  top: 20%;
+  right: 15%;
+  --duration: 9s;
+  --delay: 1s;
+  --tx: -250px;
+  --ty: 350px;
+}
+
+.gpu-particle-3 {
+  bottom: 30%;
+  left: 20%;
+  --duration: 8s;
+  --delay: 2s;
+  --tx: 400px;
+  --ty: -300px;
+}
+
+.gpu-particle-4 {
+  bottom: 20%;
+  right: 25%;
+  --duration: 10s;
+  --delay: 1.5s;
+  --tx: -350px;
+  --ty: -400px;
+}
+
+.gpu-particle-5 {
+  top: 50%;
+  left: 50%;
+  --duration: 11s;
+  --delay: 3s;
+  --tx: 200px;
+  --ty: 200px;
+}
+
+/* Grid Pattern Background */
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(59, 130, 246, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Radial Gradient */
+.bg-gradient-radial {
+  background: radial-gradient(circle at center, var(--tw-gradient-stops));
 }
 
 /* Print styles */

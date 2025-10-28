@@ -18,6 +18,10 @@ export default {
   "benchmarks": {
     "title": "Benchmarks",
     "type": "page"
+  },
+  "interactive-demos": {
+    "title": "Interactive Demos",
+    "type": "page"
   }
 }
 

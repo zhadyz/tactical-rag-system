@@ -54,7 +54,9 @@ const config: DocsThemeConfig = {
         />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#2563eb" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
       </>
     )
   },
@@ -131,10 +133,13 @@ const config: DocsThemeConfig = {
   },
   // Banner
   banner: {
-    key: 'v4.1-release',
+    key: 'v4.2-release',
     text: (
-      <a href="/blog/v4.1-release" target="_blank">
-        🚀 Apollo v4.1 is out! GPU acceleration now 10x faster. Read more →
+      <a href="/blog/v4.2-release" target="_blank" className="flex items-center justify-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+          NEW
+        </span>
+        <span>Apollo v4.2 is out! GPU acceleration now 10x faster. Read more →</span>
       </a>
     )
   },
