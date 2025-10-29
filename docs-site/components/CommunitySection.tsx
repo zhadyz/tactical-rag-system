@@ -11,7 +11,7 @@ export function CommunitySection() {
             Community & Support
           </h2>
           <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-            Join thousands of developers building intelligent document systems with Apollo
+            Get started with Apollo and explore the resources available
           </p>
         </div>
 
