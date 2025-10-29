@@ -66,7 +66,7 @@ export function BenchmarksTable() {
 
       <div className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
         <p className="mb-3">Benchmark conditions: 100K document corpus, NVIDIA A100 40GB, concurrent queries, mixed complexity</p>
-        <a href="/benchmarks" className="inline-flex items-center gap-2 font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+        <a href="/benchmarks/overview" className="inline-flex items-center gap-2 font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
           <span>View detailed benchmark methodology and reproduce results</span>
           <ArrowRight className="h-4 w-4" />
         </a>
