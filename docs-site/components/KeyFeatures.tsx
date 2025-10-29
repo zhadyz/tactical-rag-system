@@ -1,5 +1,5 @@
 import React from 'react'
-import { Zap, Cpu, Database, Lock, Gauge, Box } from 'lucide-react'
+import { Database, Lock, Gauge, Box } from 'lucide-react'
 
 export function KeyFeatures() {
   return (
@@ -13,37 +13,7 @@ export function KeyFeatures() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <div className="group relative overflow-hidden rounded-2xl border border-blue-200/50 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/10 dark:border-blue-900/30 dark:bg-gray-900/50">
-          <div className="absolute right-0 top-0 h-40 w-40 translate-x-10 -translate-y-10 rounded-full bg-blue-500/10 blur-3xl transition-all group-hover:bg-blue-500/20" />
-          <div className="relative">
-            <div className="mb-5 inline-flex rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 p-3 shadow-lg shadow-blue-500/25">
-              <Zap className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="mb-3 text-xl font-bold text-gray-900 dark:text-white">
-              GPU Acceleration
-            </h3>
-            <p className="leading-relaxed text-gray-600 dark:text-gray-400">
-              CUDA-optimized embeddings and vector operations deliver 10x faster retrieval compared to CPU-only solutions
-            </p>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-purple-200/50 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 dark:border-purple-900/30 dark:bg-gray-900/50">
-          <div className="absolute right-0 top-0 h-40 w-40 translate-x-10 -translate-y-10 rounded-full bg-purple-500/10 blur-3xl transition-all group-hover:bg-purple-500/20" />
-          <div className="relative">
-            <div className="mb-5 inline-flex rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 p-3 shadow-lg shadow-purple-500/25">
-              <Cpu className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="mb-3 text-xl font-bold text-gray-900 dark:text-white">
-              Adaptive Retrieval
-            </h3>
-            <p className="leading-relaxed text-gray-600 dark:text-gray-400">
-              Multi-stage ranking with real-time query complexity analysis and dynamic top-k selection
-            </p>
-          </div>
-        </div>
-
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
         <div className="group relative overflow-hidden rounded-2xl border border-cyan-200/50 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-500/10 dark:border-cyan-900/30 dark:bg-gray-900/50">
           <div className="absolute right-0 top-0 h-40 w-40 translate-x-10 -translate-y-10 rounded-full bg-cyan-500/10 blur-3xl transition-all group-hover:bg-cyan-500/20" />
           <div className="relative">
