@@ -78,7 +78,7 @@ export function ArchitectureOverview() {
       </div>
 
       <div className="mt-8 text-center">
-        <a href="/architecture" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+        <a href="/architecture/overview" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
           <span className="font-medium">Learn more in the Architecture documentation</span>
           <ArrowRight className="h-4 w-4" />
         </a>
