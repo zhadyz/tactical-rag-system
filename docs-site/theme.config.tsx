@@ -10,10 +10,6 @@ const config: DocsThemeConfig = {
   logo: (
     <div className="flex items-center gap-3 font-bold">
       <img src="/apollo-logo.png" alt="Apollo" className="h-16 w-16" />
-      <span className="text-xl">Apollo</span>
-      <span className="ml-2 rounded-md bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
-        GPU
-      </span>
     </div>
   ),
   project: {
