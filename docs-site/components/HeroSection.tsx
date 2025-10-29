@@ -25,16 +25,16 @@ export function HeroSection() {
         {/* Badge */}
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-950/30 px-4 py-2 backdrop-blur-sm animate-fade-in-up">
           <Sparkles className="h-4 w-4 text-blue-400 animate-pulse" />
-          <span className="text-sm font-medium text-blue-300">Version 4.2 • Now with 10x faster GPU acceleration</span>
+          <span className="text-sm font-medium text-blue-300">Version 4.2 • Now with 10x faster acceleration</span>
         </div>
 
         {/* Main heading with gradient text */}
         <h1 className="mb-6 text-6xl font-bold tracking-tight text-white md:text-7xl lg:text-8xl animate-fade-in-up animation-delay-100">
-          Apollo <span className="gpu-gradient-text">RAG</span>
+          <span className="gpu-gradient-text">RAG</span>
         </h1>
 
         <p className="mb-4 text-2xl font-semibold text-blue-100 md:text-3xl lg:text-4xl animate-fade-in-up animation-delay-200">
-          GPU-Accelerated Document Intelligence
+          Document Intelligence
         </p>
 
         <p className="mx-auto mb-10 max-w-3xl text-lg leading-relaxed text-gray-300 md:text-xl animate-fade-in-up animation-delay-300">
