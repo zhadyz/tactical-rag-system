@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, LogIn, LogOut, User } from 'lucide-react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 
 interface DropdownItem {
   title: string
@@ -89,6 +90,7 @@ const navSections: NavSection[] = [
 ]
 
 export function CustomNavbar() {
+  const { data: session, status } = useSession()
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -146,7 +148,7 @@ export function CustomNavbar() {
 
   return (
     <>
-      <nav className="custom-navbar-wrapper relative">
+      <nav className="custom-navbar-wrapper relative flex items-center gap-4">
         <ul className="flex items-center gap-1">
           {navSections.map((section) => (
             <li
@@ -200,6 +202,37 @@ export function CustomNavbar() {
             </li>
           ))}
         </ul>
+
+        {/* Auth Section */}
+        {status === 'loading' ? (
+          <div className="h-9 w-20 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-800" />
+        ) : session ? (
+          <div className="flex items-center gap-3">
+            {/* User Info */}
+            <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 dark:bg-gray-800">
+              <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {session.user?.name || session.user?.email || 'User'}
+              </span>
+            </div>
+            {/* Logout Button */}
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-900"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => signIn()}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+          >
+            <LogIn className="h-4 w-4" />
+            Login
+          </button>
+        )}
       </nav>
 
       <style jsx global>{`
