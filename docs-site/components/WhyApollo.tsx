@@ -30,10 +30,10 @@ export function WhyApollo() {
               <span className="font-semibold text-gray-900 dark:text-white"> every</span> compute-intensive operation:
               embeddings, similarity search, re-ranking, and token generation.
             </p>
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400">
+            <a href="/core-concepts/gpu-acceleration" className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
               <span>Learn about our GPU architecture</span>
               <ArrowRight className="h-4 w-4" />
-            </div>
+            </a>
           </div>
         </div>
 
@@ -52,10 +52,10 @@ export function WhyApollo() {
               Apollo analyzes query complexity in real-time and automatically adjusts retrieval strategies,
               chunk sizes, and re-ranking depth to optimize both latency and accuracy. No manual tuning required.
             </p>
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 dark:text-purple-400">
+            <a href="/core-concepts/adaptive-retrieval" className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300">
               <span>Explore adaptive strategies</span>
               <ArrowRight className="h-4 w-4" />
-            </div>
+            </a>
           </div>
         </div>
 
@@ -74,10 +74,10 @@ export function WhyApollo() {
               Built-in metrics, tracing, and profiling at every layer. Know exactly what's happening in your RAG
               pipeline with OpenTelemetry integration and custom performance dashboards.
             </p>
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-orange-600 dark:text-orange-400">
+            <a href="/advanced/monitoring" className="inline-flex items-center gap-2 text-sm font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300">
               <span>View monitoring features</span>
               <ArrowRight className="h-4 w-4" />
-            </div>
+            </a>
           </div>
         </div>
 
@@ -96,10 +96,10 @@ export function WhyApollo() {
               Multi-tenant architecture, role-based access control, comprehensive audit logging, and compliance features
               designed for regulated industries and enterprise deployments.
             </p>
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-red-600 dark:text-red-400">
+            <a href="/advanced/security" className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">
               <span>See security features</span>
               <ArrowRight className="h-4 w-4" />
-            </div>
+            </a>
           </div>
         </div>
       </div>
