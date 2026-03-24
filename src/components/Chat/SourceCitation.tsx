@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { FileText, ChevronDown, ChevronRight, BookOpen, ExternalLink } from 'lucide-react';
-import type { Source } from '../../types';
+import type { Source, CRAGEvaluation } from '../../types';
 import { PDFViewerModal } from '../PDFViewer';
+import { CRAGIndicator } from '../Agent/CRAGIndicator';
 
 interface SourceCitationProps {
   source: Source;
   index: number;
+  cragEvaluation?: CRAGEvaluation;
 }
 
 // PERFORMANCE OPTIMIZATION: Memoized helper functions moved outside component
@@ -58,6 +60,7 @@ const getRelevanceBadge = (score: number) => {
 export const SourceCitation = React.memo<SourceCitationProps>(({
   source,
   index,
+  cragEvaluation,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
@@ -134,8 +137,11 @@ export const SourceCitation = React.memo<SourceCitationProps>(({
           )}
         </div>
 
-        {/* Relevance badge */}
-        <div className="flex-shrink-0">
+        {/* Badges */}
+        <div className="flex-shrink-0 flex items-center gap-1.5">
+          {cragEvaluation && (
+            <CRAGIndicator evaluation={cragEvaluation} />
+          )}
           <span
             className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-semibold
                        border transition-all duration-150 ${relevanceBadge.color}`}

@@ -1,17 +1,17 @@
 ---
 title: Customization & Extensions
-description: Extend Apollo RAG with custom models, retrieval strategies, and plugins
+description: Extend Forge with custom models, retrieval strategies, and plugins
 ---
 
 import { Callout } from '../../components/Callout'
 
 # Customization & Extensions
 
-Apollo RAG is designed with extensibility at its core. This guide shows you how to customize components, integrate new models, and extend the system for your specific needs.
+Forge is designed with extensibility at its core. This guide shows you how to customize components, integrate new models, and extend the system for your specific needs.
 
 ## Customization Overview
 
-Apollo provides multiple extension points across its architecture:
+Forge provides multiple extension points across its architecture:
 
 - **Model Layer**: Swap LLMs, embeddings, and rerankers
 - **Retrieval Layer**: Add custom strategies and transformations
@@ -26,7 +26,7 @@ All customization maintains backward compatibility with the existing API surface
 
 ### Adding a New LLM Backend
 
-Apollo supports multiple LLM backends through the factory pattern. To add a new backend:
+Forge supports multiple LLM backends through the factory pattern. To add a new backend:
 
 **1. Create LLM Engine Class** (`backend/_src/llm_engine_custom.py`):
 
@@ -469,7 +469,7 @@ web_search:
 ## Best Practices
 
 <Callout type="warning">
-**Version Compatibility**: Test extensions against the target Apollo version. Extension APIs maintain backward compatibility within major versions.
+**Version Compatibility**: Test extensions against the target Forge version. Extension APIs maintain backward compatibility within major versions.
 </Callout>
 
 ### Extension Guidelines

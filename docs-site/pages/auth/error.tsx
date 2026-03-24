@@ -65,7 +65,7 @@ export default function AuthError() {
         {/* Header */}
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <img src="/apollo-logo.png" alt="Apollo" className="h-16 w-16" />
+            <img src="/forge-logo.png" alt="Forge" className="h-16 w-16" />
           </Link>
         </div>
 

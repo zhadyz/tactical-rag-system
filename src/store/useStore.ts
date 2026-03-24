@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Message, Settings, Document } from '../types';
+import type { Message, Settings, Document, AgentStep, RetrievalStage, CRAGEvaluation, VerificationResult } from '../types';
 
 interface ChatState {
   messages: Message[];
@@ -15,7 +15,15 @@ interface DocumentState {
   isUploading: boolean;
 }
 
-interface AppStore extends ChatState, DocumentState {
+interface AgentState {
+  currentSteps: AgentStep[];
+  retrievalStages: RetrievalStage[];
+  cragEvaluations: CRAGEvaluation[];
+  verificationResults: VerificationResult[];
+  isAgentActive: boolean;
+}
+
+interface AppStore extends ChatState, DocumentState, AgentState {
   settings: Settings;
 
   // Chat actions
@@ -38,6 +46,16 @@ interface AppStore extends ChatState, DocumentState {
   updateDocument: (id: string, updates: Partial<Document>) => void;
   removeDocument: (id: string) => void;
   setUploading: (uploading: boolean) => void;
+
+  // Agent actions
+  addAgentStep: (step: AgentStep) => void;
+  updateAgentStep: (stepId: string, updates: Partial<AgentStep>) => void;
+  setRetrievalStages: (stages: RetrievalStage[]) => void;
+  setCRAGEvaluations: (evaluations: CRAGEvaluation[]) => void;
+  setVerificationResults: (results: VerificationResult[]) => void;
+  setAgentActive: (active: boolean) => void;
+  clearAgentState: () => void;
+  finalizeAgentMessage: () => void;
 }
 
 const useStore = create<AppStore>()(
@@ -51,12 +69,21 @@ const useStore = create<AppStore>()(
       conversationId: null,
       documents: [],
       isUploading: false,
+
+      // Agent state
+      currentSteps: [],
+      retrievalStages: [],
+      cragEvaluations: [],
+      verificationResults: [],
+      isAgentActive: false,
+
       settings: {
-        mode: 'simple', // Changed from 'adaptive' - simple mode is 3-5x faster for most queries
+        mode: 'direct',
         useContext: true,
-        streamResponse: true, // Enable streaming by default
+        streamResponse: true,
         darkMode: false,
-        rerankPreset: 'quality', // Default to balanced preset (3 documents)
+        rerankPreset: 'quality',
+        showAgentReasoning: true,
       },
 
       // Chat actions
@@ -89,13 +116,10 @@ const useStore = create<AppStore>()(
 
       appendToLastMessage: (content) =>
         set((state) => {
-          // PERFORMANCE OPTIMIZATION: Direct mutation within immer-style update
-          // This prevents creating multiple copies of the messages array
           const messages = [...state.messages];
           const lastMessage = messages[messages.length - 1];
 
           if (lastMessage && lastMessage.role === 'assistant') {
-            // Direct concatenation - more efficient than spreading
             lastMessage.content += content;
           }
 
@@ -170,13 +194,88 @@ const useStore = create<AppStore>()(
         })),
 
       setUploading: (uploading) => set({ isUploading: uploading }),
+
+      // Agent actions
+      addAgentStep: (step) =>
+        set((state) => ({
+          currentSteps: [...state.currentSteps, step],
+        })),
+
+      updateAgentStep: (stepId, updates) =>
+        set((state) => ({
+          currentSteps: state.currentSteps.map((step) =>
+            step.id === stepId ? { ...step, ...updates } : step
+          ),
+        })),
+
+      setRetrievalStages: (stages) => set({ retrievalStages: stages }),
+
+      setCRAGEvaluations: (evaluations) => set({ cragEvaluations: evaluations }),
+
+      setVerificationResults: (results) => set({ verificationResults: results }),
+
+      setAgentActive: (active) => set({ isAgentActive: active }),
+
+      clearAgentState: () =>
+        set({
+          currentSteps: [],
+          retrievalStages: [],
+          cragEvaluations: [],
+          verificationResults: [],
+          isAgentActive: false,
+        }),
+
+      finalizeAgentMessage: () =>
+        set((state) => {
+          const messages = [...state.messages];
+          const lastMessage = messages[messages.length - 1];
+
+          if (lastMessage && lastMessage.role === 'assistant') {
+            if (state.currentSteps.length > 0) {
+              lastMessage.agentSteps = [...state.currentSteps];
+            }
+            if (state.retrievalStages.length > 0) {
+              lastMessage.retrievalStages = [...state.retrievalStages];
+            }
+            if (state.cragEvaluations.length > 0) {
+              lastMessage.cragEvaluations = [...state.cragEvaluations];
+            }
+            if (state.verificationResults.length > 0) {
+              lastMessage.verificationResults = [...state.verificationResults];
+            }
+          }
+
+          return {
+            messages,
+            currentSteps: [],
+            retrievalStages: [],
+            cragEvaluations: [],
+            verificationResults: [],
+            isAgentActive: false,
+          };
+        }),
     }),
     {
-      name: 'tactical-rag-store',
+      name: 'forge-store',
+      version: 1,
       partialize: (state) => ({
         settings: state.settings,
-        // Don't persist messages, documents, or loading states
       }),
+      migrate: (persistedState: any, version: number) => {
+        if (version === 0 || !version) {
+          // Migrate old mode values
+          if (persistedState?.settings?.mode === 'simple') {
+            persistedState.settings.mode = 'direct';
+          } else if (persistedState?.settings?.mode === 'adaptive') {
+            persistedState.settings.mode = 'agentic';
+          }
+          // Add showAgentReasoning if missing
+          if (persistedState?.settings && persistedState.settings.showAgentReasoning === undefined) {
+            persistedState.settings.showAgentReasoning = true;
+          }
+        }
+        return persistedState;
+      },
     }
   )
 );

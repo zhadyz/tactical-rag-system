@@ -9,7 +9,7 @@ import { Callout } from './components/Callout'
 const config: DocsThemeConfig = {
   logo: (
     <div className="flex items-center gap-3 font-bold">
-      <img src="/apollo-logo.png" alt="Apollo" className="h-16 w-16" />
+      <img src="/forge-logo.png" alt="Forge" className="h-16 w-16" />
     </div>
   ),
   project: {
@@ -23,20 +23,20 @@ const config: DocsThemeConfig = {
     const { asPath, defaultLocale, locale } = useRouter()
     const { frontMatter } = useConfig()
     const url =
-      'https://apollo.onyxlab.ai' +
+      'https://forge.onyxlab.ai' +
       (defaultLocale === locale ? asPath : `/${locale}${asPath}`)
 
     return (
       <>
         <meta property="og:url" content={url} />
-        <meta property="og:title" content={frontMatter.title || 'Apollo RAG'} />
+        <meta property="og:title" content={frontMatter.title || 'Forge'} />
         <meta
           property="og:description"
           content={frontMatter.description || 'GPU-Accelerated Document Intelligence Platform'}
         />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#2563eb" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/apollo-logo.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/forge-logo.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
       </>
@@ -97,17 +97,17 @@ const config: DocsThemeConfig = {
   darkMode: true,
   nextThemes: {
     defaultTheme: 'dark',
-    storageKey: 'apollo-theme'
+    storageKey: 'forge-theme'
   },
   // Banner
   banner: {
-    key: 'v4.2-release',
+    key: 'v5.0-release',
     text: (
-      <a href="/blog/v4.2-release" target="_blank" className="flex items-center justify-center gap-2">
+      <a href="/blog/v5.0-release" target="_blank" className="flex items-center justify-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
           NEW
         </span>
-        <span>Apollo v4.2 is out! GPU acceleration now 10x faster. Read more →</span>
+        <span>Forge V5 is here! Agentic RAG with 14 cutting-edge techniques. Read more →</span>
       </a>
     )
   },

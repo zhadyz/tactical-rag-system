@@ -7,7 +7,7 @@ import { Callout } from '@/components/Callout'
 
 # Real-Time Streaming
 
-Apollo uses **Server-Sent Events (SSE)** for real-time response streaming, optimized for smooth 60fps rendering with advanced token buffering and backpressure handling.
+Forge uses **Server-Sent Events (SSE)** for real-time response streaming, optimized for smooth 60fps rendering with advanced token buffering and backpressure handling.
 
 ## Streaming Overview
 
@@ -20,7 +20,7 @@ Traditional request-response patterns wait for complete LLM generation before di
 - **Live Monitoring**: Real-time performance metrics and health indicators
 
 <Callout type="info">
-Apollo achieves 80-100 tokens/sec inference speed on RTX 5080 with Q5_K_M quantization.
+Forge achieves 80-100 tokens/sec inference speed on RTX 5080 with Q5_K_M quantization.
 </Callout>
 
 ## SSE Protocol
@@ -159,7 +159,7 @@ export const useThrottledCallback = (
 
 ## Backpressure Handling
 
-Apollo implements multi-level flow control to prevent overwhelming the client:
+Forge implements multi-level flow control to prevent overwhelming the client:
 
 ### Server-Side Backpressure
 
@@ -254,7 +254,7 @@ type StreamEvent =
 
 ```json
 // Token event
-data: {"type":"token","content":"Apollo"}
+data: {"type":"token","content":"Forge"}
 
 // Sources event
 data: {"type":"sources","content":[{"content":"...","file_name":"doc.pdf","relevance_score":0.89}]}

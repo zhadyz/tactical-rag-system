@@ -98,6 +98,42 @@ export const useStreamingChat = () => {
                     }
                     break;
 
+                  case 'agent_thinking':
+                    if (callbacks.onAgentThinking && event.content) {
+                      callbacks.onAgentThinking(event.content);
+                    }
+                    break;
+
+                  case 'tool_call':
+                    if (callbacks.onToolCall && event.content) {
+                      callbacks.onToolCall(event.content);
+                    }
+                    break;
+
+                  case 'tool_result':
+                    if (callbacks.onToolResult && event.content) {
+                      callbacks.onToolResult(event.content);
+                    }
+                    break;
+
+                  case 'crag_evaluation':
+                    if (callbacks.onCRAGEvaluation && event.content) {
+                      callbacks.onCRAGEvaluation(event.content);
+                    }
+                    break;
+
+                  case 'retrieval_complete':
+                    if (callbacks.onRetrievalComplete && event.content) {
+                      callbacks.onRetrievalComplete(event.content);
+                    }
+                    break;
+
+                  case 'verification':
+                    if (callbacks.onVerification && event.content) {
+                      callbacks.onVerification(event.content);
+                    }
+                    break;
+
                   default:
                     if (import.meta.env.DEV) {
                       console.warn('Unknown event type:', event.type);

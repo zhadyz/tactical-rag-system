@@ -10,10 +10,10 @@ export default function SignIn({ providers }: { providers: any }) {
         {/* Header */}
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <img src="/apollo-logo.png" alt="Apollo" className="h-16 w-16" />
+            <img src="/forge-logo.png" alt="Forge" className="h-16 w-16" />
           </Link>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Sign in to Apollo
+            Sign in to Forge
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Access documentation and resources

@@ -7,7 +7,7 @@ import { Sparkles, TrendingUp, Zap, Shield, Gauge } from 'lucide-react'
 
 const benchmarkData = [
   {
-    name: 'Apollo',
+    name: 'Forge',
     latency: 127,
     throughput: 450,
     accuracy: 94.2,
@@ -300,7 +300,7 @@ export function BenchmarkExplorer() {
                 <PolarGrid stroke="#374151" />
                 <PolarAngleAxis dataKey="system" stroke="#9ca3af" />
                 <PolarRadiusAxis stroke="#9ca3af" />
-                <Radar name="Apollo" dataKey="Latency (inv)" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
+                <Radar name="Forge" dataKey="Latency (inv)" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
                 <Radar name="Throughput" dataKey="Throughput" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
                 <Radar name="Accuracy" dataKey="Accuracy" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
                 <Legend />

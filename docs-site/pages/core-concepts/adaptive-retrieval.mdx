@@ -1,17 +1,17 @@
 ---
 title: Adaptive Retrieval
-description: Learn how Apollo RAG intelligently adapts retrieval strategies based on query complexity for optimal speed-accuracy balance
+description: Learn how Forge intelligently adapts retrieval strategies based on query complexity for optimal speed-accuracy balance
 ---
 
 import { Callout } from 'nextra/components'
 
 # Adaptive Retrieval
 
-Apollo RAG features an intelligent **adaptive retrieval system** that automatically selects the optimal search strategy based on query complexity. The system balances speed and accuracy by choosing between three distinct modes: Simple, Hybrid, and Advanced.
+Forge features an intelligent **adaptive retrieval system** that automatically selects the optimal search strategy based on query complexity. The system balances speed and accuracy by choosing between three distinct modes: Simple, Hybrid, and Advanced.
 
 ## Overview
 
-Traditional RAG systems use a single retrieval approach for all queries, leading to either slow performance or poor accuracy. Apollo's adaptive retrieval solves this by:
+Traditional RAG systems use a single retrieval approach for all queries, leading to either slow performance or poor accuracy. Forge's adaptive retrieval solves this by:
 
 - **Classifying query complexity** using LLM-based analysis
 - **Routing to appropriate strategy** (simple, hybrid, or advanced)
@@ -254,7 +254,7 @@ const response = await fetch('http://localhost:8000/api/query', {
 
 ## Automatic Mode Selection
 
-When `mode: "adaptive"` is specified, Apollo uses LLM-based query classification to automatically select the optimal strategy.
+When `mode: "adaptive"` is specified, Forge uses LLM-based query classification to automatically select the optimal strategy.
 
 ### Classification Logic
 
@@ -494,7 +494,7 @@ rerank_preset: "deep"
 ### Automatic (Recommended)
 
 ```typescript
-// Let Apollo decide
+// Let Forge decide
 mode: "adaptive"
 use_context: true
 rerank_preset: "quality"
@@ -516,7 +516,7 @@ rerank_preset: "quality"
 
 ## Summary
 
-Apollo's adaptive retrieval system provides:
+Forge's adaptive retrieval system provides:
 
 - **Three distinct modes** (Simple, Hybrid, Advanced) optimized for different use cases
 - **Automatic classification** to select the best strategy per query

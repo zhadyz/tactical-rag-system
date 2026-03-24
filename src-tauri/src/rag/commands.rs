@@ -1,4 +1,4 @@
-// ATLAS Protocol - Phase 1: Tauri Commands
+// Forge - Phase 1: Tauri Commands
 // Frontend interface for embedding operations
 
 use std::sync::{Arc, Mutex};

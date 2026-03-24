@@ -1,17 +1,17 @@
 ---
 title: Troubleshooting Guide
-description: Comprehensive guide to diagnosing and fixing common issues in Apollo RAG
+description: Comprehensive guide to diagnosing and fixing common issues in Forge
 ---
 
 import { Callout } from '../../components/Callout'
 
 # Troubleshooting Guide
 
-Comprehensive guide for diagnosing and resolving common issues with Apollo RAG.
+Comprehensive guide for diagnosing and resolving common issues with Forge.
 
 ## Troubleshooting Overview
 
-Apollo is a complex system with multiple layers (Frontend, Tauri, Backend). Issues can arise at any layer. This guide helps you:
+Forge is a complex system with multiple layers (Frontend, Tauri, Backend). Issues can arise at any layer. This guide helps you:
 
 - Identify which layer is causing problems
 - Use diagnostic commands to gather information
@@ -26,7 +26,7 @@ curl http://localhost:8000/api/health
 
 # Check Docker containers
 docker ps
-docker logs atlas-backend --tail 50
+docker logs forge-backend --tail 50
 
 # Check GPU availability
 nvidia-smi
@@ -51,10 +51,10 @@ docker stats
 
 ```bash
 # Check container status
-docker-compose -f backend/docker-compose.atlas.yml ps
+docker-compose -f backend/docker-compose.yml ps
 
 # View detailed logs
-docker-compose -f backend/docker-compose.atlas.yml logs atlas-backend
+docker-compose -f backend/docker-compose.yml logs forge-backend
 
 # Check resource limits
 docker stats --no-stream
@@ -80,13 +80,13 @@ docker stats --no-stream
 
 ```bash
 # Check CUDA installation
-docker exec atlas-backend nvcc --version
+docker exec forge-backend nvcc --version
 
 # Check GPU visibility
-docker exec atlas-backend nvidia-smi
+docker exec forge-backend nvidia-smi
 
 # Verify CUDA libraries
-docker exec atlas-backend ldconfig -p | grep cuda
+docker exec forge-backend ldconfig -p | grep cuda
 ```
 
 **Common Causes**:
@@ -116,13 +116,13 @@ docker exec atlas-backend ldconfig -p | grep cuda
 
 ```bash
 # Monitor loading progress
-docker logs atlas-backend -f | grep -i "loading\|model\|initialized"
+docker logs forge-backend -f | grep -i "loading\|model\|initialized"
 
 # Check VRAM during load
 watch -n 1 nvidia-smi
 ```
 
-**Fix**: Increase health check `start_period` in `docker-compose.atlas.yml`:
+**Fix**: Increase health check `start_period` in `docker-compose.yml`:
 ```yaml
 healthcheck:
   start_period: 90s  # Increase from 45s
@@ -170,10 +170,10 @@ curl -X POST http://localhost:8000/api/query \
 
 ```bash
 # Monitor memory over time
-watch -n 5 'docker stats --no-stream | grep atlas-backend'
+watch -n 5 'docker stats --no-stream | grep forge-backend'
 
 # Check Python memory usage
-docker exec atlas-backend python -c "
+docker exec forge-backend python -c "
 import psutil
 process = psutil.Process()
 print(f'RAM: {process.memory_info().rss / 1024**3:.2f} GB')
@@ -222,7 +222,7 @@ watch -n 1 nvidia-smi
 
 - **Clear GPU cache**:
    ```bash
-   docker exec atlas-backend python -c "
+   docker exec forge-backend python -c "
    import torch
    torch.cuda.empty_cache()
    print('GPU cache cleared')
@@ -242,7 +242,7 @@ watch -n 1 nvidia-smi
 nvidia-smi pmon -c 1
 
 # Verify llama.cpp CUDA build
-docker exec atlas-backend python -c "
+docker exec forge-backend python -c "
 from llama_cpp import Llama
 print('CUDA available:', Llama.supports_cuda())
 "
@@ -251,7 +251,7 @@ print('CUDA available:', Llama.supports_cuda())
 **Fix**: Rebuild llama-cpp-python with CUDA:
 ```bash
 docker-compose down
-docker-compose build --no-cache atlas-backend
+docker-compose build --no-cache forge-backend
 docker-compose up -d
 ```
 
@@ -285,7 +285,7 @@ curl http://localhost:8000/api/cache/stats
 docker ps | grep redis
 
 # Test Redis connectivity from backend
-docker exec atlas-backend redis-cli -h redis ping
+docker exec forge-backend redis-cli -h redis ping
 
 # Check Redis logs
 docker logs redis --tail 50
@@ -307,10 +307,10 @@ docker-compose restart redis
 curl http://localhost:8000/api/health
 
 # Check Docker network
-docker network inspect atlas-network
+docker network inspect forge-network
 
 # Verify backend listening
-docker exec atlas-backend netstat -tuln | grep 8000
+docker exec forge-backend netstat -tuln | grep 8000
 ```
 
 **Common Causes**:
@@ -323,7 +323,7 @@ docker exec atlas-backend netstat -tuln | grep 8000
 
 - **Backend crash loop**: Check logs for Python errors
    ```bash
-   docker logs atlas-backend --tail 100 -f
+   docker logs forge-backend --tail 100 -f
    ```
 
 #### Timeout on Long Queries
@@ -347,21 +347,21 @@ const TIMEOUTS = {
 ### Enable Debug Logging
 
 ```yaml
-# docker-compose.atlas.yml
+# docker-compose.yml
 environment:
   LOG_LEVEL: DEBUG  # Change from INFO
 ```
 
 Restart backend:
 ```bash
-docker-compose restart atlas-backend
+docker-compose restart forge-backend
 ```
 
 ### Log Locations
 
 ```bash
 # Backend application logs
-docker logs atlas-backend
+docker logs forge-backend
 
 # Persistent logs (if volume mounted)
 cat backend/logs/backend.log
@@ -392,8 +392,8 @@ Backend uses structured JSON logging:
 
 Search logs efficiently:
 ```bash
-docker logs atlas-backend | jq 'select(.level == "ERROR")'
-docker logs atlas-backend | jq 'select(.component == "llm_engine")'
+docker logs forge-backend | jq 'select(.level == "ERROR")'
+docker logs forge-backend | jq 'select(.component == "llm_engine")'
 ```
 
 ## Log Analysis Patterns
@@ -472,7 +472,7 @@ When reporting issues, include:
 
 - **Backend logs**:
    ```bash
-   docker logs atlas-backend --tail 200 > backend.log
+   docker logs forge-backend --tail 200 > backend.log
    ```
 
 - **Health check**:
@@ -523,7 +523,7 @@ Open issues at: [GitHub Repository]
 ### Community Support
 
 - **Discord**: [Link]
-- **Documentation**: [https://docs.apollo-rag.com](/)
+- **Documentation**: [https://docs.forge-rag.com](/)
 - **Email**: z@onyxlab.ai
 
 ---

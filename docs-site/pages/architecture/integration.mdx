@@ -1,19 +1,19 @@
 ---
 title: Integration & Data Flow
-description: Deep dive into Apollo's multi-layer integration architecture, pipeline stages, and cross-component communication patterns.
+description: Deep dive into Forge's multi-layer integration architecture, pipeline stages, and cross-component communication patterns.
 ---
 
 import { Callout } from '../../components/Callout'
 
 # Integration & Data Flow
 
-Apollo RAG employs a sophisticated three-tier architecture with dual communication patterns optimized for both native OS integration and high-throughput data transfer.
+Forge employs a sophisticated three-tier architecture with dual communication patterns optimized for both native OS integration and high-throughput data transfer.
 
 ## Integration Overview
 
 ### Communication Architecture
 
-Apollo uses **dual communication** for optimization:
+Forge uses **dual communication** for optimization:
 
 - **Tauri IPC (JSON-RPC)**: Native features (health checks, model switching, notifications)
 - **Direct HTTP**: Data endpoints (queries, document upload, streaming responses)
@@ -520,7 +520,7 @@ const useStore = create<AppState>((set, get) => ({
 
 ---
 
-## Caching Integration (ATLAS)
+## Caching Integration (Forge)
 
 ### Multi-Level Cache Architecture
 
@@ -631,7 +631,7 @@ Speedup: 206x (12.37s vs 0.06s)
 ```rust
 // src-tauri/src/commands.rs
 #[tauri::command]
-async fn check_atlas_health() -> Result<HealthStatus, String> {
+async fn check_forge_health() -> Result<HealthStatus, String> {
     let response = reqwest::get("http://localhost:8000/api/health")
         .await?
         .json::<HealthStatus>()
@@ -689,7 +689,7 @@ const computeStats = (queries: QueryPerformance[]) => ({
 ## Next Steps
 
 <Callout type="success">
-**Continue Learning**: Now that you understand how Apollo's layers integrate, dive into [Core Concepts](/core-concepts) to learn about the RAG engine, retrieval strategies, and caching mechanisms.
+**Continue Learning**: Now that you understand how Forge's layers integrate, dive into [Core Concepts](/core-concepts) to learn about the RAG engine, retrieval strategies, and caching mechanisms.
 </Callout>
 
 ### Related Documentation

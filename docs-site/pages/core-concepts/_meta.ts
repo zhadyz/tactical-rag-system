@@ -4,7 +4,7 @@ export default {
     "type": "page"
   },
   "caching": {
-    "title": "ATLAS Multi-Level Caching",
+    "title": "Forge Multi-Level Caching",
     "type": "page"
   },
   "adaptive-retrieval": {

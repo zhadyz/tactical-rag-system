@@ -7,11 +7,11 @@ import { Callout } from '../../components/Callout'
 
 # Desktop Bridge Layer
 
-The Desktop Bridge Layer connects Apollo's React frontend to native OS capabilities through **Tauri 2.9**, a Rust-based desktop runtime. It provides type-safe IPC communication, backend lifecycle management, and native integrations while maintaining a small memory footprint.
+The Desktop Bridge Layer connects Forge's React frontend to native OS capabilities through **Tauri 2.9**, a Rust-based desktop runtime. It provides type-safe IPC communication, backend lifecycle management, and native integrations while maintaining a small memory footprint.
 
 ## Bridge Architecture
 
-Apollo uses a **hybrid dual-protocol architecture** for optimal performance:
+Forge uses a **hybrid dual-protocol architecture** for optimal performance:
 
 ```
 +-------------------------------------------------------------+
@@ -69,7 +69,7 @@ pub struct HealthStatus {
 
 /// Tauri command - exposed to frontend via invoke()
 #[tauri::command]
-pub async fn check_atlas_health(
+pub async fn check_forge_health(
     state: State<'_, Arc<Mutex<AppState>>>
 ) -> Result<HealthStatus, String> {
     let state = state.lock().await;
@@ -115,7 +115,7 @@ interface HealthStatus {
 
 export const checkHealth = async (): Promise<HealthStatus> => {
   // Tauri IPC call - serialized via serde/JSON
-  return await invoke<HealthStatus>('check_atlas_health');
+  return await invoke<HealthStatus>('check_forge_health');
 };
 ```
 
@@ -415,7 +415,7 @@ pub async fn get_backend_status(
 {
   "windows": [
     {
-      "title": "Tactical RAG - Document Intelligence",
+      "title": "Forge - Document Intelligence",
       "width": 1400,
       "height": 900,
       "minWidth": 1024,
@@ -511,8 +511,8 @@ pub async fn check_backend_connected(
     sidecar::stop_backend,
     sidecar::get_backend_status,
 
-    // ATLAS protocol
-    commands::check_atlas_health,
+    // Forge protocol
+    commands::check_forge_health,
     commands::check_backend_connected,
     commands::get_cache_stats,
     commands::get_available_models,
@@ -735,7 +735,7 @@ export const useCacheStats = () => {
 - **cargo build --release** → Compiles Rust binary
 - **tauri-build** generates context and resources
 - **NSIS** packages binary, frontend, and icons
-- **Output**: `Tactical-RAG-Desktop_4.0.0_x64-setup.exe` (~20-30MB)
+- **Output**: `Forge-Desktop_5.0.0_x64-setup.exe` (~20-30MB)
 
 ## Next: Integration Patterns
 
@@ -746,6 +746,6 @@ Continue to [Integration Layer](/architecture/integration) to see how the bridge
 **Key Files**:
 - `src-tauri/src/main.rs` - Entry point (minimal)
 - `src-tauri/src/lib.rs` - Application logic and Tauri builder
-- `src-tauri/src/commands.rs` - ATLAS backend integration
+- `src-tauri/src/commands.rs` - Forge backend integration
 - `src-tauri/src/sidecar.rs` - Backend process lifecycle
 - `src-tauri/capabilities/default.json` - Permission definitions

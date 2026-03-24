@@ -1,13 +1,13 @@
 ---
 title: Installation
-description: Install Apollo RAG and set up your development environment
+description: Install Forge and set up your development environment
 ---
 
 import { Callout } from '@/components/Callout'
 
 # Installation
 
-Apollo RAG supports multiple installation methods depending on your use case and infrastructure.
+Forge supports multiple installation methods depending on your use case and infrastructure.
 
 ## System Requirements
 
@@ -28,7 +28,7 @@ For optimal performance with GPU acceleration:
 - **cuDNN**: 8.6 or higher
 
 <Callout type="info">
-  Apollo works on CPU-only systems but GPU acceleration provides **10x faster** retrieval and
+  Forge works on CPU-only systems but GPU acceleration provides **10x faster** retrieval and
   embedding operations.
 </Callout>
 
@@ -36,12 +36,12 @@ For optimal performance with GPU acceleration:
 
 ### Docker Installation (Recommended)
 
-The fastest way to get Apollo running is with Docker Compose:
+The fastest way to get Forge running is with Docker Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+git clone https://github.com/yourusername/forge-rag.git
+cd forge-rag
 
 # Launch with Docker Compose (includes GPU support)
 docker compose up -d
@@ -63,34 +63,34 @@ The Docker setup includes:
 
 ### pip Installation
 
-Install Apollo as a Python package:
+Install Forge as a Python package:
 
 ```bash
 # Create a virtual environment
-python -m venv apollo-env
-source apollo-env/bin/activate  # On Windows: apollo-env\Scripts\activate
+python -m venv forge-env
+source forge-env/bin/activate  # On Windows: forge-env\Scripts\activate
 
-# Install Apollo with GPU support
-pip install apollo-rag[gpu]
+# Install Forge with GPU support
+pip install forge-rag[gpu]
 
 # Or CPU-only version
-pip install apollo-rag
+pip install forge-rag
 
 # Verify installation
-apollo --version
+forge --version
 ```
 
 **Optional Dependencies:**
 
 ```bash
 # For PDF processing
-pip install apollo-rag[pdf]
+pip install forge-rag[pdf]
 
 # For advanced monitoring
-pip install apollo-rag[monitoring]
+pip install forge-rag[monitoring]
 
 # Install all extras
-pip install apollo-rag[all]
+pip install forge-rag[all]
 ```
 
 ### Build from Source
@@ -99,8 +99,8 @@ For development or customization:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+git clone https://github.com/yourusername/forge-rag.git
+cd forge-rag
 
 # Install in development mode
 pip install -e ".[dev,gpu]"
@@ -109,7 +109,7 @@ pip install -e ".[dev,gpu]"
 pytest tests/
 
 # Start the development server
-python -m apollo.server --dev
+python -m forge.server --dev
 ```
 
 **Development Dependencies:**
@@ -162,14 +162,14 @@ nvcc --version
 #### macOS
 
 <Callout type="warning">
-  NVIDIA GPUs are not supported on modern macOS. Apollo can run on CPU or you can use Docker with
+  NVIDIA GPUs are not supported on modern macOS. Forge can run on CPU or you can use Docker with
   GPU passthrough on a Linux host.
 </Callout>
 
 For Metal GPU acceleration (experimental):
 
 ```bash
-pip install apollo-rag[metal]
+pip install forge-rag[metal]
 ```
 
 ## Verify Installation
@@ -177,11 +177,11 @@ pip install apollo-rag[metal]
 After installation, verify everything is working:
 
 ```bash
-# Check Apollo version
-apollo --version
+# Check Forge version
+forge --version
 
 # Run diagnostics
-apollo diagnose
+forge diagnose
 
 # Check GPU availability
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
@@ -197,7 +197,7 @@ Expected output:
 ```json
 {
   "status": "success",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "gpu_enabled": true,
   "gpu_count": 1,
   "gpu_name": "NVIDIA RTX 4090"
@@ -208,7 +208,7 @@ Expected output:
 
 ### GPU Not Detected
 
-If CUDA is installed but Apollo doesn't detect it:
+If CUDA is installed but Forge doesn't detect it:
 
 ```bash
 # Check CUDA environment variables
@@ -239,18 +239,18 @@ If you encounter import errors:
 ```bash
 # Clear pip cache and reinstall
 pip cache purge
-pip install --force-reinstall apollo-rag[gpu]
+pip install --force-reinstall forge-rag[gpu]
 ```
 
 ## Next Steps
 
-Now that Apollo is installed:
+Now that Forge is installed:
 
 - [Configure](/getting-started/configuration) your deployment
 - [Upload your first document](/getting-started/first-query)
 - [Explore the API](/api-reference)
 
 <Callout type="info">
-  Need help? Join our [Discord community](https://discord.gg/apollo-rag) or check the
+  Need help? Join our [Discord community](https://discord.gg/forge-rag) or check the
   [troubleshooting guide](/advanced/troubleshooting).
 </Callout>

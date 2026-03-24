@@ -143,6 +143,44 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <ModeSelector />
             </div>
 
+            {/* Show Agent Reasoning Toggle (visible in agentic mode) */}
+            {settings.mode === 'agentic' && (
+              <div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label
+                      htmlFor="show-agent-reasoning"
+                      className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      Show Agent Reasoning
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Display the agent's thinking and tool usage in real-time
+                    </p>
+                  </div>
+                  <button
+                    id="show-agent-reasoning"
+                    onClick={() => updateSettings({ showAgentReasoning: !settings.showAgentReasoning })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      settings.showAgentReasoning
+                        ? 'bg-primary-600'
+                        : 'bg-gray-200 dark:bg-gray-700'
+                    }`}
+                    role="switch"
+                    aria-checked={settings.showAgentReasoning}
+                    aria-label="Show agent reasoning"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        settings.showAgentReasoning ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Rerank Preset */}
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
@@ -475,7 +513,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </h3>
               <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700">
                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                  <strong>Tactical RAG Desktop</strong>
+                  <strong>Forge Desktop</strong>
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Version 4.0.0 (Beta)

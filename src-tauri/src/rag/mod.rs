@@ -1,4 +1,4 @@
-// ATLAS Protocol - Phase 1: RAG Module
+// Forge - Phase 1: RAG Module
 // Root module for Retrieval-Augmented Generation functionality
 
 pub mod config;
@@ -24,5 +24,5 @@ pub fn init() {
         )
         .init();
 
-    tracing::info!("ATLAS Protocol RAG module initialized");
+    tracing::info!("Forge RAG module initialized");
 }

@@ -1,13 +1,13 @@
 ---
 title: Reproduce Benchmarks
-description: Step-by-step guide to reproduce Apollo RAG performance benchmarks
+description: Step-by-step guide to reproduce Forge performance benchmarks
 ---
 
 import { Callout } from '@/components/Callout'
 
 # Reproduce Benchmarks
 
-This guide provides detailed instructions to reproduce Apollo RAG's benchmark results independently. Follow these steps to verify the reported performance metrics on your own hardware.
+This guide provides detailed instructions to reproduce Forge's benchmark results independently. Follow these steps to verify the reported performance metrics on your own hardware.
 
 ## Prerequisites
 
@@ -34,18 +34,18 @@ This guide provides detailed instructions to reproduce Apollo RAG's benchmark re
 
 ## Step 1: Clone Repository
 
-Clone the Apollo RAG repository with benchmark scripts:
+Clone the Forge repository with benchmark scripts:
 
 ```bash
 # Clone main repository
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+git clone https://github.com/yourusername/forge-rag.git
+cd forge-rag
 
-# Checkout v4.2 production branch
-git checkout v4.2-production
+# Checkout v5.0 production branch
+git checkout v5.0-production
 
 # Verify Docker Compose files
-ls backend/docker-compose.atlas.yml
+ls backend/docker-compose.yml
 ```
 
 ## Step 2: Prepare Test Data
@@ -59,7 +59,7 @@ The benchmark uses a standardized corpus of 100,000 documents (15GB):
 mkdir -p backend/documents/benchmark
 
 # Download benchmark dataset (Wikipedia subset)
-wget https://benchmark-data.apollo-rag.io/wiki-100k.tar.gz
+wget https://benchmark-data.forge-rag.io/wiki-100k.tar.gz
 
 # Extract to documents directory
 tar -xzf wiki-100k.tar.gz -C backend/documents/benchmark/
@@ -141,27 +141,27 @@ Build the multi-stage Docker image with CUDA support:
 cd backend
 
 # Build with CUDA 12.1 support
-docker build -f Dockerfile.atlas -t apollo-backend:benchmark .
+docker build -f Dockerfile -t forge-backend:benchmark .
 
 # Verify build (should be ~9GB)
-docker images apollo-backend:benchmark
+docker images forge-backend:benchmark
 ```
 
 Expected build time: **10-15 minutes** (first build)
 
 ## Step 5: Start Docker Compose Stack
 
-Launch all services (Qdrant, Redis, Apollo backend):
+Launch all services (Qdrant, Redis, Forge backend):
 
 ```bash
 # Start services in detached mode
-docker-compose -f docker-compose.atlas.yml up -d
+docker-compose -f docker-compose.yml up -d
 
 # Verify all containers are healthy
-docker-compose -f docker-compose.atlas.yml ps
+docker-compose -f docker-compose.yml ps
 
 # Check backend logs for initialization
-docker-compose -f docker-compose.atlas.yml logs -f atlas-backend
+docker-compose -f docker-compose.yml logs -f forge-backend
 ```
 
 Wait for initialization message: **"RAG Engine initialized in 20-30 seconds"**
@@ -192,7 +192,7 @@ Process and index all 100K documents:
 curl -X POST http://localhost:8000/api/documents/reindex
 
 # Monitor indexing progress (logs)
-docker-compose logs -f atlas-backend | grep "Processing"
+docker-compose logs -f forge-backend | grep "Processing"
 ```
 
 **Expected indexing time**: 45-90 minutes depending on GPU
@@ -323,7 +323,7 @@ Performance scaling factors:
 export EMBEDDING_BATCH_SIZE=128
 
 # Check CUDA availability
-docker exec apollo-backend python -c "import torch; print(torch.cuda.is_available())"
+docker exec forge-backend python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 ### Issue: Out of Memory Errors
@@ -350,7 +350,7 @@ docker-compose up -d
 **Solution**:
 ```bash
 # Check if embeddings are on CPU (RTX 50-series workaround)
-docker-compose logs atlas-backend | grep "FORCE_TORCH_CPU"
+docker-compose logs forge-backend | grep "FORCE_TORCH_CPU"
 
 # Verify CUDA version match
 nvidia-smi  # Should show CUDA 12.1+
@@ -363,7 +363,7 @@ nvidia-smi  # Should show CUDA 12.1+
 **Solution**:
 ```bash
 # Verify Redis connection
-docker exec atlas-backend redis-cli -h redis ping
+docker exec forge-backend redis-cli -h redis ping
 
 # Check cache TTL settings
 curl http://localhost:8000/api/cache/stats
@@ -373,7 +373,7 @@ curl http://localhost:8000/api/cache/stats
 
 - **Analyze Results**: Review [benchmark methodology](/benchmarks/methodology) to understand metrics
 - **Optimize Performance**: See [configuration guide](/getting-started/configuration) for tuning tips
-- **Share Results**: Submit your benchmark results via [GitHub Discussions](https://github.com/yourusername/apollo-rag/discussions)
+- **Share Results**: Submit your benchmark results via [GitHub Discussions](https://github.com/yourusername/forge-rag/discussions)
 
 <Callout type="success">
   Successfully reproduced benchmarks? Share your results with the community! We track performance across different GPU configurations.
@@ -381,7 +381,7 @@ curl http://localhost:8000/api/cache/stats
 
 ## Additional Resources
 
-- **Docker Compose Reference**: `backend/docker-compose.atlas.yml`
+- **Docker Compose Reference**: `backend/docker-compose.yml`
 - **Benchmark Scripts**: `scripts/benchmark_*.py`
 - **Configuration Guide**: `/guides/configuration`
 - **Performance Tuning**: `/guides/performance-optimization`

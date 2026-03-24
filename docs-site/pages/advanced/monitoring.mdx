@@ -1,31 +1,31 @@
 ---
 title: Monitoring & Observability
-description: Comprehensive guide to monitoring Apollo RAG performance, health, and system metrics for production deployments
+description: Comprehensive guide to monitoring Forge performance, health, and system metrics for production deployments
 ---
 
 import { Callout } from 'nextra/components'
 
 # Monitoring & Observability
 
-Apollo RAG includes built-in monitoring and observability features designed for production deployments. This guide covers metrics collection, health checks, performance profiling, and alerting strategies.
+Forge includes built-in monitoring and observability features designed for production deployments. This guide covers metrics collection, health checks, performance profiling, and alerting strategies.
 
 ## Monitoring Overview
 
-Apollo provides multi-layered observability across three critical dimensions:
+Forge provides multi-layered observability across three critical dimensions:
 
 - **System Health**: Component status, resource usage, service availability
 - **Performance Metrics**: Query latency, throughput, cache hit rates
 - **Application Logs**: Structured JSON logs with timing breakdowns
 
 <Callout type="info">
-**Production Readiness**: Apollo uses structured JSON logging and rotating file handlers for offline analysis and field debugging.
+**Production Readiness**: Forge uses structured JSON logging and rotating file handlers for offline analysis and field debugging.
 </Callout>
 
 ## Metrics Collection
 
 ### Key Metrics to Track
 
-Apollo automatically tracks performance metrics across the entire request pipeline:
+Forge automatically tracks performance metrics across the entire request pipeline:
 
 ```typescript
 interface QueryMetrics {
@@ -52,7 +52,7 @@ interface QueryMetrics {
 
 ### Performance Breakdown
 
-Apollo's `StageTimer` tracks timing at each pipeline stage:
+Forge's `StageTimer` tracks timing at each pipeline stage:
 
 ```python
 # backend/app/utils/timing.py
@@ -141,11 +141,11 @@ curl http://localhost:8000/api/health
 
 ### Docker Health Checks
 
-Health checks are configured in `docker-compose.atlas.yml`:
+Health checks are configured in `docker-compose.yml`:
 
 ```yaml
 services:
-  atlas-backend:
+  forge-backend:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 15s        # Check every 15 seconds
@@ -276,13 +276,13 @@ def get_gpu_metrics():
 
 ### Structured JSON Logging
 
-Apollo uses structured JSON logging for production deployments:
+Forge uses structured JSON logging for production deployments:
 
 ```json
 {
   "timestamp": "2025-10-28T15:30:42.123Z",
   "level": "INFO",
-  "service": "atlas-protocol-backend",
+  "service": "forge-backend",
   "environment": "production",
   "process_id": 42,
   "thread_id": 140235,
@@ -305,8 +305,8 @@ Apollo uses structured JSON logging for production deployments:
 
 ```bash
 logs/
-├── atlas-protocol.log          # All logs (rotating, 100MB per file, 10 backups)
-├── atlas-protocol-errors.log   # Errors only (rotating, 50MB per file, 5 backups)
+├── forge-protocol.log          # All logs (rotating, 100MB per file, 10 backups)
+├── forge-protocol-errors.log   # Errors only (rotating, 50MB per file, 5 backups)
 └── performance-metrics.jsonl   # Performance metrics (append-only)
 ```
 
@@ -391,20 +391,20 @@ Resource Pressure:
 
 ### Prometheus Metrics (Future)
 
-Apollo is designed for Prometheus integration:
+Forge is designed for Prometheus integration:
 
 ```python
 # Example Prometheus metrics (to be implemented)
 from prometheus_client import Counter, Histogram, Gauge
 
 # Query metrics
-query_total = Counter('apollo_queries_total', 'Total queries processed', ['mode', 'cache_hit'])
-query_latency = Histogram('apollo_query_latency_seconds', 'Query latency', ['mode'])
-cache_hit_rate = Gauge('apollo_cache_hit_rate', 'Cache hit rate')
+query_total = Counter('forge_queries_total', 'Total queries processed', ['mode', 'cache_hit'])
+query_latency = Histogram('forge_query_latency_seconds', 'Query latency', ['mode'])
+cache_hit_rate = Gauge('forge_cache_hit_rate', 'Cache hit rate')
 
 # System metrics
-gpu_memory_used = Gauge('apollo_gpu_memory_mb', 'GPU memory usage in MB')
-active_connections = Gauge('apollo_active_connections', 'Active connections')
+gpu_memory_used = Gauge('forge_gpu_memory_mb', 'GPU memory usage in MB')
+active_connections = Gauge('forge_active_connections', 'Active connections')
 ```
 
 ### Grafana Dashboard Example
@@ -412,16 +412,16 @@ active_connections = Gauge('apollo_active_connections', 'Active connections')
 ```json
 {
   "dashboard": {
-    "title": "Apollo RAG Monitoring",
+    "title": "Forge Monitoring",
     "panels": [
       {
         "title": "Query Latency (p50, p95, p99)",
-        "targets": ["apollo_query_latency_seconds"],
+        "targets": ["forge_query_latency_seconds"],
         "type": "graph"
       },
       {
         "title": "Cache Hit Rate",
-        "targets": ["apollo_cache_hit_rate"],
+        "targets": ["forge_cache_hit_rate"],
         "type": "stat"
       },
       {
@@ -431,7 +431,7 @@ active_connections = Gauge('apollo_active_connections', 'Active connections')
       },
       {
         "title": "Component Health",
-        "targets": ["apollo_component_status"],
+        "targets": ["forge_component_status"],
         "type": "stat"
       }
     ]
@@ -489,7 +489,7 @@ cache_manager.config.semantic_similarity_threshold = 0.90  # More lenient
 
 **Investigation**:
 - Check component status: `curl http://localhost:8000/api/health`
-- Review logs: `tail -f logs/atlas-protocol-errors.log`
+- Review logs: `tail -f logs/forge-protocol-errors.log`
 - Check dependencies: Redis, Qdrant connections
 
 **Solution**:
@@ -501,7 +501,7 @@ docker-compose restart redis
 docker-compose restart qdrant
 
 # Restart backend
-docker-compose restart atlas-backend
+docker-compose restart forge-backend
 ```
 
 ---

@@ -1,4 +1,4 @@
-// ATLAS Protocol - Phase 1: Embedding Configuration
+// Forge - Phase 1: Embedding Configuration
 // Configuration for the embedding engine
 
 use std::path::PathBuf;

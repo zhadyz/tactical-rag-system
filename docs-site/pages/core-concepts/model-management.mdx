@@ -7,7 +7,7 @@ import { Callout } from 'nextra/components'
 
 # Model Management
 
-Apollo RAG provides sophisticated **hot-swappable LLM models** that allow you to switch between different models at runtime without restarting the backend. This enables you to balance speed, quality, and VRAM usage based on your current needs.
+Forge provides sophisticated **hot-swappable LLM models** that allow you to switch between different models at runtime without restarting the backend. This enables you to balance speed, quality, and VRAM usage based on your current needs.
 
 ## Model Management Overview
 
@@ -80,7 +80,7 @@ The hot-swap process typically completes in **15-30 seconds**:
 
 ## Model Registry
 
-Apollo includes a curated registry of production-tested models optimized for RAG workloads:
+Forge includes a curated registry of production-tested models optimized for RAG workloads:
 
 ### Available Models
 
@@ -228,7 +228,7 @@ async fn switch_model(model_id: String) -> Result<ModelInfo, String> {
 
 ### Quantization Levels
 
-Apollo supports various **GGUF quantization levels** (tradeoff between size/speed and quality):
+Forge supports various **GGUF quantization levels** (tradeoff between size/speed and quality):
 
 | Quantization | File Size | VRAM | Speed | Quality | Best For |
 |--------------|-----------|------|-------|---------|----------|
@@ -238,7 +238,7 @@ Apollo supports various **GGUF quantization levels** (tradeoff between size/spee
 | **Q8_0** | ~9.5GB | 10GB | 40-60 tok/s | Excellent | Best quality, slower |
 
 <Callout type="info">
-**Quantization Format**: Apollo uses **GGUF** (GPT-Generated Unified Format), the modern replacement for GGML. GGUF models are:
+**Quantization Format**: Forge uses **GGUF** (GPT-Generated Unified Format), the modern replacement for GGML. GGUF models are:
 - More portable across platforms
 - Faster to load (metadata in header)
 - Better memory-mapped I/O support
@@ -277,7 +277,7 @@ LLM_CONFIG = {
 
 ### GGUF (Primary Format)
 
-Apollo exclusively uses **GGUF** quantized models for optimal performance:
+Forge exclusively uses **GGUF** quantized models for optimal performance:
 
 **Advantages:**
 - **GPU acceleration** via llama.cpp (80-100 tok/s on RTX 5080)
@@ -300,7 +300,7 @@ wget https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-
 
 ### Unsupported Formats
 
-Apollo **does not support**:
+Forge **does not support**:
 - **PyTorch (.bin, .pt, .safetensors)**: Too large, slow, requires transformers library
 - **ONNX (.onnx)**: No llama.cpp support
 - **TensorFlow (.pb)**: Incompatible runtime
@@ -324,7 +324,7 @@ Apollo **does not support**:
 
 ### Out-of-Memory Handling
 
-If VRAM is exhausted, Apollo falls back gracefully:
+If VRAM is exhausted, Forge falls back gracefully:
 
 ```python
 # backend/_src/llm_engine_llamacpp.py
@@ -400,14 +400,14 @@ Fast (100 tok/s) ←─────────────────→ Quali
 
 - **Pre-load models** during Docker build to avoid startup delays:
    ```dockerfile
-   # backend/Dockerfile.atlas
+   # backend/Dockerfile
    COPY models/*.gguf /models/
    RUN python -c "from llama_cpp import Llama; Llama('/models/llama-3.1-8b.gguf', n_gpu_layers=0)"
    ```
 
 - **Use environment variables** for model selection:
    ```bash
-   # docker-compose.atlas.yml
+   # docker-compose.yml
    environment:
      MODEL_PATH: /models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
      GPU_LAYERS: 33
@@ -480,11 +480,11 @@ curl http://localhost:8000/api/models/current
 nvidia-smi --query-gpu=memory.used,memory.total --format=csv
 
 # Monitor model switching
-docker-compose -f backend/docker-compose.atlas.yml logs -f atlas-backend
+docker-compose -f backend/docker-compose.yml logs -f forge-backend
 ```
 
 ## Next Steps
 
-Learn about **Streaming** to understand how Apollo delivers real-time token-by-token responses:
+Learn about **Streaming** to understand how Forge delivers real-time token-by-token responses:
 
 - [Streaming →](/core-concepts/streaming)

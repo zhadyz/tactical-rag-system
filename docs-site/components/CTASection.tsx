@@ -13,7 +13,7 @@ export function CTASection() {
           Ready to Accelerate Your Document Intelligence?
         </h2>
         <p className="mx-auto mb-8 max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-          Join teams using Apollo to process millions of documents with GPU-accelerated speed and precision
+          Join teams using Forge to process millions of documents with GPU-accelerated speed and precision
         </p>
         <div className="flex flex-wrap justify-center gap-4">
           <a

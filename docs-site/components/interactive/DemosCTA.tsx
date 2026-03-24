@@ -4,10 +4,10 @@ export function DemosCTA() {
   return (
     <div className="mx-auto my-20 max-w-4xl rounded-2xl border border-blue-200/50 bg-gradient-to-br from-blue-50 to-blue-100/30 p-12 text-center dark:border-blue-800/30 dark:from-blue-950/30 dark:to-blue-900/20">
       <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">
-        Ready to Experience Apollo?
+        Ready to Experience Forge?
       </h2>
       <p className="mx-auto mb-8 max-w-2xl text-lg text-gray-700 dark:text-gray-300">
-        These interactive demos just scratch the surface. Try Apollo with your own data and see the difference GPU acceleration makes.
+        These interactive demos just scratch the surface. Try Forge with your own data and see the difference GPU acceleration makes.
       </p>
       <div className="flex flex-wrap justify-center gap-4">
         <a

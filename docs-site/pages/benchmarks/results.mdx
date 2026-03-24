@@ -1,6 +1,6 @@
 ---
 title: Benchmark Results
-description: Comprehensive performance analysis comparing Apollo RAG against leading frameworks - LangChain, LlamaIndex, and Haystack
+description: Comprehensive performance analysis comparing Forge against leading frameworks - LangChain, LlamaIndex, and Haystack
 ---
 
 import { Callout } from '@/components/Callout'
@@ -13,10 +13,10 @@ import { Callout } from '@/components/Callout'
 
 ## Executive Summary
 
-Apollo RAG delivers **industry-leading performance** across all key metrics, demonstrating the effectiveness of GPU-accelerated inference, multi-level caching, and adaptive retrieval strategies. Our benchmarks reveal substantial performance advantages over established frameworks:
+Forge delivers **industry-leading performance** across all key metrics, demonstrating the effectiveness of GPU-accelerated inference, multi-level caching, and adaptive retrieval strategies. Our benchmarks reveal substantial performance advantages over established frameworks:
 
 <Callout type="success">
-**Apollo Performance Leadership**
+**Forge Performance Leadership**
 - **7.0x faster** latency than LangChain (127ms vs 892ms)
 - **6.7x higher** throughput than LangChain (450 q/s vs 67 q/s)
 - **5.1 percentage points** better accuracy than LangChain (94.2% vs 89.1%)
@@ -31,7 +31,7 @@ Apollo RAG delivers **industry-leading performance** across all key metrics, dem
 
 | Framework | Latency (P95) | Throughput | Accuracy | GPU Utilization | Architecture |
 |-----------|---------------|------------|----------|-----------------|--------------|
-| **Apollo** | **127ms** | **450 q/s** | **94.2%** | **88%** | GPU-accelerated llama.cpp + CUDA |
+| **Forge** | **127ms** | **450 q/s** | **94.2%** | **88%** | GPU-accelerated llama.cpp + CUDA |
 | LangChain | 892ms | 67 q/s | 89.1% | 23% | CPU-based with minimal GPU usage |
 | LlamaIndex | 654ms | 102 q/s | 91.3% | 41% | Hybrid CPU/GPU data framework |
 | Haystack | 543ms | 134 q/s | 90.7% | 35% | NLP-focused with moderate GPU usage |
@@ -44,18 +44,18 @@ Apollo RAG delivers **industry-leading performance** across all key metrics, dem
 
 ## Latency Analysis
 
-Apollo achieves **sub-200ms query latency** through aggressive optimization:
+Forge achieves **sub-200ms query latency** through aggressive optimization:
 
 ### Latency Breakdown by Framework
 
 ```
-Apollo (127ms):     ████░░░░░░░░░░░░░░░░ (Baseline)
+Forge (127ms):     ████░░░░░░░░░░░░░░░░ (Baseline)
 Haystack (543ms):   █████████████████████░░░░░░░░░░░░░░░░░░ (4.3x slower)
 LlamaIndex (654ms): ██████████████████████████░░░░░░░░░ (5.1x slower)
 LangChain (892ms):  ████████████████████████████████████████ (7.0x slower)
 ```
 
-### Why Apollo is 7x Faster Than LangChain
+### Why Forge is 7x Faster Than LangChain
 
 - **GPU-Accelerated Inference**: llama.cpp with CUDA kernel optimization (80-100 tokens/sec)
 - **KV Cache Preservation**: Eliminates redundant key-value pair computation (40-60% speedup)
@@ -69,12 +69,12 @@ LangChain (892ms):  ████████████████████
 - **Adaptive Retrieval Routing**: Query classification automatically selects optimal strategy (simple/hybrid/advanced)
 
 <Callout type="tip">
-**Cache Hit Impact**: With Apollo's 60-80% cache hit rate in production, effective average latency drops to **~70ms** for typical workloads.
+**Cache Hit Impact**: With Forge's 60-80% cache hit rate in production, effective average latency drops to **~70ms** for typical workloads.
 </Callout>
 
 ### Latency by Query Mode
 
-| Mode | Apollo | LangChain | LlamaIndex | Haystack |
+| Mode | Forge | LangChain | LlamaIndex | Haystack |
 |------|--------|-----------|------------|----------|
 | **Simple** | 85ms | 743ms | 521ms | 423ms |
 | **Hybrid** | 127ms | 892ms | 654ms | 543ms |
@@ -84,12 +84,12 @@ LangChain (892ms):  ████████████████████
 
 ## Throughput Analysis
 
-Apollo's throughput advantage stems from efficient resource utilization and parallel processing:
+Forge's throughput advantage stems from efficient resource utilization and parallel processing:
 
 ### Queries Per Second (Higher is Better)
 
 ```
-Apollo (450 q/s):     ████████████████████████████████████████████████ (Baseline)
+Forge (450 q/s):     ████████████████████████████████████████████████ (Baseline)
 Haystack (134 q/s):   █████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ (3.4x lower)
 LlamaIndex (102 q/s): ██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ (4.4x lower)
 LangChain (67 q/s):   ███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ (6.7x lower)
@@ -97,7 +97,7 @@ LangChain (67 q/s):   ███████░░░░░░░░░░░░�
 
 ### Throughput Breakdown
 
-| Metric | Apollo | LangChain | Improvement |
+| Metric | Forge | LangChain | Improvement |
 |--------|--------|-----------|-------------|
 | Peak Throughput | 450 q/s | 67 q/s | **+571%** |
 | Sustained Throughput (5min) | 427 q/s | 63 q/s | **+578%** |
@@ -110,33 +110,33 @@ LangChain (67 q/s):   ███████░░░░░░░░░░░░�
 - **Qdrant HNSW Index**: 3-5ms vector search at 1M documents enables high-throughput retrieval
 
 <Callout type="success">
-**Production Validation**: Apollo sustained **427 queries/second** for 24 hours with 99.7% success rate and zero crashes (AWS EC2 g5.4xlarge, A10G GPU).
+**Production Validation**: Forge sustained **427 queries/second** for 24 hours with 99.7% success rate and zero crashes (AWS EC2 g5.4xlarge, A10G GPU).
 </Callout>
 
 ---
 
 ## Accuracy Analysis
 
-Apollo achieves **94.2% accuracy** through sophisticated retrieval and reranking:
+Forge achieves **94.2% accuracy** through sophisticated retrieval and reranking:
 
 ### Accuracy Comparison
 
-| Framework | Accuracy | Delta from Apollo |
+| Framework | Accuracy | Delta from Forge |
 |-----------|----------|-------------------|
-| **Apollo** | **94.2%** | Baseline |
+| **Forge** | **94.2%** | Baseline |
 | LlamaIndex | 91.3% | -2.9 pp |
 | Haystack | 90.7% | -3.5 pp |
 | LangChain | 89.1% | -5.1 pp |
 
 ### Accuracy by Query Complexity
 
-| Complexity | Apollo | LangChain | LlamaIndex | Haystack |
+| Complexity | Forge | LangChain | LlamaIndex | Haystack |
 |------------|--------|-----------|------------|----------|
 | **Simple** | 97.1% | 93.4% | 95.2% | 94.6% |
 | **Moderate** | 94.8% | 89.7% | 91.8% | 90.9% |
 | **Complex** | 89.3% | 81.2% | 85.1% | 84.2% |
 
-### Why Apollo Achieves Higher Accuracy
+### Why Forge Achieves Higher Accuracy
 
 - **Adaptive Retrieval Engine**:
    - **Simple Mode**: Single dense vector search (top-k=3) for straightforward queries
@@ -166,12 +166,12 @@ Apollo achieves **94.2% accuracy** through sophisticated retrieval and reranking
 
 ## GPU Utilization Analysis
 
-Apollo maximizes GPU efficiency through kernel optimization and smart batching:
+Forge maximizes GPU efficiency through kernel optimization and smart batching:
 
 ### GPU Utilization Comparison
 
 ```
-Apollo (88%):       ████████████████████████████████████████████ (Near-optimal)
+Forge (88%):       ████████████████████████████████████████████ (Near-optimal)
 Haystack (35%):     █████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░ (2.5x lower)
 LlamaIndex (41%):   ████████████████████░░░░░░░░░░░░░░░░░░░░░░░ (2.1x lower)
 LangChain (23%):    ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ (3.8x lower)
@@ -179,7 +179,7 @@ LangChain (23%):    ███████████░░░░░░░░░
 
 ### GPU Utilization Breakdown
 
-| Metric | Apollo | LangChain | Notes |
+| Metric | Forge | LangChain | Notes |
 |--------|--------|-----------|-------|
 | **Inference Utilization** | 92% | 31% | llama.cpp CUDA kernels vs. standard PyTorch |
 | **Embedding Utilization** | 78% | 12% | Batched embedding generation vs. sequential |
@@ -201,13 +201,13 @@ LangChain (23%):    ███████████░░░░░░░░░
 
 ## Performance Breakdown by Mode
 
-Apollo's adaptive retrieval automatically selects the optimal strategy based on query complexity:
+Forge's adaptive retrieval automatically selects the optimal strategy based on query complexity:
 
 ### Simple Mode (68% of Queries)
 
 **Profile**: Single-entity factual queries ("What is the capital of France?", "Who invented the telephone?")
 
-| Metric | Apollo | LangChain | Improvement |
+| Metric | Forge | LangChain | Improvement |
 |--------|--------|-----------|-------------|
 | Latency (P95) | 85ms | 743ms | **8.7x faster** |
 | Throughput | 620 q/s | 89 q/s | **7.0x higher** |
@@ -219,9 +219,9 @@ Apollo's adaptive retrieval automatically selects the optimal strategy based on 
 
 ### Hybrid Mode (25% of Queries)
 
-**Profile**: Multi-aspect or domain-specific queries ("Compare Apollo and LangChain performance", "Explain Docker networking")
+**Profile**: Multi-aspect or domain-specific queries ("Compare Forge and LangChain performance", "Explain Docker networking")
 
-| Metric | Apollo | LangChain | Improvement |
+| Metric | Forge | LangChain | Improvement |
 |--------|--------|-----------|-------------|
 | Latency (P95) | 127ms | 892ms | **7.0x faster** |
 | Throughput | 450 q/s | 67 q/s | **6.7x higher** |
@@ -233,9 +233,9 @@ Apollo's adaptive retrieval automatically selects the optimal strategy based on 
 
 ### Advanced Mode (7% of Queries)
 
-**Profile**: Complex reasoning or ambiguous queries ("Why is Apollo faster than competitors across all metrics?", "How do multi-tier caching systems improve latency?")
+**Profile**: Complex reasoning or ambiguous queries ("Why is Forge faster than competitors across all metrics?", "How do multi-tier caching systems improve latency?")
 
-| Metric | Apollo | LangChain | Improvement |
+| Metric | Forge | LangChain | Improvement |
 |--------|--------|-----------|-------------|
 | Latency (P95) | 189ms | 1,247ms | **6.6x faster** |
 | Throughput | 298 q/s | 45 q/s | **6.6x higher** |
@@ -248,7 +248,7 @@ Apollo's adaptive retrieval automatically selects the optimal strategy based on 
 ## Key Takeaways
 
 <Callout type="success">
-### Apollo's Competitive Advantages
+### Forge's Competitive Advantages
 
 - **Latency Leadership**: 7x faster than LangChain, 5x faster than LlamaIndex
 - **Throughput Dominance**: 450 q/s sustained throughput (6.7x higher than LangChain)
@@ -259,7 +259,7 @@ Apollo's adaptive retrieval automatically selects the optimal strategy based on 
 
 ### Performance Enablers
 
-The following architectural decisions drive Apollo's performance leadership:
+The following architectural decisions drive Forge's performance leadership:
 
 | Feature | Impact | Tradeoff |
 |---------|--------|----------|
@@ -311,19 +311,19 @@ CUDA 12.1+ drivers
 ### Step 1: Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+git clone https://github.com/yourusername/forge-rag.git
+cd forge-rag
 ```
 
 ### Step 2: Download Benchmark Dataset
 
 ```bash
 # 100K document corpus (Wikipedia + arXiv + PubMed)
-wget https://apollo-benchmarks.s3.amazonaws.com/corpus-100k.tar.gz
+wget https://forge-benchmarks.s3.amazonaws.com/corpus-100k.tar.gz
 tar -xzf corpus-100k.tar.gz -C backend/documents/
 
 # 10K question-answer pairs with ground truth
-wget https://apollo-benchmarks.s3.amazonaws.com/qa-pairs-10k.json
+wget https://forge-benchmarks.s3.amazonaws.com/qa-pairs-10k.json
 mv qa-pairs-10k.json backend/benchmark/
 ```
 
@@ -331,15 +331,15 @@ mv qa-pairs-10k.json backend/benchmark/
 
 ```bash
 cd backend
-docker-compose -f docker-compose.atlas.yml up -d
-docker logs -f atlas-backend  # Wait for "Application startup complete"
+docker-compose -f docker-compose.yml up -d
+docker logs -f forge-backend  # Wait for "Application startup complete"
 ```
 
 ### Step 4: Run Benchmarks
 
 ```bash
-# Apollo benchmark (default)
-python benchmark/run_benchmark.py --framework apollo --queries 1000 --concurrent 10
+# Forge benchmark (default)
+python benchmark/run_benchmark.py --framework forge --queries 1000 --concurrent 10
 
 # LangChain comparison
 python benchmark/run_benchmark.py --framework langchain --queries 1000 --concurrent 10
@@ -425,7 +425,7 @@ To ensure unbiased comparison:
 - **Multiple Runs**: 5 runs per framework, median reported
 
 <Callout type="note">
-**Reproducibility**: Full benchmark code, dataset, and Docker images published at [github.com/yourusername/apollo-benchmarks](https://github.com/yourusername/apollo-benchmarks). SHA256 checksums provided for all artifacts.
+**Reproducibility**: Full benchmark code, dataset, and Docker images published at [github.com/yourusername/forge-benchmarks](https://github.com/yourusername/forge-benchmarks). SHA256 checksums provided for all artifacts.
 </Callout>
 
 ---
@@ -433,14 +433,14 @@ To ensure unbiased comparison:
 ## Next Steps
 
 <Callout type="success">
-**Ready to experience Apollo's performance firsthand?**
+**Ready to experience Forge's performance firsthand?**
 
-- [Quick Start Guide](/getting-started/quick-start) - Install Apollo in 5 minutes
-- [Architecture Overview](/architecture/overview) - Understand how Apollo achieves these results
-- [API Reference](/api-reference) - Integrate Apollo into your application
+- [Quick Start Guide](/getting-started/quick-start) - Install Forge in 5 minutes
+- [Architecture Overview](/architecture/overview) - Understand how Forge achieves these results
+- [API Reference](/api-reference) - Integrate Forge into your application
 - [Interactive Demos](/interactive-demos) - Explore benchmarks interactively
 </Callout>
 
 ---
 
-*Last Updated: October 28, 2025 • Benchmark Version: v4.0.0*
+*Last Updated: October 28, 2025 • Benchmark Version: v5.0.0*

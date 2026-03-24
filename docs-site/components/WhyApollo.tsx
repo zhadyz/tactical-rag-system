@@ -1,12 +1,12 @@
 import React from 'react'
 import { Zap, Cpu, Gauge, Lock, ArrowRight } from 'lucide-react'
 
-export function WhyApollo() {
+export function WhyForge() {
   return (
     <div className="mx-auto my-20 max-w-7xl px-4">
       <div className="mb-16 text-center">
         <h2 className="mb-3 text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
-          Why Apollo
+          Why Forge
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
           Four core principles that set us apart from traditional RAG frameworks
@@ -26,7 +26,7 @@ export function WhyApollo() {
               </h3>
             </div>
             <p className="mb-4 leading-relaxed text-gray-700 dark:text-gray-300">
-              Unlike frameworks that claim GPU support but run most operations on CPU, Apollo leverages CUDA for
+              Unlike frameworks that claim GPU support but run most operations on CPU, Forge leverages CUDA for
               <span className="font-semibold text-gray-900 dark:text-white"> every</span> compute-intensive operation:
               embeddings, similarity search, re-ranking, and token generation.
             </p>
@@ -49,7 +49,7 @@ export function WhyApollo() {
               </h3>
             </div>
             <p className="mb-4 leading-relaxed text-gray-700 dark:text-gray-300">
-              Apollo analyzes query complexity in real-time and automatically adjusts retrieval strategies,
+              Forge analyzes query complexity in real-time and automatically adjusts retrieval strategies,
               chunk sizes, and re-ranking depth to optimize both latency and accuracy. No manual tuning required.
             </p>
             <a href="/core-concepts/adaptive-retrieval" className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300">

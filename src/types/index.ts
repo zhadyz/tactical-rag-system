@@ -1,3 +1,74 @@
+// Agent tool names
+export type AgentToolName =
+  | 'semantic_search'
+  | 'proposition_search'
+  | 'keyword_search'
+  | 'graph_traverse'
+  | 'chunk_read'
+  | 'section_read'
+  | string;
+
+export interface AgentStep {
+  id: string;
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'crag_evaluation' | 'verification';
+  timestamp: Date;
+  content: string;
+  toolName?: AgentToolName;
+  toolInput?: Record<string, any>;
+  toolOutput?: any;
+  durationMs?: number;
+  status: 'pending' | 'running' | 'complete' | 'error';
+}
+
+export interface ToolCall {
+  id: string;
+  toolName: AgentToolName;
+  input: Record<string, any>;
+  timestamp: Date;
+}
+
+export interface ToolResult {
+  id: string;
+  toolCallId: string;
+  toolName: AgentToolName;
+  output: any;
+  durationMs: number;
+  resultCount?: number;
+}
+
+export interface CRAGEvaluation {
+  documentId: string;
+  source: string;
+  score: number;
+  verdict: 'correct' | 'incorrect' | 'ambiguous';
+  reason?: string;
+}
+
+export interface VerificationResult {
+  claim: string;
+  supported: boolean;
+  confidence: number;
+  supportingSources: string[];
+  explanation?: string;
+}
+
+export interface RetrievalStage {
+  stageName: string;
+  resultsCount: number;
+  topScore: number;
+  durationMs: number;
+  sources: Source[];
+}
+
+export interface IngestStatusResponse {
+  status: 'idle' | 'running' | 'complete' | 'error';
+  progress: number;
+  currentStage?: string;
+  documentsProcessed?: number;
+  totalDocuments?: number;
+  error?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -6,6 +77,10 @@ export interface Message {
   timestamp: Date;
   metadata?: Record<string, any>;
   isStreaming?: boolean;
+  agentSteps?: AgentStep[];
+  retrievalStages?: RetrievalStage[];
+  cragEvaluations?: CRAGEvaluation[];
+  verificationResults?: VerificationResult[];
 }
 
 export interface Source {
@@ -26,7 +101,7 @@ export interface Source {
 
 export interface QueryRequest {
   question: string;
-  mode: 'simple' | 'adaptive';
+  mode: 'direct' | 'agentic';
   use_context: boolean;
   rerank_preset?: 'quick' | 'quality' | 'deep';
 }
@@ -67,15 +142,17 @@ export interface QueryResponse {
 }
 
 export interface Settings {
-  mode: 'simple' | 'adaptive';
+  mode: 'direct' | 'agentic';
   useContext: boolean;
   streamResponse: boolean;
   darkMode: boolean;
   rerankPreset: 'quick' | 'quality' | 'deep';
+  showAgentReasoning: boolean;
 }
 
 export interface StreamEvent {
-  type: 'token' | 'sources' | 'metadata' | 'done' | 'error';
+  type: 'token' | 'sources' | 'metadata' | 'done' | 'error'
+    | 'agent_thinking' | 'tool_call' | 'tool_result' | 'crag_evaluation' | 'retrieval_complete' | 'verification';
   content?: any;
 }
 
@@ -85,6 +162,12 @@ export interface StreamCallbacks {
   onMetadata?: (metadata: QueryMetadata) => void;
   onDone?: () => void;
   onError?: (error: string) => void;
+  onAgentThinking?: (content: string) => void;
+  onToolCall?: (toolCall: any) => void;
+  onToolResult?: (toolResult: any) => void;
+  onCRAGEvaluation?: (evaluations: CRAGEvaluation[]) => void;
+  onRetrievalComplete?: (data: any) => void;
+  onVerification?: (results: VerificationResult[]) => void;
 }
 
 export interface Document {

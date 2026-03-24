@@ -1,13 +1,13 @@
 ---
 title: API Reference
-description: Complete Apollo RAG API documentation with interactive examples
+description: Complete Forge API documentation with interactive examples
 ---
 
 import { Callout } from '@/components/Callout'
 
 # API Reference
 
-Apollo RAG provides a REST API for document retrieval and question answering. All endpoints return JSON and support CORS.
+Forge provides a REST API for document retrieval and question answering. All endpoints return JSON and support CORS.
 
 ## Base URL
 
@@ -18,7 +18,7 @@ http://localhost:8000
 
 **Production:**
 ```
-https://apollo.onyxlab.ai
+https://forge.onyxlab.ai
 ```
 
 <Callout type="info">
@@ -27,10 +27,10 @@ https://apollo.onyxlab.ai
 
 ## Authentication
 
-Currently, Apollo runs without authentication for development. For production deployments, implement authentication middleware or use a reverse proxy like Nginx.
+Currently, Forge runs without authentication for development. For production deployments, implement authentication middleware or use a reverse proxy like Nginx.
 
 <Callout type="warning">
-  **Security:** Enable rate limiting and authentication before deploying to production. Apollo includes built-in rate limiting (30 requests/minute per IP).
+  **Security:** Enable rate limiting and authentication before deploying to production. Forge includes built-in rate limiting (30 requests/minute per IP).
 </Callout>
 
 ---
@@ -48,7 +48,7 @@ Check system status and configuration.
 ```json
 {
   "status": "healthy",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "gpu_enabled": true,
   "gpu_count": 1,
   "gpu_name": "NVIDIA RTX 4090",
@@ -64,7 +64,7 @@ Check system status and configuration.
 | Field | Type | Description |
 |-------|------|-------------|
 | `status` | string | System health status: `healthy` or `unhealthy` |
-| `version` | string | Apollo version number |
+| `version` | string | Forge version number |
 | `gpu_enabled` | boolean | Whether GPU acceleration is active |
 | `gpu_count` | number | Number of available GPUs |
 | `gpu_name` | string | GPU model name (if available) |
@@ -258,7 +258,7 @@ interface QueryResponse {
   };
 }
 
-async function queryApollo(question: string): Promise<QueryResponse> {
+async function queryForge(question: string): Promise<QueryResponse> {
   const response = await fetch('http://localhost:8000/api/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -277,7 +277,7 @@ async function queryApollo(question: string): Promise<QueryResponse> {
 }
 
 // Usage
-const result = await queryApollo("Can I grow a beard?");
+const result = await queryForge("Can I grow a beard?");
 console.log(`Answer: ${result.answer}`);
 console.log(`Processing time: ${result.metadata.processing_time_ms}ms`);
 ```
@@ -448,7 +448,7 @@ print(result['message'])
 
 ## Rate Limiting
 
-Apollo enforces rate limiting to prevent abuse:
+Forge enforces rate limiting to prevent abuse:
 
 - **Limit:** 30 requests per 60 seconds per IP address
 - **Response when exceeded:** HTTP 429 with error message
@@ -469,7 +469,7 @@ X-RateLimit-Reset: 1640995200
 
 ### Prompt Injection Detection
 
-Apollo automatically detects and logs potential prompt injection attempts:
+Forge automatically detects and logs potential prompt injection attempts:
 
 **Detected patterns:**
 - `ignore previous instructions`
@@ -501,7 +501,7 @@ environment:
 
 ### Caching
 
-Apollo includes multi-layer caching:
+Forge includes multi-layer caching:
 
 - **Embedding Cache:** Stores vector embeddings for repeated queries
 - **Response Cache:** Caches complete answers for identical questions
@@ -521,7 +521,7 @@ Apollo includes multi-layer caching:
 
 ### GPU Acceleration
 
-When GPU is available, Apollo automatically:
+When GPU is available, Forge automatically:
 - Uses CUDA for embedding generation (10x faster)
 - Accelerates vector search operations
 - Batches embedding computations
@@ -601,7 +601,7 @@ for i, result in enumerate(results):
 import requests
 from requests.exceptions import RequestException
 
-def query_apollo_safe(question: str, mode: str = "simple"):
+def query_forge_safe(question: str, mode: str = "simple"):
     try:
         response = requests.post(
             "http://localhost:8000/api/query",
@@ -629,7 +629,7 @@ def query_apollo_safe(question: str, mode: str = "simple"):
         return None
 
 # Usage
-result = query_apollo_safe("Can I grow a beard?")
+result = query_forge_safe("Can I grow a beard?")
 if result:
     print(result['answer'])
 ```
@@ -637,11 +637,11 @@ if result:
 ---
 
 <Callout type="success">
-  **Ready to integrate Apollo?** Check out the [interactive demos](/interactive-demos) to explore Apollo's capabilities.
+  **Ready to integrate Forge?** Check out the [interactive demos](/interactive-demos) to explore Forge's capabilities.
 </Callout>
 
 ## Next Steps
 
-- **[Quick Start](/getting-started/quick-start)** - Get Apollo running in 5 minutes
-- **[Architecture](/architecture/overview)** - Understand how Apollo works
+- **[Quick Start](/getting-started/quick-start)** - Get Forge running in 5 minutes
+- **[Architecture](/architecture/overview)** - Understand how Forge works
 - **[Benchmarks](/benchmarks/overview)** - Performance comparisons

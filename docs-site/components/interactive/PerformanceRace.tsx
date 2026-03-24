@@ -210,7 +210,7 @@ export function PerformanceRace() {
           The Performance Gap
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-          Watch Apollo's GPU acceleration process 100,000 documents in real-time to witness the power of GPU acceleration
+          Watch Forge's GPU acceleration process 100,000 documents in real-time to witness the power of GPU acceleration
         </p>
       </motion.div>
 

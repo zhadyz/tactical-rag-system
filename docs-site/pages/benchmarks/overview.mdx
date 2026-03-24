@@ -1,6 +1,6 @@
 ---
 title: Benchmark Overview
-description: Apollo RAG performance benchmarks and comparisons
+description: Forge performance benchmarks and comparisons
 ---
 
 import { Callout } from '@/components/Callout'
@@ -15,7 +15,7 @@ import { Gauge, Zap, Target, Cpu } from 'lucide-react'
 
 # Performance Benchmarks
 
-Apollo RAG delivers exceptional performance through GPU acceleration and intelligent retrieval strategies.
+Forge delivers exceptional performance through GPU acceleration and intelligent retrieval strategies.
 
 ## Executive Summary
 
@@ -54,7 +54,7 @@ Apollo RAG delivers exceptional performance through GPU acceleration and intelli
 </div>
 
 <Callout type="success">
-  Apollo achieves **10x faster** retrieval than CPU-only systems while maintaining higher accuracy
+  Forge achieves **10x faster** retrieval than CPU-only systems while maintaining higher accuracy
   through adaptive retrieval strategies.
 </Callout>
 
@@ -64,7 +64,7 @@ Apollo RAG delivers exceptional performance through GPU acceleration and intelli
 
 <LatencyChart />
 
-Apollo's P95 latency of **127ms** is 7x faster than LangChain and 5x faster than LlamaIndex. This
+Forge's P95 latency of **127ms** is 7x faster than LangChain and 5x faster than LlamaIndex. This
 includes:
 
 - Embedding generation: 15ms
@@ -76,7 +76,7 @@ includes:
 
 <ThroughputChart />
 
-Apollo handles **450 queries/second** with concurrent processing, compared to:
+Forge handles **450 queries/second** with concurrent processing, compared to:
 
 - LangChain: 67 q/s (6.7x slower)
 - LlamaIndex: 102 q/s (4.4x slower)
@@ -86,7 +86,7 @@ Apollo handles **450 queries/second** with concurrent processing, compared to:
 
 <AccuracyChart />
 
-Apollo achieves **94.2% accuracy** on context relevance benchmarks through:
+Forge achieves **94.2% accuracy** on context relevance benchmarks through:
 
 - Adaptive retrieval strategies
 - Multi-stage re-ranking
@@ -97,7 +97,7 @@ Apollo achieves **94.2% accuracy** on context relevance benchmarks through:
 
 <GpuUtilizationChart />
 
-Apollo achieves **88% GPU utilization** by:
+Forge achieves **88% GPU utilization** by:
 
 - CUDA-optimized embedding operations
 - Batched vector search
@@ -132,14 +132,14 @@ Apollo achieves **88% GPU utilization** by:
 - **Duration**: 10 minutes
 - **Queries**: 270,000 total
 
-## Why Apollo is Faster
+## Why Forge is Faster
 
 ### 1. **True GPU Acceleration**
 
-Unlike other frameworks, Apollo runs **every** compute-intensive operation on GPU:
+Unlike other frameworks, Forge runs **every** compute-intensive operation on GPU:
 
 ```python
-# Apollo: Everything on GPU
+# Forge: Everything on GPU
 embeddings = gpu_model.encode(chunks)          # GPU
 similarities = gpu_search(query, embeddings)   # GPU
 reranked = gpu_rerank(candidates)              # GPU
@@ -154,7 +154,7 @@ response = gpu_llm.generate(context)           # GPU
 
 ### 2. **Adaptive Retrieval**
 
-Apollo analyzes query complexity and adjusts retrieval strategy:
+Forge analyzes query complexity and adjusts retrieval strategy:
 
 - **Simple queries**: Fast single-stage retrieval
 - **Medium queries**: Two-stage with light re-ranking
@@ -164,7 +164,7 @@ This avoids wasting compute on simple queries while ensuring accuracy on complex
 
 ### 3. **Batched Operations**
 
-Apollo batches operations for maximum GPU efficiency:
+Forge batches operations for maximum GPU efficiency:
 
 ```python
 # Batch 32 queries together
@@ -182,7 +182,7 @@ batch_results = vector_search_batch(batch_embeddings)
 
 | System        | Latency (P95) | Throughput | Accuracy | GPU Util | Cost/1M queries |
 | ------------- | ------------- | ---------- | -------- | -------- | --------------- |
-| **Apollo**    | **127ms**     | **450q/s** | **94.2%**| **88%**  | **$12**         |
+| **Forge**    | **127ms**     | **450q/s** | **94.2%**| **88%**  | **$12**         |
 | LangChain     | 892ms         | 67q/s      | 89.1%    | 23%      | $89             |
 | LlamaIndex    | 654ms         | 102q/s     | 91.3%    | 41%      | $64             |
 | Haystack      | 543ms         | 134q/s     | 90.7%    | 35%      | $41             |
@@ -193,8 +193,8 @@ Want to verify these results? See our [reproduction guide](/benchmarks/reproduce
 
 ```bash
 # Clone benchmark suite
-git clone https://github.com/yourusername/apollo-benchmarks.git
-cd apollo-benchmarks
+git clone https://github.com/yourusername/forge-benchmarks.git
+cd forge-benchmarks
 
 # Run full benchmark suite
 ./run_benchmarks.sh --gpu --iterations=10

@@ -9,7 +9,7 @@ export function BenchmarksTable() {
           Performance Comparison
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-          Apollo consistently outperforms popular RAG frameworks in real-world benchmarks
+          Forge consistently outperforms popular RAG frameworks in real-world benchmarks
         </p>
       </div>
 
@@ -29,7 +29,7 @@ export function BenchmarksTable() {
               <tr className="bg-blue-50/30 dark:bg-blue-950/20">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-base font-bold text-gray-900 dark:text-white">Apollo</span>
+                    <span className="text-base font-bold text-gray-900 dark:text-white">Forge</span>
                     <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">Best</span>
                   </div>
                 </td>

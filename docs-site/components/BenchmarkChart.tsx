@@ -22,7 +22,7 @@ interface BenchmarkData {
 
 const data: BenchmarkData[] = [
   {
-    name: 'Apollo',
+    name: 'Forge',
     latency: 127,
     throughput: 450,
     accuracy: 94.2,

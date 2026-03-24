@@ -1,13 +1,13 @@
 ---
 title: Backend Architecture
-description: Deep dive into Apollo RAG's FastAPI backend, multi-stage caching, and GPU-accelerated inference engine
+description: Deep dive into Forge's FastAPI backend, multi-stage caching, and GPU-accelerated inference engine
 ---
 
 import { Callout } from '../../components/Callout'
 
 # Backend Architecture
 
-The Apollo RAG backend is a **FastAPI-based Python system** with 8 architectural layers, GPU-accelerated inference via llama.cpp, and a sophisticated multi-stage caching protocol (ATLAS L1-L5). It achieves **80-100 tokens/sec** inference speed and **less than 1ms** cache hit latency.
+The Forge backend is a **FastAPI-based Python system** with 8 architectural layers, GPU-accelerated inference via llama.cpp, and a sophisticated multi-stage caching protocol (Forge L1-L5). It achieves **80-100 tokens/sec** inference speed and **less than 1ms** cache hit latency.
 
 <Callout type="info">
 **Performance at a Glance**: 20-30s startup • 8-15s query latency (simple mode) • 60-80% cache hit rate • 98% latency reduction on cache hits
@@ -27,7 +27,7 @@ The backend follows a **layered architecture** pattern with clear separation of 
 - **Retrieval Layer**: Adaptive strategies with HyDE and multi-query expansion
 - **Vector Store**: Dual support for Qdrant (production) and ChromaDB (legacy)
 - **Document Processing**: PDF/DOCX with semantic chunking
-- **Caching**: L1-L5 ATLAS protocol (multi-stage optimization)
+- **Caching**: L1-L5 Forge protocol (multi-stage optimization)
 - **Model Management**: Hot-swappable LLM models without restart
 
 ### Technology Stack
@@ -54,7 +54,7 @@ graph TB
     B --> D[Retrieval<br/>Adaptive Strategies]
     D --> E[Vector Stores<br/>Qdrant + ChromaDB]
     B --> F[Document Processing<br/>PDF/DOCX + Chunking]
-    B --> G[Caching<br/>L1-L5 ATLAS Protocol]
+    B --> G[Caching<br/>L1-L5 Forge]
     B --> H[Model Management<br/>Hot Swapping]
 
     style A fill:#e1f5ff
@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Shutting down RAG backend...")
 
 app = FastAPI(
-    title="Apollo RAG API",
+    title="Forge API",
     version="4.0.0",
     lifespan=lifespan
 )
@@ -134,7 +134,7 @@ app.add_middleware(
 
 ### SSE Streaming Endpoint
 
-Apollo supports **Server-Sent Events (SSE)** for real-time token streaming:
+Forge supports **Server-Sent Events (SSE)** for real-time token streaming:
 
 ```python
 # backend/app/api/query.py
@@ -172,7 +172,7 @@ async def query_stream(request: QueryRequest):
 ```
 
 <Callout type="tip">
-**SSE vs WebSocket**: Apollo uses SSE for unidirectional streaming (server → client). SSE is simpler, auto-reconnects, and works better with HTTP/2 multiplexing than WebSockets.
+**SSE vs WebSocket**: Forge uses SSE for unidirectional streaming (server → client). SSE is simpler, auto-reconnects, and works better with HTTP/2 multiplexing than WebSockets.
 </Callout>
 
 ---
@@ -181,7 +181,7 @@ async def query_stream(request: QueryRequest):
 
 ### llama.cpp Integration
 
-Apollo uses **llama.cpp** directly (not Ollama) for **8-10x faster inference**:
+Forge uses **llama.cpp** directly (not Ollama) for **8-10x faster inference**:
 
 ```python
 # backend/_src/llm_engine_llamacpp.py
@@ -291,11 +291,11 @@ class ModelManager:
 
 ---
 
-## ATLAS Caching Protocol
+## Forge Caching Protocol
 
 ### Multi-Stage Architecture (L1-L5)
 
-The ATLAS protocol implements **5 cache layers** for maximum performance:
+The Forge protocol implements **5 cache layers** for maximum performance:
 
 ```python
 # backend/_src/cache_next_gen.py
@@ -391,7 +391,7 @@ class EmbeddingCache:
 
 ### BGE-Large Embeddings
 
-Apollo uses **BAAI/bge-large-en-v1.5** (1024-dimensional) for dense vector embeddings:
+Forge uses **BAAI/bge-large-en-v1.5** (1024-dimensional) for dense vector embeddings:
 
 ```python
 # backend/app/core/rag_engine.py
@@ -468,10 +468,10 @@ embeddings = await asyncio.gather(*tasks)
 
 ### CUDA Integration
 
-Apollo leverages **CUDA 12.1** for GPU-accelerated inference:
+Forge leverages **CUDA 12.1** for GPU-accelerated inference:
 
 ```dockerfile
-# backend/Dockerfile.atlas
+# backend/Dockerfile
 FROM python:3.11-slim-bookworm
 
 # Install CUDA Toolkit
@@ -605,7 +605,7 @@ Configuration:
 ```
 
 <Callout type="info">
-**ChromaDB Fallback**: Apollo maintains ChromaDB support for backward compatibility. Qdrant is recommended for production due to 10x better performance at scale.
+**ChromaDB Fallback**: Forge maintains ChromaDB support for backward compatibility. Qdrant is recommended for production due to 10x better performance at scale.
 </Callout>
 
 ---
@@ -614,7 +614,7 @@ Configuration:
 
 ### Supported Formats
 
-Apollo processes multiple document formats with specialized extractors:
+Forge processes multiple document formats with specialized extractors:
 
 ```python
 # backend/_src/document_processor.py
@@ -904,7 +904,7 @@ async def initialize(self) -> Tuple[bool, str]:
 
 ## Next Steps
 
-Continue exploring Apollo's architecture:
+Continue exploring Forge's architecture:
 
 - **[Frontend Architecture](/architecture/frontend)** - React 19 UI with SSE streaming
 - **[Tauri Bridge](/architecture/desktop-bridge)** - Desktop integration layer

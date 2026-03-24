@@ -361,7 +361,7 @@ export function RAGPipelineVisualizer() {
           The Architecture
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-          Scroll down to see the data flow through Apollo's pipeline, or click any stage to explore
+          Scroll down to see the data flow through Forge's pipeline, or click any stage to explore
         </p>
       </motion.div>
 

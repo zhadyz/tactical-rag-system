@@ -1,11 +1,11 @@
 ---
 title: "Frontend Architecture"
-description: "Deep dive into Apollo's React 19 frontend with 60fps token buffering, optimized streaming, and production-grade error handling"
+description: "Deep dive into Forge's React 19 frontend with 60fps token buffering, optimized streaming, and production-grade error handling"
 ---
 
 # Frontend Architecture
 
-Apollo's frontend is a **React 19 + TypeScript** application built for **enterprise-grade performance** and **mission-critical reliability**. It features real-time SSE streaming with token buffering at 60fps, comprehensive error boundaries with field logging, and a custom design system inspired by Apple, Nvidia, and Scale.ai.
+Forge's frontend is a **React 19 + TypeScript** application built for **enterprise-grade performance** and **mission-critical reliability**. It features real-time SSE streaming with token buffering at 60fps, comprehensive error boundaries with field logging, and a custom design system inspired by Apple, Nvidia, and Scale.ai.
 
 ## Architecture Overview
 
@@ -156,7 +156,7 @@ export default React.memo(ChatMessage, arePropsEqual);
 
 ### Zustand Store Architecture
 
-Apollo uses **Zustand** for lightweight, performant state management with **selective persistence**.
+Forge uses **Zustand** for lightweight, performant state management with **selective persistence**.
 
 ```typescript
 // src/store/useStore.ts

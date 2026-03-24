@@ -1,23 +1,23 @@
 ---
 title: Configuration
-description: Configure Apollo RAG for optimal performance
+description: Configure Forge for optimal performance
 ---
 
 import { Callout } from '../../components/Callout'
 
 # Configuration
 
-Apollo RAG offers extensive configuration options to optimize performance for your hardware and use case. This guide covers essential settings for production deployments.
+Forge offers extensive configuration options to optimize performance for your hardware and use case. This guide covers essential settings for production deployments.
 
 ## Configuration Overview
 
-Apollo uses a **multi-layer configuration system**:
+Forge uses a **multi-layer configuration system**:
 - **Environment variables** (`.env` file) - Service connections and paths
 - **config.yml** - Main configuration file for RAG components
 - **Runtime API** - Dynamic settings updates via `/api/settings`
 
 <Callout type="info">
-Apollo automatically searches for `config.yml` in standard locations: `./config.yml`, `../config.yml`, `/app/config.yml`
+Forge automatically searches for `config.yml` in standard locations: `./config.yml`, `../config.yml`, `/app/config.yml`
 </Callout>
 
 ## Environment Variables
@@ -149,9 +149,9 @@ embedding:
   normalize_embeddings: true
 ```
 
-## Caching Configuration (ATLAS Protocol)
+## Caching Configuration (Forge)
 
-Apollo uses a **5-layer caching architecture** for optimal performance:
+Forge uses a **5-layer caching architecture** for optimal performance:
 
 ### L1: Query Cache (NextGenCacheManager)
 
@@ -291,16 +291,16 @@ chunking:
 For **CUDA 12.1** on RTX 5080/5090:
 
 ```dockerfile
-# Dockerfile.atlas
+# Dockerfile
 ENV CUDA_HOME=/usr/local/cuda
 ENV PATH=/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/lib/wsl/drivers:/usr/local/cuda/lib64
 ```
 
 ```yaml
-# docker-compose.atlas.yml
+# docker-compose.yml
 services:
-  atlas-backend:
+  forge-backend:
     deploy:
       resources:
         reservations:
@@ -375,7 +375,7 @@ CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
 ### Health Checks
 
 ```yaml
-# docker-compose.atlas.yml
+# docker-compose.yml
 healthcheck:
   test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
   interval: 15s
@@ -388,7 +388,7 @@ healthcheck:
 
 ```yaml
 # ============================================================
-# Apollo RAG - Production Configuration
+# Forge - Production Configuration
 # ============================================================
 
 # Storage Paths
@@ -523,7 +523,7 @@ retrieval:
 
 ## Next Steps
 
-Now that you've configured Apollo RAG, you're ready to make your first query:
+Now that you've configured Forge, you're ready to make your first query:
 
 - [Making Your First Query](/getting-started/first-query) - Query the API
 - [API Reference](/api-reference) - Complete endpoint documentation

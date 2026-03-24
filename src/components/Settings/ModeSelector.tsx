@@ -8,15 +8,15 @@ export const ModeSelector: React.FC = () => {
 
   const modes = [
     {
-      id: 'simple',
-      name: 'Simple',
+      id: 'direct',
+      name: 'Direct',
       description: 'Fast, direct answers from documents',
       icon: Zap,
     },
     {
-      id: 'adaptive',
-      name: 'Adaptive',
-      description: 'Intelligent routing with advanced reasoning',
+      id: 'agentic',
+      name: 'Agentic',
+      description: 'AI-driven retrieval with reasoning and verification',
       icon: Brain,
     },
   ] as const;

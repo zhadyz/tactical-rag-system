@@ -1,5 +1,4 @@
 mod sidecar;
-mod ollama;
 // mod rag;  // Commented out: Backend handles embeddings via Python
 mod commands;
 
@@ -31,15 +30,10 @@ pub fn run() {
       let sidecar_state = Arc::new(Mutex::new(Some(sidecar)));
       app.manage(sidecar_state);
 
-      // Initialize ATLAS embedding state
-      // Commented out: Backend handles embeddings via Python
-      // let embedding_state = Arc::new(Mutex::new(EmbeddingState::default()));
-      // app.manage(embedding_state);
-
-      // Initialize ATLAS backend state
-      let backend_url = std::env::var("ATLAS_BACKEND_URL")
+      // Initialize Forge backend state
+      let backend_url = std::env::var("FORGE_BACKEND_URL")
         .unwrap_or_else(|_| "http://localhost:8000".to_string());
-      log::info!("ATLAS backend URL: {}", backend_url);
+      log::info!("Forge backend URL: {}", backend_url);
 
       let app_state = Arc::new(tokio::sync::Mutex::new(
         commands::AppState::new(backend_url)
@@ -59,23 +53,14 @@ pub fn run() {
       sidecar::start_backend,
       sidecar::stop_backend,
       sidecar::get_backend_status,
-      ollama::get_ollama_status,
-      ollama::pull_qwen_model,
-      ollama::verify_qwen,
-      ollama::get_recommended_qwen_model,
-      // ATLAS Protocol - Embedding Commands (Commented out: Backend handles embeddings via Python)
-      // rag::commands::init_embedding_engine,
-      // rag::commands::generate_embeddings,
-      // rag::commands::generate_embedding,
-      // rag::commands::get_embedding_status,
-      // ATLAS Protocol - Backend Integration Commands
-      commands::check_atlas_health,
+      // Forge Backend Integration Commands
+      commands::check_forge_health,
       commands::check_backend_connected,
       commands::get_cache_stats,
       commands::get_available_models,
       commands::open_url,
       commands::show_notification,
-      // ATLAS Protocol - Model Hotswap Commands
+      // Forge Model Hotswap Commands
       commands::get_models_list,
       commands::get_current_model,
       commands::switch_model,

@@ -1,13 +1,13 @@
 ---
 title: Architecture Overview
-description: Comprehensive guide to Apollo RAG's three-tier hybrid desktop architecture
+description: Comprehensive guide to Forge's three-tier hybrid desktop architecture
 ---
 
 import { Callout } from '../../components/Callout'
 
 # Architecture Overview
 
-Apollo RAG is built as a **GPU-accelerated, offline-capable RAG system** packaged as a modern desktop application. The architecture combines three sophisticated layers working in harmony to deliver high-performance document intelligence.
+Forge is built as a **GPU-accelerated, offline-capable RAG system** packaged as a modern desktop application. The architecture combines three sophisticated layers working in harmony to deliver high-performance document intelligence.
 
 <Callout type="info">
 **Key Design Goal**: Achieve 80-100 tokens/sec inference with 8-15 second query latency while maintaining production-grade reliability and security.
@@ -15,7 +15,7 @@ Apollo RAG is built as a **GPU-accelerated, offline-capable RAG system** package
 
 ## System Overview
 
-Apollo RAG implements a **three-tier hybrid architecture** that separates concerns while optimizing for performance:
+Forge implements a **three-tier hybrid architecture** that separates concerns while optimizing for performance:
 
 - **Frontend Layer**: Modern React 19 UI with real-time streaming and performance optimization
 - **Desktop Bridge Layer**: Tauri 2.9 native runtime providing OS integration and IPC
@@ -89,7 +89,7 @@ This separation enables:
 |  * RAG orchestration engine (parallel initialization)     |
 |  * llama.cpp GPU inference (80-100 tokens/sec)            |
 |  * Vector database - Qdrant (dense + sparse search)       |
-|  * Multi-tier caching - Redis (L1-L5 ATLAS protocol)      |
+|  * Multi-tier caching - Redis (L1-L5 Forge protocol)      |
 |  * Document processing pipeline (PDF/DOCX/TXT)            |
 |  * Adaptive retrieval strategies (simple/hybrid/advanced) |
 |  * Model management (hot-swappable LLMs)                  |
@@ -104,7 +104,7 @@ This separation enables:
 ```
 
 <Callout type="tip">
-**Dual Communication Pattern**: Apollo uses both Tauri IPC and direct HTTP for optimal performance. IPC handles lightweight native features, while HTTP handles data-intensive operations like streaming queries.
+**Dual Communication Pattern**: Forge uses both Tauri IPC and direct HTTP for optimal performance. IPC handles lightweight native features, while HTTP handles data-intensive operations like streaming queries.
 </Callout>
 
 ## Frontend Layer
@@ -200,7 +200,7 @@ src/
 ```rust
 // Command allowlisting prevents arbitrary Rust execution
 #[tauri::command]
-async fn check_atlas_health(
+async fn check_forge_health(
     state: State<'_, Arc<tokio::sync::Mutex<AppState>>>
 ) -> Result<HealthStatus, String> {
     // Type-safe, validated, allowlisted command
@@ -242,7 +242,7 @@ async fn check_atlas_health(
 
 ### Core Architecture
 
-Apollo's backend implements **8 architectural layers**:
+Forge's backend implements **8 architectural layers**:
 
 - **API Layer**: REST endpoints with rate limiting, CORS, validation
 - **RAG Engine**: Master orchestrator with parallel initialization
@@ -250,7 +250,7 @@ Apollo's backend implements **8 architectural layers**:
 - **Retrieval Engine**: Adaptive strategies (simple/hybrid/advanced)
 - **Vector Stores**: Qdrant (dense + sparse search)
 - **Document Processor**: Multi-format support with semantic chunking
-- **Caching System**: L1-L5 ATLAS protocol
+- **Caching System**: L1-L5 Forge protocol
 - **Model Manager**: Hot-swappable LLM runtime
 
 ### Performance Characteristics
@@ -304,7 +304,7 @@ async def initialize():
     )
 ```
 
-**Multi-Level Caching (ATLAS Protocol)**
+**Multi-Level Caching (Forge)**
 - **L1 - Query Cache**: Exact → Normalized → Semantic matching (Redis hash)
 - **L2 - Embedding Cache**: 98% latency reduction (50ms → less than 1ms)
 - **L3 - Conversation Memory**: Ring buffer with automatic summarization
@@ -339,13 +339,13 @@ def generate(self, prompt, **kwargs):
 
 ### Dual Communication Architecture
 
-Apollo uses **two parallel communication channels** for optimization:
+Forge uses **two parallel communication channels** for optimization:
 
 **Tauri IPC (JSON-RPC)**:
 - **Use Case**: Native features, health checks, system integration
 - **Protocol**: JSON serialization over IPC bridge
 - **Latency**: less than 10ms for lightweight operations
-- **Examples**: `check_atlas_health()`, `switch_model()`, `show_notification()`
+- **Examples**: `check_forge_health()`, `switch_model()`, `show_notification()`
 
 **Direct HTTP (Fetch API)**:
 - **Use Case**: Data-intensive operations, streaming
@@ -373,14 +373,14 @@ interface HealthStatus {
 }
 
 export const checkHealth = async (): Promise<HealthStatus> => {
-  return await invoke<HealthStatus>('check_atlas_health');
+  return await invoke<HealthStatus>('check_forge_health');
 };
 ```
 
 ```rust
 // Backend: Rust command handler
 #[tauri::command]
-async fn check_atlas_health(
+async fn check_forge_health(
     state: State<'_, Arc<tokio::sync::Mutex<AppState>>>
 ) -> Result<HealthStatus, String> {
     let app_state = state.lock().await;
@@ -511,7 +511,7 @@ Release lock --> Return stats
 
 ## Design Principles
 
-Apollo's architecture is guided by several core principles:
+Forge's architecture is guided by several core principles:
 
 ### Performance First
 - **Parallel initialization**: 3.4x speedup through concurrent component loading
@@ -550,7 +550,7 @@ Apollo's architecture is guided by several core principles:
 - **Atomic operations**: Prevent corruption during updates
 
 <Callout type="success">
-**Architecture Philosophy**: Apollo prioritizes performance and reliability over simplicity. Every optimization is documented with its trade-offs, and every component is designed for production use.
+**Architecture Philosophy**: Forge prioritizes performance and reliability over simplicity. Every optimization is documented with its trade-offs, and every component is designed for production use.
 </Callout>
 
 ## Next Steps: Deep Dives

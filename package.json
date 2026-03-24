@@ -1,7 +1,7 @@
 {
-  "name": "tactical-rag-desktop",
-  "version": "4.0.0",
-  "description": "Tactical RAG Desktop - Document Intelligence System",
+  "name": "forge-desktop",
+  "version": "5.0.0",
+  "description": "Forge Desktop - Agentic Document Intelligence System",
   "type": "module",
   "private": true,
   "scripts": {

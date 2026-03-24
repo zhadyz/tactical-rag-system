@@ -1,11 +1,11 @@
 ---
 title: Quick Start
-description: Get Apollo RAG running in 5 minutes
+description: Get Forge running in 5 minutes
 ---
 
 # Quick Start
 
-Get Apollo RAG up and running in under 5 minutes.
+Get Forge up and running in under 5 minutes.
 
 ## Prerequisites
 
@@ -16,8 +16,8 @@ Get Apollo RAG up and running in under 5 minutes.
 ## Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+git clone https://github.com/yourusername/forge-rag.git
+cd forge-rag
 ```
 
 ## Configure Environment
@@ -36,7 +36,7 @@ OLLAMA_MODEL=llama3.1:8b
 VECTOR_STORE=chroma
 ```
 
-## Launch Apollo
+## Launch Forge
 
 ```bash
 docker compose up -d
@@ -47,10 +47,10 @@ docker compose up -d
 ```bash
 curl -X POST http://localhost:8000/api/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is Apollo RAG?", "mode": "simple"}'
+  -d '{"question": "What is Forge?", "mode": "simple"}'
 ```
 
 ## Next Steps
 
 - [API Reference](/api-reference) - Complete endpoint documentation
-- [Architecture](/architecture/overview) - How Apollo works
+- [Architecture](/architecture/overview) - How Forge works

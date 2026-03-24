@@ -1,13 +1,13 @@
 ---
 title: GPU Acceleration
-description: Learn how Apollo RAG leverages GPU acceleration for 80-100 tokens/sec inference with CUDA and llama.cpp
+description: Learn how Forge leverages GPU acceleration for 80-100 tokens/sec inference with CUDA and llama.cpp
 ---
 
 import { Callout } from 'nextra/components'
 
 # GPU Acceleration
 
-Apollo RAG achieves **80-100 tokens/sec** inference speeds by leveraging GPU acceleration through CUDA 12.1 and llama.cpp. This page explains how the system utilizes GPU resources for optimal performance.
+Forge achieves **80-100 tokens/sec** inference speeds by leveraging GPU acceleration through CUDA 12.1 and llama.cpp. This page explains how the system utilizes GPU resources for optimal performance.
 
 ## Why GPU Acceleration Matters
 
@@ -29,7 +29,7 @@ GPU acceleration provides several critical advantages for RAG systems:
 
 ## CUDA Integration
 
-Apollo RAG requires **CUDA 12.1** for GPU acceleration. The system is optimized for modern NVIDIA GPUs with compute capability 8.0+.
+Forge requires **CUDA 12.1** for GPU acceleration. The system is optimized for modern NVIDIA GPUs with compute capability 8.0+.
 
 ### CUDA Configuration
 
@@ -49,7 +49,7 @@ CMAKE_CUDA_ARCHITECTURES = "all-major"
 The Docker image includes CUDA toolkit and libraries:
 
 ```dockerfile
-# backend/Dockerfile.atlas
+# backend/Dockerfile
 FROM python:3.11-slim-bookworm AS base
 
 # Install CUDA Toolkit 12.1
@@ -75,7 +75,7 @@ RUN CMAKE_ARGS="-DGGML_CUDA=ON" \
 
 ## llama.cpp GPU Backend
 
-Apollo uses **llama.cpp** via the `llama-cpp-python` bindings for direct GPU acceleration, bypassing Ollama's HTTP overhead.
+Forge uses **llama.cpp** via the `llama-cpp-python` bindings for direct GPU acceleration, bypassing Ollama's HTTP overhead.
 
 ### GPU Offloading Strategy
 
@@ -270,7 +270,7 @@ class LlamaCppEngine:
 ```
 
 <Callout type="info">
-**Thread Safety**: llama.cpp is NOT thread-safe. Apollo uses a single-thread executor with semaphore to prevent race conditions.
+**Thread Safety**: llama.cpp is NOT thread-safe. Forge uses a single-thread executor with semaphore to prevent race conditions.
 </Callout>
 
 ## Hardware Requirements
@@ -310,7 +310,7 @@ CPU: 12+ cores for document processing
 - Quadro RTX 4000/5000
 
 <Callout type="error">
-**PyTorch Compatibility**: RTX 5080 has sm_120 architecture incompatibility with PyTorch 2.5.1. Apollo forces embeddings to CPU as a workaround.
+**PyTorch Compatibility**: RTX 5080 has sm_120 architecture incompatibility with PyTorch 2.5.1. Forge forces embeddings to CPU as a workaround.
 </Callout>
 
 ## Configuration Examples
@@ -373,15 +373,15 @@ nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total \
 
 ```bash
 # Monitor GPU usage inside container
-docker exec atlas-backend nvidia-smi
+docker exec forge-backend nvidia-smi
 
 # Stream GPU stats
-docker exec atlas-backend watch -n 1 nvidia-smi
+docker exec forge-backend watch -n 1 nvidia-smi
 ```
 
 ### Performance Metrics API
 
-Apollo exposes GPU metrics via the health endpoint:
+Forge exposes GPU metrics via the health endpoint:
 
 ```bash
 curl http://localhost:8000/api/health | jq .components.llm

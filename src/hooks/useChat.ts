@@ -21,6 +21,16 @@ export const useChat = () => {
   const addQuery = usePerformanceStore((state) => state.addQuery);
   const { isOnline } = useConnectionStatus();
 
+  // Agent store actions
+  const addAgentStep = useStore((state) => state.addAgentStep);
+  const updateAgentStep = useStore((state) => state.updateAgentStep);
+  const setRetrievalStages = useStore((state) => state.setRetrievalStages);
+  const setCRAGEvaluations = useStore((state) => state.setCRAGEvaluations);
+  const setVerificationResults = useStore((state) => state.setVerificationResults);
+  const setAgentActive = useStore((state) => state.setAgentActive);
+  const clearAgentState = useStore((state) => state.clearAgentState);
+  const finalizeAgentMessage = useStore((state) => state.finalizeAgentMessage);
+
   // PERFORMANCE OPTIMIZATION: Batch token accumulation
   const tokenBufferRef = useRef<string>('');
   const flushTokens = useCallback(() => {
@@ -31,7 +41,6 @@ export const useChat = () => {
   }, [appendToLastMessage]);
 
   // PERFORMANCE OPTIMIZATION: Throttle token updates to reduce re-renders
-  // Updates happen at most once per frame (~60fps) instead of per token
   const throttledFlushTokens = useThrottledCallback(flushTokens, 16);
 
   const sendMessage = useCallback(
@@ -42,7 +51,6 @@ export const useChat = () => {
           const offlineError = 'Cannot send message while offline. Please check your connection.';
           setError(offlineError);
 
-          // Add error message to chat
           const errorMessage: Message = {
             id: uuidv4(),
             role: 'assistant',
@@ -53,8 +61,9 @@ export const useChat = () => {
           return;
         }
 
-        // Clear any previous errors
+        // Clear any previous errors and agent state
         setError(null);
+        clearAgentState();
 
         // Add user message
         const userMessage: Message = {
@@ -90,28 +99,21 @@ export const useChat = () => {
             },
             {
               onToken: (token: string) => {
-                // PERFORMANCE OPTIMIZATION: Buffer tokens and flush throttled
-                // This reduces re-renders from 100+ per second to ~60fps max
                 tokenBufferRef.current += token;
                 throttledFlushTokens();
               },
               onSources: (sources: any[]) => {
-                // Flush any pending tokens before updating sources
                 flushTokens();
-                // Update last message with sources
                 updateLastMessage(assistantMessage.content, sources);
               },
               onMetadata: (metadata: any) => {
-                // Flush any pending tokens before updating metadata
                 flushTokens();
-                // Update last message with metadata
                 updateLastMessage(assistantMessage.content, undefined, {
                   mode_used: metadata.mode,
                   processing_time: metadata.processing_time_ms,
                   ...metadata,
                 });
 
-                // Track performance metrics (streaming)
                 if (metadata?.processing_time_ms) {
                   addQuery({
                     id: uuidv4(),
@@ -127,19 +129,71 @@ export const useChat = () => {
                 }
               },
               onDone: () => {
-                // Flush any remaining tokens before marking complete
                 flushTokens();
-                // Mark streaming as complete
+                finalizeAgentMessage();
                 setLastMessageStreaming(false);
                 setStreaming(false);
               },
               onError: (error: string) => {
-                // Flush any remaining tokens before handling error
                 flushTokens();
                 console.error('Streaming error:', error);
                 setError(error);
                 setLastMessageStreaming(false);
                 setStreaming(false);
+              },
+              onAgentThinking: (thinkingContent: string) => {
+                setAgentActive(true);
+                addAgentStep({
+                  id: uuidv4(),
+                  type: 'thinking',
+                  timestamp: new Date(),
+                  content: thinkingContent,
+                  status: 'complete',
+                });
+              },
+              onToolCall: (toolCall: any) => {
+                addAgentStep({
+                  id: toolCall.id || uuidv4(),
+                  type: 'tool_call',
+                  timestamp: new Date(),
+                  content: `Calling ${toolCall.tool || toolCall.toolName}`,
+                  toolName: toolCall.tool || toolCall.toolName,
+                  toolInput: toolCall.input,
+                  status: 'running',
+                });
+              },
+              onToolResult: (toolResult: any) => {
+                const toolCallId = toolResult.tool_call_id || toolResult.toolCallId;
+                if (toolCallId) {
+                  updateAgentStep(toolCallId, { status: 'complete' });
+                }
+                addAgentStep({
+                  id: uuidv4(),
+                  type: 'tool_result',
+                  timestamp: new Date(),
+                  content: `${toolResult.count || toolResult.resultCount || 0} results in ${toolResult.duration_ms || toolResult.durationMs || 0}ms`,
+                  toolName: toolResult.tool || toolResult.toolName,
+                  toolOutput: toolResult,
+                  durationMs: toolResult.duration_ms || toolResult.durationMs,
+                  status: 'complete',
+                });
+              },
+              onCRAGEvaluation: (evaluations: any) => {
+                setCRAGEvaluations(evaluations);
+                addAgentStep({
+                  id: uuidv4(),
+                  type: 'crag_evaluation',
+                  timestamp: new Date(),
+                  content: `Evaluated ${evaluations.length} documents`,
+                  status: 'complete',
+                });
+              },
+              onRetrievalComplete: (data: any) => {
+                setRetrievalStages(data.stages || []);
+                setAgentActive(false);
+              },
+              onVerification: (results: any) => {
+                setVerificationResults(results);
               },
             }
           );
@@ -147,7 +201,6 @@ export const useChat = () => {
           // Use traditional non-streaming API
           setLoading(true);
 
-          // Call API
           const response = await api.query({
             question: content,
             mode: settings.mode,
@@ -155,7 +208,6 @@ export const useChat = () => {
             rerank_preset: settings.rerankPreset,
           });
 
-          // Add assistant response
           const assistantMessage: Message = {
             id: uuidv4(),
             role: 'assistant',
@@ -170,7 +222,6 @@ export const useChat = () => {
           };
           addMessage(assistantMessage);
 
-          // Track performance metrics (non-streaming)
           if (response.metadata?.processing_time_ms) {
             addQuery({
               id: uuidv4(),
@@ -191,7 +242,6 @@ export const useChat = () => {
         console.error('Error sending message:', err);
         setError(err.message || 'Failed to send message. Please try again.');
 
-        // Optionally add an error message to the chat
         const errorMessage: Message = {
           id: uuidv4(),
           role: 'assistant',
@@ -220,6 +270,14 @@ export const useChat = () => {
       throttledFlushTokens,
       flushTokens,
       isOnline,
+      addAgentStep,
+      updateAgentStep,
+      setRetrievalStages,
+      setCRAGEvaluations,
+      setVerificationResults,
+      setAgentActive,
+      clearAgentState,
+      finalizeAgentMessage,
     ]
   );
 

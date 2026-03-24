@@ -11,7 +11,7 @@ export function CommunitySection() {
             Community & Support
           </h2>
           <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
-            Get started with Apollo and explore the resources available
+            Get started with Forge and explore the resources available
           </p>
         </div>
 

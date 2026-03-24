@@ -1,19 +1,19 @@
 ---
-title: "ATLAS Multi-Level Caching"
-description: "Comprehensive guide to Apollo's five-layer ATLAS caching protocol for 98% latency reduction"
+title: "Forge Multi-Level Caching"
+description: "Comprehensive guide to Forge's five-layer Forge caching protocol for 98% latency reduction"
 ---
 
 import { Callout } from '@/components/Callout'
 
-# ATLAS Multi-Level Caching
+# Forge Multi-Level Caching
 
-Apollo RAG employs a sophisticated **five-layer caching architecture** (L1-L5) called the ATLAS Protocol that achieves **98% latency reduction** for cached queries, dropping response times from 50-100ms to less than 1ms.
+Forge employs a sophisticated **five-layer caching architecture** (L1-L5) called the Forge that achieves **98% latency reduction** for cached queries, dropping response times from 50-100ms to less than 1ms.
 
 ## Caching Overview
 
-### Why ATLAS Matters
+### Why Forge Matters
 
-The ATLAS (Adaptive Tiered Latency-Aware Storage) protocol is designed to minimize redundant computation at every stage of the RAG pipeline:
+The Forge (Adaptive Tiered Latency-Aware Storage) protocol is designed to minimize redundant computation at every stage of the RAG pipeline:
 
 - **L1 Query Cache**: Exact, normalized, and semantic query matching
 - **L2 Embedding Cache**: Reusable vector embeddings for queries and documents
@@ -182,7 +182,7 @@ Storage Lifetime: Session-based (cleared on restart)
 
 ### Automatic Summarization
 
-When the conversation exceeds 5 exchanges, Apollo automatically summarizes older context to stay within token limits:
+When the conversation exceeds 5 exchanges, Forge automatically summarizes older context to stay within token limits:
 
 ```python
 # backend/_src/conversation_memory.py
@@ -243,7 +243,7 @@ models = [
 ### Docker Layer Optimization
 
 ```dockerfile
-# Stage 3: Pre-cache HuggingFace models (backend/Dockerfile.atlas)
+# Stage 3: Pre-cache HuggingFace models (backend/Dockerfile)
 FROM python-deps AS model-cache
 RUN python -c "from sentence_transformers import SentenceTransformer; \
     SentenceTransformer('BAAI/bge-large-en-v1.5'); \
@@ -263,7 +263,7 @@ ENV TRANSFORMERS_CACHE=/root/.cache/huggingface
 | Startup Time | 78s | 23s | **3.4x faster** |
 
 <Callout type="success">
-**Production Benefit**: L4 caching combined with parallel initialization reduces Apollo's startup time from 78 seconds to **20-30 seconds**.
+**Production Benefit**: L4 caching combined with parallel initialization reduces Forge's startup time from 78 seconds to **20-30 seconds**.
 </Callout>
 
 ---
@@ -331,7 +331,7 @@ class QueryPrefetcher:
 
 ### Before/After Metrics
 
-**Without ATLAS Caching**:
+**Without Forge Caching**:
 ```yaml
 Average Query Time: 12.5 seconds
 Cache Hit Rate: 0%
@@ -339,7 +339,7 @@ Embedding Computation: Always required (50-100ms)
 Model Loading: On every startup (15-20s)
 ```
 
-**With ATLAS Caching**:
+**With Forge Caching**:
 ```yaml
 Average Query Time: 3.2 seconds (74% reduction)
 Cache Hit Rate: 60-80%
@@ -580,7 +580,7 @@ response = await rag_engine.query(
 
 ## Next Steps
 
-Learn about **[Adaptive Retrieval](/core-concepts/adaptive-retrieval)** to understand how Apollo intelligently routes queries to different retrieval strategies based on complexity.
+Learn about **[Adaptive Retrieval](/core-concepts/adaptive-retrieval)** to understand how Forge intelligently routes queries to different retrieval strategies based on complexity.
 
 <Callout type="info">
 **Related Topics**:

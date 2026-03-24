@@ -1,4 +1,4 @@
-import type { QueryRequest, QueryResponse, HealthStatus, DocumentListResponse, ReindexResponse } from '../types';
+import type { QueryRequest, QueryResponse, HealthStatus, DocumentListResponse, ReindexResponse, IngestStatusResponse } from '../types';
 import { API } from '../constants/ui';
 
 // Tauri desktop app: Connect directly to backend (no proxy needed)
@@ -240,6 +240,22 @@ export const api = {
       }, API.DEFAULT_TIMEOUT);
       return handleResponse<{ success: boolean; message: string; current_settings: any }>(response);
     });
+  },
+
+  // Trigger document ingestion pipeline
+  triggerIngest: async (): Promise<{ success: boolean; message: string }> => {
+    return fetchWithRetry(async () => {
+      const response = await fetchWithTimeout(`${API_BASE}/api/ingest`, {
+        method: 'POST',
+      }, API.DEFAULT_TIMEOUT);
+      return handleResponse<{ success: boolean; message: string }>(response);
+    });
+  },
+
+  // Get ingestion pipeline status
+  getIngestStatus: async (): Promise<IngestStatusResponse> => {
+    const response = await fetchWithTimeout(`${API_BASE}/api/ingest/status`, {}, API.HEALTH_CHECK_TIMEOUT);
+    return handleResponse<IngestStatusResponse>(response);
   },
 };
 

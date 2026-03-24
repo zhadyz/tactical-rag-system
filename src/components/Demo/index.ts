@@ -1,7 +1,7 @@
 /**
  * Interactive Demo Components
  *
- * These components showcase Apollo's capabilities in ways
+ * These components showcase Forge's capabilities in ways
  * that NO other RAG documentation does.
  */
 

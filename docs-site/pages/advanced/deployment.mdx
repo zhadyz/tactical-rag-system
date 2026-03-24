@@ -1,13 +1,13 @@
 ---
 title: Production Deployment
-description: Deploy Apollo RAG with Docker Compose, multi-stage builds, and GPU acceleration
+description: Deploy Forge with Docker Compose, multi-stage builds, and GPU acceleration
 ---
 
 import { Callout } from '@/components/Callout'
 
 # Production Deployment
 
-Deploy Apollo RAG to production with Docker Compose orchestration, GPU acceleration, and production-grade monitoring.
+Deploy Forge to production with Docker Compose orchestration, GPU acceleration, and production-grade monitoring.
 
 <Callout type="warning">
 **Production Prerequisites**: Ensure you have Docker 24+, Docker Compose 2.20+, NVIDIA Container Toolkit, and at least 48GB RAM + 16GB GPU VRAM.
@@ -17,9 +17,9 @@ Deploy Apollo RAG to production with Docker Compose orchestration, GPU accelerat
 
 ## Deployment Overview
 
-Apollo's production deployment uses a **multi-container architecture** orchestrated via Docker Compose:
+Forge's production deployment uses a **multi-container architecture** orchestrated via Docker Compose:
 
-- **atlas-backend**: FastAPI + RAG pipeline with GPU acceleration
+- **forge-backend**: FastAPI + RAG pipeline with GPU acceleration
 - **qdrant**: Vector database for semantic search
 - **redis**: Multi-tier caching layer
 - **prometheus**: Metrics collection and alerting
@@ -52,12 +52,12 @@ Observability:
 
 ### Service Architecture
 
-The complete stack is defined in `backend/docker-compose.atlas.yml`:
+The complete stack is defined in `backend/docker-compose.yml`:
 
 ```yaml
 # Network Configuration
 networks:
-  atlas-network:
+  forge-network:
     driver: bridge
     ipam:
       config:
@@ -72,10 +72,10 @@ volumes:
 
 services:
   # Core RAG Service
-  atlas-backend:
+  forge-backend:
     build:
       context: ..
-      dockerfile: backend/Dockerfile.atlas
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     depends_on:
@@ -98,10 +98,10 @@ services:
 ```bash
 # Production deployment
 cd backend
-docker-compose -f docker-compose.atlas.yml up -d
+docker-compose -f docker-compose.yml up -d
 
 # View logs
-docker-compose logs -f atlas-backend
+docker-compose logs -f forge-backend
 
 # Check service health
 docker-compose ps
@@ -122,7 +122,7 @@ docker-compose down -v
 
 ## Multi-Stage Docker Builds
 
-Apollo uses a **5-stage Dockerfile** for optimal caching and minimal image size (9GB, 52% reduction from baseline).
+Forge uses a **5-stage Dockerfile** for optimal caching and minimal image size (9GB, 52% reduction from baseline).
 
 ### Build Stages
 
@@ -162,8 +162,8 @@ FROM app AS runtime
 
 ```bash
 # Build the image
-docker build -f backend/Dockerfile.atlas \
-  -t atlas-protocol-backend:v4.0 \
+docker build -f backend/Dockerfile \
+  -t forge-backend:v5.0 \
   --build-arg BUILDKIT_INLINE_CACHE=1 \
   .
 
@@ -221,7 +221,7 @@ TEMPERATURE=0.7
 VECTOR_STORE=qdrant
 QDRANT_HOST=qdrant
 QDRANT_PORT=6333
-QDRANT_COLLECTION=atlas_knowledge_base
+QDRANT_COLLECTION=forge_documents
 
 # Cache Configuration
 RAG_CACHE__USE_REDIS=true
@@ -266,7 +266,7 @@ REDIS_PASSWORD=<your-redis-password>
 
 ```yaml
 services:
-  atlas-backend:
+  forge-backend:
     volumes:
       # Document storage (read-only)
       - ./documents:/app/documents:ro
@@ -304,24 +304,24 @@ services:
 
 ```bash
 # Backup Qdrant snapshots
-docker exec atlas-qdrant \
-  curl -X POST http://localhost:6333/collections/atlas_knowledge_base/snapshots
+docker exec forge-qdrant \
+  curl -X POST http://localhost:6333/collections/forge_documents/snapshots
 
 # Copy snapshot
-docker cp atlas-qdrant:/qdrant/snapshots ./backups/qdrant/
+docker cp forge-qdrant:/qdrant/snapshots ./backups/qdrant/
 
 # Backup Redis RDB
-docker exec atlas-redis redis-cli BGSAVE
-docker cp atlas-redis:/data/dump.rdb ./backups/redis/
+docker exec forge-redis redis-cli BGSAVE
+docker cp forge-redis:/data/dump.rdb ./backups/redis/
 
 # Restore Qdrant from snapshot
-docker cp ./backups/qdrant/snapshot.tar atlas-qdrant:/qdrant/snapshots/
-curl -X PUT http://localhost:6333/collections/atlas_knowledge_base/snapshots/upload \
+docker cp ./backups/qdrant/snapshot.tar forge-qdrant:/qdrant/snapshots/
+curl -X PUT http://localhost:6333/collections/forge_documents/snapshots/upload \
   -F "snapshot=@snapshot.tar"
 
 # Restore Redis
-docker cp ./backups/redis/dump.rdb atlas-redis:/data/
-docker restart atlas-redis
+docker cp ./backups/redis/dump.rdb forge-redis:/data/
+docker restart forge-redis
 ```
 
 ---
@@ -331,9 +331,9 @@ docker restart atlas-redis
 ### NVIDIA Runtime Setup
 
 ```yaml
-# docker-compose.atlas.yml
+# docker-compose.yml
 services:
-  atlas-backend:
+  forge-backend:
     deploy:
       resources:
         reservations:
@@ -352,7 +352,7 @@ services:
 
 ```bash
 # Check GPU access inside container
-docker exec atlas-backend nvidia-smi
+docker exec forge-backend nvidia-smi
 
 # Expected output:
 # +-----------------------------------------------------------------------------+
@@ -374,7 +374,7 @@ docker exec atlas-backend nvidia-smi
 
 ```yaml
 networks:
-  atlas-network:
+  forge-network:
     driver: bridge
     ipam:
       config:
@@ -384,17 +384,17 @@ networks:
 services:
   qdrant:
     networks:
-      atlas-network:
+      forge-network:
         ipv4_address: 172.28.0.2
 
   redis:
     networks:
-      atlas-network:
+      forge-network:
         ipv4_address: 172.28.0.3
 
-  atlas-backend:
+  forge-backend:
     networks:
-      atlas-network:
+      forge-network:
         ipv4_address: 172.28.0.10
 ```
 
@@ -402,7 +402,7 @@ services:
 
 ```yaml
 services:
-  atlas-backend:    8000:8000  # REST API
+  forge-backend:    8000:8000  # REST API
   qdrant:          6333:6333  # HTTP API
   redis:           6379:6379  # Cache
   prometheus:      9090:9090  # Metrics
@@ -418,7 +418,7 @@ services:
 
 ```yaml
 # Backend Health Check
-atlas-backend:
+forge-backend:
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
     interval: 15s
@@ -458,7 +458,7 @@ redis:
     "cache": "ready",
     "conversation_memory": "ready"
   },
-  "version": "4.0.0",
+  "version": "5.0.0",
   "uptime_seconds": 1234
 }
 ```
@@ -472,7 +472,7 @@ redis:
 ```yaml
 # Resource Allocation (RTX 5080 + 96GB RAM)
 services:
-  atlas-backend:
+  forge-backend:
     deploy:
       resources:
         limits:
@@ -500,12 +500,12 @@ services:
 ### Horizontal Scaling
 
 <Callout type="warning">
-**GPU Limitation**: Each atlas-backend instance requires dedicated GPU access. Scale horizontally by deploying multiple GPU nodes with load balancer.
+**GPU Limitation**: Each forge-backend instance requires dedicated GPU access. Scale horizontally by deploying multiple GPU nodes with load balancer.
 </Callout>
 
 ```nginx
 # nginx.conf - Load Balancer
-upstream apollo_backend {
+upstream forge_backend {
     least_conn;
     server 192.168.1.10:8000 weight=1;  # GPU Node 1
     server 192.168.1.11:8000 weight=1;  # GPU Node 2
@@ -517,7 +517,7 @@ server {
     server_name api.yourdomain.com;
 
     location / {
-        proxy_pass http://apollo_backend;
+        proxy_pass http://forge_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -537,20 +537,20 @@ server {
 #!/bin/bash
 # backup.sh - Daily backup automation
 
-BACKUP_DIR=/backups/apollo/$(date +%Y%m%d)
+BACKUP_DIR=/backups/forge/$(date +%Y%m%d)
 mkdir -p $BACKUP_DIR
 
 # Backup Qdrant
 echo "Backing up Qdrant..."
-docker exec atlas-qdrant \
-  curl -X POST http://localhost:6333/collections/atlas_knowledge_base/snapshots
-docker cp atlas-qdrant:/qdrant/snapshots/ $BACKUP_DIR/qdrant/
+docker exec forge-qdrant \
+  curl -X POST http://localhost:6333/collections/forge_documents/snapshots
+docker cp forge-qdrant:/qdrant/snapshots/ $BACKUP_DIR/qdrant/
 
 # Backup Redis
 echo "Backing up Redis..."
-docker exec atlas-redis redis-cli BGSAVE
+docker exec forge-redis redis-cli BGSAVE
 sleep 5
-docker cp atlas-redis:/data/dump.rdb $BACKUP_DIR/redis/
+docker cp forge-redis:/data/dump.rdb $BACKUP_DIR/redis/
 
 # Backup application logs
 echo "Backing up logs..."
@@ -576,9 +576,9 @@ docker-compose down
 
 # 2. Restore volumes
 tar -xzf backup-20250128.tar.gz
-docker volume rm atlas-protocol_qdrant_storage
-docker volume create atlas-protocol_qdrant_storage
-docker cp backup-20250128/qdrant/ atlas-qdrant:/qdrant/storage/
+docker volume rm forge_qdrant_storage
+docker volume create forge_qdrant_storage
+docker cp backup-20250128/qdrant/ forge-qdrant:/qdrant/storage/
 
 # 3. Restart stack
 docker-compose up -d
