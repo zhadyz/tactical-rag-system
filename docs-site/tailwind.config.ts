@@ -11,7 +11,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Apollo Brand Colors
+        // Forge Brand Colors
         primary: {
           50: '#eff6ff',
           100: '#dbeafe',

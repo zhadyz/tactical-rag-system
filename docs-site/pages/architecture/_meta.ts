@@ -1,7 +1,6 @@
 export default {
-  'overview': 'Architecture Overview',
-  'backend': 'Backend Layer',
-  'frontend': 'Frontend Layer',
-  'desktop-bridge': 'Desktop Bridge',
-  'integration': 'Data Flow & Integration'
+  overview: "System Overview",
+  "ingestion-pipeline": "Ingestion Pipeline",
+  "query-pipeline": "Query Pipeline",
+  "streaming-protocol": "Streaming Protocol",
 }

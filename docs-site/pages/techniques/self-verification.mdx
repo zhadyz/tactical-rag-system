@@ -1,0 +1,256 @@
+---
+title: Self-Verification
+description: How Forge audits every generated answer claim-by-claim against source documents before delivering it to the user.
+---
+
+import { Callout } from '../../components/Callout'
+
+# Self-Verification
+
+Self-verification is Forge's final quality gate. After generating an answer, the system **extracts every factual claim** from the response and **checks each one against the source documents** that were used as context. Unsupported claims are flagged, and the overall confidence score reflects how well-grounded the answer is.
+
+## Why Verify?
+
+Even with CRAG filtering and ColBERT reranking, LLMs can still:
+
+- **Hallucinate details** — Invent specific numbers, dates, or names not in the sources
+- **Over-generalize** — State something as universal when the source only mentioned a specific case
+- **Conflate sources** — Merge information from two different documents inaccurately
+- **Extrapolate** — Draw conclusions the source material doesn't support
+
+Self-verification catches these failure modes before the answer reaches the user.
+
+## How It Works
+
+### Step 1: Claim Extraction
+
+The LLM extracts atomic claims from its own generated answer:
+
+```python
+# forge/verification/verifier.py
+class SelfVerifier:
+    """Post-generation claim-by-claim verification."""
+
+    CLAIM_EXTRACTION_PROMPT = """Extract all factual claims from this answer.
+Each claim should be a single, verifiable statement.
+
+Answer:
+{answer}
+
+List each claim on a new line:"""
+
+    async def extract_claims(self, answer: str) -> list[str]:
+        response = await self.llm.generate(
+            self.CLAIM_EXTRACTION_PROMPT.format(answer=answer),
+            max_tokens=500,
+            temperature=0.0,
+        )
+        claims = [
+            line.strip().lstrip("0123456789.- )")
+            for line in response.strip().split("\n")
+            if line.strip() and len(line.strip()) > 10
+        ]
+        return claims[:self.config.max_claims]
+```
+
+### Step 2: Claim Verification
+
+Each claim is checked against the source documents that were used to generate the answer:
+
+```python
+    VERIFY_PROMPT = """Determine if this claim is supported by the source text.
+
+Claim: {claim}
+
+Source text:
+{source_text}
+
+Is this claim directly supported by the source text?
+Respond with one of:
+- SUPPORTED: The claim is directly stated or clearly implied by the source
+- PARTIALLY_SUPPORTED: Some aspects are supported but key details are not
+- NOT_SUPPORTED: The claim cannot be verified from the source text
+
+Verdict:"""
+
+    async def verify_claim(
+        self,
+        claim: str,
+        sources: list[ScoredChunk],
+    ) -> ClaimVerification:
+        """Verify a single claim against source documents."""
+        source_text = "\n\n---\n\n".join([
+            f"[Source {i+1}]: {s.original_text}"
+            for i, s in enumerate(sources)
+        ])
+
+        response = await self.llm.generate(
+            self.VERIFY_PROMPT.format(
+                claim=claim,
+                source_text=source_text,
+            ),
+            max_tokens=50,
+            temperature=0.0,
+        )
+
+        verdict = self._parse_verdict(response)
+        return ClaimVerification(
+            claim=claim,
+            verdict=verdict,
+            source_ids=[s.id for s in sources],
+        )
+```
+
+### Step 3: Confidence Scoring
+
+The overall confidence score is computed from the verification results:
+
+```python
+    def compute_confidence(
+        self,
+        verifications: list[ClaimVerification],
+    ) -> float:
+        """Compute overall answer confidence from claim verifications."""
+        if not verifications:
+            return 0.0
+
+        weights = {
+            "SUPPORTED": 1.0,
+            "PARTIALLY_SUPPORTED": 0.5,
+            "NOT_SUPPORTED": 0.0,
+        }
+
+        total = sum(
+            weights[v.verdict]
+            for v in verifications
+        )
+        return total / len(verifications)
+```
+
+## Example Verification
+
+**Generated answer:**
+> "The Phase 2 trial showed an 81% success rate with 340 participants across 12 sites. The trial was led by Dr. Smith and received FDA fast-track designation in March 2024."
+
+**Extracted claims:**
+1. "The Phase 2 trial showed an 81% success rate."
+2. "The trial had 340 participants."
+3. "The trial was conducted across 12 sites."
+4. "The trial was led by Dr. Smith."
+5. "The trial received FDA fast-track designation in March 2024."
+
+**Verification results:**
+
+| Claim | Verdict | Source |
+|---|---|---|
+| Phase 2 trial showed 81% success rate | SUPPORTED | Source 1, p.12 |
+| Trial had 340 participants | SUPPORTED | Source 2, p.3 |
+| Trial conducted across 12 sites | SUPPORTED | Source 2, p.3 |
+| Trial led by Dr. Smith | PARTIALLY_SUPPORTED | Source mentions "Smith et al." but not "Dr. Smith" specifically |
+| FDA fast-track designation in March 2024 | NOT_SUPPORTED | Source says "Q1 2024" but not specifically "March" |
+
+**Confidence:** (1.0 + 1.0 + 1.0 + 0.5 + 0.0) / 5 = **0.70**
+
+The verification catches the hallucinated "March" detail and the imprecise "Dr. Smith" attribution — exactly the kind of subtle errors that would otherwise go unnoticed.
+
+## SSE Streaming
+
+Verification results are streamed to the frontend:
+
+```json
+{
+  "type": "verification",
+  "claims_checked": 5,
+  "claims_supported": 3,
+  "claims_partially_supported": 1,
+  "claims_unsupported": 1,
+  "confidence": 0.70,
+  "details": [
+    {
+      "claim": "The Phase 2 trial showed an 81% success rate.",
+      "verdict": "SUPPORTED"
+    },
+    {
+      "claim": "FDA fast-track designation in March 2024.",
+      "verdict": "NOT_SUPPORTED",
+      "note": "Source says Q1 2024, not March specifically"
+    }
+  ]
+}
+```
+
+The Tauri frontend displays this as a confidence indicator with expandable claim-level details.
+
+## Agent Integration
+
+In agentic mode, verification failure can trigger a retry:
+
+```python
+# forge/retrieval/agent.py (VERIFY node)
+async def verify_node(state: ForgeAgentState) -> ForgeAgentState:
+    verifier = SelfVerifier(config)
+    claims = await verifier.extract_claims(state["answer"])
+    verifications = [
+        await verifier.verify_claim(claim, state["reranked_chunks"])
+        for claim in claims
+    ]
+    confidence = verifier.compute_confidence(verifications)
+
+    if confidence < config.confidence_threshold and state["iteration"] < state["max_iterations"]:
+        # Low confidence — retry with different retrieval strategy
+        state["reasoning"] += f"\nVerification confidence {confidence:.2f} below threshold. Retrying."
+        return {"next": "PLAN"}  # Back to planning node
+
+    state["confidence"] = confidence
+    state["claims"] = verifications
+    return {"next": "END"}
+```
+
+<Callout type="info" title="Verification retries are rare">
+  In practice, the CRAG gate + ColBERT reranking pipeline produces high-quality context, so verification retries happen in less than 5% of queries. When they do occur, it's usually for complex multi-hop questions where the first retrieval pass missed a critical detail.
+</Callout>
+
+## Configuration
+
+```yaml
+verification:
+  enabled: true
+  max_claims: 10              # Max claims to verify per answer
+  confidence_threshold: 0.7   # Below this, flag as uncertain
+```
+
+### When to Disable
+
+Disable verification for maximum speed in low-stakes scenarios:
+
+```yaml
+verification:
+  enabled: false
+```
+
+This saves ~500ms per query (one LLM call for claim extraction + one per claim for verification).
+
+## Performance
+
+| Operation | Latency |
+|---|---|
+| Claim extraction | ~200ms |
+| Verify 1 claim | ~100ms |
+| Verify 5 claims | ~500ms |
+| Verify 10 claims | ~1s |
+| Total (typical 5 claims) | ~700ms |
+
+## Trade-offs
+
+| Pro | Con |
+|---|---|
+| Catches hallucinated details | Adds 500ms-1s to query time |
+| Provides per-claim confidence | Requires additional LLM calls |
+| Enables retry loop in agentic mode | Verification itself depends on LLM quality |
+| User-facing confidence scores | Can flag stylistic rephrasing as "not supported" |
+
+## References
+
+- Dhuliawala et al., "Chain-of-Verification Reduces Hallucination in Large Language Models" (2023)
+- Forge implementation: `forge/verification/verifier.py`
+- Agent integration: `forge/retrieval/agent.py` → `verify_node()`

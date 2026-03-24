@@ -1,0 +1,201 @@
+---
+title: Proposition Indexing
+description: How Forge extracts atomic factual claims from document chunks and indexes them as standalone searchable units using the Dense-X technique.
+---
+
+import { Callout } from '../../components/Callout'
+
+# Proposition Indexing
+
+Proposition Indexing (based on the Dense-X retrieval technique) extracts **atomic factual claims** from each document chunk and indexes them as standalone search units. This gives Forge pin-point precision for factual queries that standard chunk-level retrieval misses.
+
+## The Problem
+
+A typical 512-token chunk contains multiple facts:
+
+> "The company's revenue grew 23% year-over-year to $4.2B in Q3 2024, while operating margins expanded from 12% to 15%. The European division contributed 40% of total revenue, up from 35% in the prior year. CEO Jane Smith attributed the growth to the new enterprise platform launched in May."
+
+If a user asks *"What percentage of revenue came from Europe?"*, the entire 512-token chunk competes against other chunks that might discuss Europe more prominently. The specific fact — 40% — is buried in surrounding context.
+
+## The Solution
+
+During ingestion, Forge extracts atomic propositions from each chunk and indexes them as separate L3 points:
+
+**Source chunk (L2):**
+> "The company's revenue grew 23% year-over-year to $4.2B in Q3 2024..."
+
+**Extracted propositions (L3):**
+1. "The company's revenue grew 23% year-over-year in Q3 2024."
+2. "The company's Q3 2024 revenue was $4.2B."
+3. "Operating margins expanded from 12% to 15% in Q3 2024."
+4. "The European division contributed 40% of total revenue in Q3 2024."
+5. "The European division's revenue share increased from 35% to 40% year-over-year."
+6. "CEO Jane Smith attributed growth to the new enterprise platform."
+7. "The enterprise platform was launched in May."
+
+Each proposition is a self-contained factual statement that can be embedded and retrieved independently. When the user asks about Europe's revenue share, proposition #4 matches precisely.
+
+## Implementation
+
+Proposition extraction happens during ingestion in `forge/ingestion/propositions.py`:
+
+```python
+class PropositionExtractor:
+    """Extracts atomic propositions from document chunks."""
+
+    EXTRACTION_PROMPT = """Extract all atomic factual propositions from this text.
+Each proposition should be:
+- A single, self-contained factual statement
+- Understandable without the surrounding context
+- Include necessary entities, dates, and values
+- Not a subjective opinion or interpretation
+
+Text:
+{chunk_text}
+
+Output each proposition on a new line, prefixed with "- "."""
+
+    async def extract(self, chunk: DocumentChunk) -> list[Proposition]:
+        """Extract propositions from a single chunk."""
+        response = await self.llm.generate(
+            self.EXTRACTION_PROMPT.format(chunk_text=chunk.text),
+            max_tokens=500,
+            temperature=0.0,
+        )
+
+        propositions = []
+        for line in response.strip().split("\n"):
+            line = line.strip().lstrip("- ").strip()
+            if line and len(line) > 10:
+                propositions.append(Proposition(
+                    text=line,
+                    parent_chunk_id=chunk.id,
+                    parent_document_id=chunk.document_id,
+                    level="L3",
+                ))
+
+        return propositions[:self.config.max_propositions]
+```
+
+### Storage in Qdrant
+
+Each proposition is stored as a separate point in the same Qdrant collection, at hierarchy level L3:
+
+```python
+# Each proposition gets its own BGE-M3 embeddings
+vectors = await bge_m3.encode(proposition.text)
+
+point = PointStruct(
+    id=proposition.id,
+    vector={
+        "dense": vectors["dense"],
+        "sparse": vectors["sparse"],
+        "colbert": vectors["colbert"],
+    },
+    payload={
+        "text": proposition.text,
+        "original_text": proposition.text,
+        "level": "L3",
+        "parent_chunk_id": proposition.parent_chunk_id,
+        "parent_document_id": proposition.parent_document_id,
+        "type": "proposition",
+    },
+)
+```
+
+### Agent Access
+
+The `proposition_search` tool in the agent specifically targets L3 points:
+
+```python
+@tool
+async def proposition_search(query: str, top_k: int = 10) -> list[ScoredChunk]:
+    """Search proposition-level index for precise factual matches."""
+    dense_vec, _ = await bge_m3.encode(query)
+    results = await qdrant.search(
+        collection="forge_documents",
+        query_vector=("dense", dense_vec),
+        query_filter=Filter(
+            must=[FieldCondition(key="level", match=MatchValue(value="L3"))]
+        ),
+        limit=top_k,
+    )
+    return [ScoredChunk.from_qdrant(r) for r in results]
+```
+
+<Callout type="info" title="Parent expansion still works">
+  When a proposition is retrieved, the agent can trace back to the parent chunk via `parent_chunk_id` to get full context. This is the bridge between proposition precision and contextual understanding — retrieve at L3 for matching, expand to L2 for generation context.
+</Callout>
+
+## Example: Before and After
+
+### Without Proposition Indexing
+
+```
+Query: "What is the half-life of the compound?"
+
+Retrieved chunks (L2):
+  1. "The pharmacokinetic study enrolled 24 healthy volunteers..."   (0.73)
+  2. "Table 2 shows the PK parameters including Cmax, Tmax..."       (0.71)
+  3. "Drug interactions were studied with common co-medications..."   (0.68)
+
+The answer ("half-life is 6.2 hours") is in chunk #2 as one value in a
+dense table of parameters. The chunk's embedding is dominated by
+"pharmacokinetic parameters" semantics, not "half-life" specifically.
+```
+
+### With Proposition Indexing
+
+```
+Query: "What is the half-life of the compound?"
+
+Retrieved propositions (L3):
+  1. "The compound has a terminal half-life of 6.2 hours."          (0.94)
+  2. "The half-life was consistent across all dose groups."          (0.89)
+  3. "Peak plasma concentration (Cmax) was reached at 1.5 hours."   (0.72)
+
+Direct hit. The atomic proposition matches the query precisely.
+```
+
+## Configuration
+
+```yaml
+propositions:
+  enabled: true
+  min_propositions: 1     # Minimum to extract per chunk
+  max_propositions: 10    # Maximum to extract per chunk
+  extraction_prompt: "default"
+```
+
+### Tuning
+
+- **`max_propositions: 5`** — Faster ingestion, may miss some facts
+- **`max_propositions: 15`** — More comprehensive, slower ingestion, higher storage
+- **`min_propositions: 1`** — Skip chunks that yield no clear factual claims (e.g., transitional paragraphs)
+
+## Trade-offs
+
+| Pro | Con |
+|---|---|
+| Precise retrieval for factual queries | 3-5x more points in Qdrant per document |
+| Self-contained facts don't need surrounding context to match | One LLM call per chunk during ingestion |
+| Works perfectly with CRAG + ColBERT reranking | Extraction quality depends on LLM capabilities |
+| Agent can choose proposition_search specifically | Not useful for broad topical queries |
+
+## Storage Impact
+
+For a typical 100-page document:
+
+| Without Propositions | With Propositions |
+|---|---|
+| ~400 L2 chunks | ~400 L2 chunks + ~2,000 L3 propositions |
+| ~400 Qdrant points | ~2,400 Qdrant points |
+| ~200MB vector storage | ~1.2GB vector storage |
+
+The storage increase is manageable for single-GPU deployments. Qdrant handles millions of points efficiently.
+
+## References
+
+- Chen et al., "Dense X Retrieval: What Retrieval Granularity Should We Use?" (2024)
+- Forge implementation: `forge/ingestion/propositions.py`
+- Agent tool: `forge/retrieval/search.py` → `proposition_search()`

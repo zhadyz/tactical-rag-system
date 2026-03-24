@@ -1,8 +1,8 @@
-name: Deploy Documentation to GitHub Pages
+name: Deploy Forge Documentation to GitHub Pages
 
 on:
   push:
-    branches: [v4.2-production, main]
+    branches: [v5.0-forge, main]
     paths:
       - 'docs-site/**'
       - '.github/workflows/deploy-docs.yml'

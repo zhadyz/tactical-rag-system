@@ -1,0 +1,348 @@
+---
+title: Agentic RAG
+description: How Forge's LangGraph-powered agent autonomously drives retrieval decisions, iterating with multiple tools until it has sufficient evidence.
+---
+
+import { Callout } from '../../components/Callout'
+
+# Agentic RAG
+
+Agentic RAG is the orchestration layer that makes Forge more than a pipeline. Instead of a fixed sequence of retrieve-then-generate, a LangGraph-powered agent **autonomously decides** which retrieval tools to invoke, evaluates the results, and iterates until it has gathered enough evidence to produce a reliable answer.
+
+## Pipeline RAG vs. Agentic RAG
+
+| Aspect | Pipeline RAG | Agentic RAG |
+|---|---|---|
+| Retrieval strategy | Fixed: embed → search → rerank → generate | Dynamic: agent selects tools per query |
+| Multi-hop | Not possible (single retrieval pass) | Native (agent chains sub-queries) |
+| Error recovery | None (bad retrieval → bad answer) | Agent detects insufficient evidence, retries |
+| Adaptivity | Same strategy for every query | Different strategy per query complexity |
+| Latency | 1-3s | 5-15s |
+| When to use | Simple factual queries | Complex, multi-hop, ambiguous questions |
+
+<Callout type="info" title="Based on emerging research">
+  Agentic RAG builds on the ReAct paradigm (Yao et al., 2023) and draws from the A-RAG framework (2026) which demonstrated that LLM-driven retrieval agents significantly outperform fixed pipelines on multi-hop question answering benchmarks.
+</Callout>
+
+## The Agent Architecture
+
+Forge's agent is built as a LangGraph `StateGraph` in `forge/retrieval/agent.py`. It follows a 7-node state machine:
+
+```
+                    ┌──────────────┐
+                    │  START       │
+                    │  (analyze    │
+                    │   query)     │
+                    └──────┬───────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+               ┌──▶│  PLAN        │◀──────────────────┐
+               │   │  (select     │                    │
+               │   │   next tool) │                    │
+               │   └──────┬───────┘                    │
+               │          │                            │
+               │          ▼                            │
+               │   ┌──────────────┐                    │
+               │   │  EXECUTE     │                    │
+               │   │  (run tool)  │                    │
+               │   └──────┬───────┘                    │
+               │          │                            │
+               │          ▼                            │
+               │   ┌──────────────┐                    │
+               │   │  EVALUATE    │     need more      │
+               │   │  (CRAG gate, │ ──────────────────▶│
+               │   │   check      │     evidence
+               │   │   evidence)  │
+               │   └──────┬───────┘
+               │          │ sufficient evidence
+               │          ▼
+               │   ┌──────────────┐
+               │   │  GENERATE    │
+               │   │  (synthesize │
+               │   │   answer)    │
+               │   └──────┬───────┘
+               │          │
+               │          ▼
+               │   ┌──────────────┐
+               │   │  VERIFY      │
+               │   │  (self-check │
+               │   │   claims)    │
+               │   └──────┬───────┘
+               │          │
+              fail        │ pass
+               │          ▼
+               │   ┌──────────────┐
+               └───│  END         │
+                   │  (stream     │
+                   │   response)  │
+                   └──────────────┘
+```
+
+### State Schema
+
+The agent maintains a typed state through its execution:
+
+```python
+class ForgeAgentState(TypedDict):
+    """LangGraph state for the Forge agent."""
+
+    # Input
+    query: str
+    mode: str  # "agentic" | "direct"
+
+    # Query analysis
+    complexity: str  # "simple" | "moderate" | "complex"
+    sub_queries: list[str]
+    current_sub_query: str
+
+    # Retrieved evidence
+    retrieved_chunks: list[ScoredChunk]
+    crag_results: list[CRAGResult]
+    reranked_chunks: list[ScoredChunk]
+
+    # Agent reasoning
+    iteration: int
+    max_iterations: int
+    tool_history: list[ToolCall]
+    reasoning: str  # Agent's current chain-of-thought
+
+    # Generation
+    answer: str
+    sources: list[Source]
+    confidence: float
+
+    # Verification
+    claims: list[Claim]
+    verification_result: VerificationResult
+```
+
+## The 7 Agent Tools
+
+The agent has access to these tools, each implemented as a LangGraph tool node:
+
+### `semantic_search`
+
+Dense + sparse vector search via BGE-M3 embeddings in Qdrant.
+
+```python
+@tool
+async def semantic_search(query: str, top_k: int = 10) -> list[ScoredChunk]:
+    """Search for relevant chunks using BGE-M3 dense and sparse vectors."""
+    dense_vec, sparse_vec = await bge_m3.encode(query)
+    results = await qdrant.search(
+        collection="forge_documents",
+        query_vector=("dense", dense_vec),
+        sparse_vector=("sparse", sparse_vec),
+        limit=top_k,
+        with_payload=True,
+    )
+    return [ScoredChunk.from_qdrant(r) for r in results]
+```
+
+### `proposition_search`
+
+Searches only L3 proposition points for atomic factual claims.
+
+```python
+@tool
+async def proposition_search(query: str, top_k: int = 10) -> list[ScoredChunk]:
+    """Search proposition-level index for precise factual matches."""
+    dense_vec, _ = await bge_m3.encode(query)
+    results = await qdrant.search(
+        collection="forge_documents",
+        query_vector=("dense", dense_vec),
+        query_filter=Filter(must=[FieldCondition(key="level", match=MatchValue(value="L3"))]),
+        limit=top_k,
+    )
+    return [ScoredChunk.from_qdrant(r) for r in results]
+```
+
+### `graph_traverse`
+
+Walks the knowledge graph to find entities and their relationships.
+
+```python
+@tool
+async def graph_traverse(entity: str, max_hops: int = 2) -> list[GraphResult]:
+    """Traverse the knowledge graph from a starting entity."""
+    # Find entity in Qdrant
+    entity_points = await qdrant.search_entities(entity)
+    # Walk adjacency list in Redis
+    neighbors = await redis.graph_neighbors(
+        entity_id=entity_points[0].id,
+        max_hops=max_hops,
+    )
+    return neighbors
+```
+
+### `rerank_colbert`
+
+ColBERT MaxSim reranking of candidate chunks for token-level precision.
+
+```python
+@tool
+async def rerank_colbert(query: str, chunks: list[ScoredChunk], top_k: int = 5) -> list[ScoredChunk]:
+    """Rerank chunks using ColBERT multi-vector MaxSim scoring."""
+    query_colbert = await bge_m3.encode_colbert(query)
+    scored = []
+    for chunk in chunks:
+        chunk_colbert = chunk.colbert_vectors  # Stored in Qdrant
+        score = maxsim(query_colbert, chunk_colbert)
+        scored.append((chunk, score))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [c for c, _ in scored[:top_k]]
+```
+
+### `decompose_query`
+
+Splits a complex question into atomic sub-queries.
+
+```python
+@tool
+async def decompose_query(query: str) -> list[str]:
+    """Break a complex query into simpler sub-queries."""
+    prompt = f"""Break this question into 2-4 simpler sub-questions
+that together would answer the original question.
+
+Question: {query}
+
+Sub-questions:"""
+    response = await llm.generate(prompt, max_tokens=200)
+    return parse_sub_queries(response)
+```
+
+### `hyde_search`
+
+Generates a hypothetical answer, embeds it, and searches for real matches.
+
+```python
+@tool
+async def hyde_search(query: str, top_k: int = 5) -> list[ScoredChunk]:
+    """Generate a hypothetical answer and use its embedding to search."""
+    hypothetical = await llm.generate(
+        f"Write a short paragraph that would perfectly answer: {query}",
+        max_tokens=200,
+    )
+    dense_vec, sparse_vec = await bge_m3.encode(hypothetical)
+    return await qdrant.search(
+        collection="forge_documents",
+        query_vector=("dense", dense_vec),
+        limit=top_k,
+    )
+```
+
+### `generate_answer`
+
+Final answer generation with all gathered evidence.
+
+```python
+@tool
+async def generate_answer(
+    query: str,
+    context_chunks: list[ScoredChunk],
+) -> str:
+    """Generate the final answer using gathered evidence."""
+    context = "\n\n".join([
+        f"[Source {i+1}] {chunk.original_text}"
+        for i, chunk in enumerate(context_chunks)
+    ])
+    return await llm.generate(
+        GENERATION_PROMPT.format(query=query, context=context),
+        max_tokens=2048,
+        stream=True,
+    )
+```
+
+## Agent Decision Making
+
+The agent's `PLAN` node uses the LLM to decide what to do next based on current state:
+
+```python
+PLAN_PROMPT = """You are a retrieval agent. Given the user's query and your
+current evidence, decide which tool to use next.
+
+Query: {query}
+Iteration: {iteration}/{max_iterations}
+Evidence so far: {evidence_summary}
+Previous tools used: {tool_history}
+
+Available tools:
+- semantic_search: Broad semantic search across all document levels
+- proposition_search: Precise factual search in atomic claims
+- graph_traverse: Explore entity relationships
+- rerank_colbert: Improve ranking of current results with token-level matching
+- decompose_query: Break query into sub-questions (use early)
+- hyde_search: Generate hypothetical answer and search (good for vague queries)
+- generate_answer: Generate final answer (only when evidence is sufficient)
+
+Respond with the tool name and your reasoning."""
+```
+
+The agent typically follows a pattern like:
+
+1. **Analyze query complexity** — simple queries go directly to `semantic_search` + `generate_answer`
+2. **Complex queries** → `decompose_query` first, then iterate through sub-queries
+3. **Each retrieval** is followed by CRAG evaluation to assess evidence quality
+4. **If evidence is insufficient**, the agent tries a different tool (e.g., `proposition_search` after `semantic_search`)
+5. **ColBERT reranking** is applied before generation to maximize precision
+6. **Self-verification** checks the final answer against sources
+
+## Example: Multi-Hop Query
+
+Query: *"How does the authentication system described in Section 4 relate to the compliance requirements in Section 7?"*
+
+```
+Iteration 1: decompose_query
+  → Sub-query 1: "What authentication system is described in Section 4?"
+  → Sub-query 2: "What compliance requirements are in Section 7?"
+  → Sub-query 3: "How do authentication and compliance relate?"
+
+Iteration 2: semantic_search("authentication system Section 4")
+  → 8 chunks retrieved, CRAG: 4 correct, 2 ambiguous, 2 incorrect
+
+Iteration 3: semantic_search("compliance requirements Section 7")
+  → 6 chunks retrieved, CRAG: 5 correct, 1 ambiguous
+
+Iteration 4: graph_traverse("authentication")
+  → Found: authentication → RELATED_TO → compliance_framework
+  → Found: authentication → PART_OF → security_architecture
+
+Iteration 5: rerank_colbert(combined evidence)
+  → Top 8 chunks selected from all retrievals
+
+Iteration 6: generate_answer
+  → Synthesized answer connecting both sections with graph context
+
+Iteration 7: verify
+  → 6 claims checked, 6 supported → confidence: 0.92
+```
+
+Total time: ~8.5 seconds. A pipeline RAG system couldn't answer this at all.
+
+## Configuration
+
+```yaml
+agent:
+  max_iterations: 8
+  tools:
+    - semantic_search
+    - proposition_search
+    - graph_traverse
+    - rerank_colbert
+    - decompose_query
+    - hyde_search
+    - generate_answer
+  reflection_enabled: true
+  early_stop: true
+```
+
+<Callout type="tip" title="Tuning iterations">
+  Most queries resolve in 3-5 iterations. Setting `max_iterations: 8` gives headroom for complex multi-hop questions without runaway loops. The `early_stop` flag lets the agent terminate early when it determines evidence is sufficient.
+</Callout>
+
+## References
+
+- Yao et al., "ReAct: Synergizing Reasoning and Acting in Language Models" (2023)
+- LangGraph documentation: [https://langchain-ai.github.io/langgraph/](https://langchain-ai.github.io/langgraph/)
+- Forge implementation: `forge/retrieval/agent.py`, `forge/retrieval/graph_builder.py`

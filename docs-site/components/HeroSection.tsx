@@ -1,19 +1,33 @@
-import React from 'react'
-import { Sparkles, ArrowRight, Github } from 'lucide-react'
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { ArrowRight, Play } from 'lucide-react'
+
+const stats = [
+  { label: '14 Techniques', value: '14' },
+  { label: '10/10 Tests Pass', value: '10/10' },
+  { label: '16GB VRAM', value: '16GB' },
+  { label: '<10s Queries', value: '<10s' },
+]
 
 export function HeroSection() {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   return (
-    <div className="hero-section -mx-6 -mt-6 relative overflow-hidden px-6 py-24 md:py-32 lg:py-40">
-      {/* Animated background effects */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-gray-950 to-purple-950 dark:from-gray-950 dark:via-blue-950 dark:to-purple-950" />
-      <div className="absolute inset-0 bg-grid-pattern opacity-20" />
-      <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-gray-950/50" />
+    <section className="relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden bg-white dark:bg-gray-950">
+      {/* Background grid pattern */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-40 dark:opacity-20" />
 
-      {/* Gradient fade to next section */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-white dark:to-gray-950" />
+      {/* Radial gradient overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.08),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.15),transparent_70%)]" />
 
-      {/* Animated GPU particles */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Floating particles */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="gpu-particle gpu-particle-1" />
         <div className="gpu-particle gpu-particle-2" />
         <div className="gpu-particle gpu-particle-3" />
@@ -21,75 +35,97 @@ export function HeroSection() {
         <div className="gpu-particle gpu-particle-5" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-4xl text-center">
-        {/* Badge */}
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-950/30 px-4 py-2 backdrop-blur-sm animate-fade-in-up">
-          <Sparkles className="h-4 w-4 text-blue-400 animate-pulse" />
-          <span className="text-sm font-medium text-blue-300">Version 5.0 • Agentic RAG with 14 cutting-edge techniques</span>
+      {/* Glowing orbs for dark mode */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 dark:bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Main content */}
+      <div className="relative z-10 mx-auto max-w-5xl px-6 text-center">
+        {/* Version badge */}
+        <div
+          className={`mb-8 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1.5 text-sm font-medium text-blue-700 backdrop-blur-sm dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 transition-all duration-700 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+          }`}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+          </span>
+          V5 — 14 cutting-edge RAG techniques
         </div>
 
-        {/* Main heading with gradient text */}
-        <h1 className="mb-6 text-6xl font-bold tracking-tight text-white md:text-7xl lg:text-8xl animate-fade-in-up animation-delay-100">
-          Forge
+        {/* Title */}
+        <h1
+          className={`mb-6 text-6xl font-extrabold tracking-tight sm:text-7xl md:text-8xl lg:text-9xl transition-all duration-700 delay-100 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}
+        >
+          <span className="gpu-gradient-text">Forge</span>
         </h1>
 
-        <p className="mb-4 text-2xl font-semibold text-blue-100 md:text-3xl lg:text-4xl animate-fade-in-up animation-delay-200">
-          Agentic Document Intelligence
+        {/* Tagline */}
+        <p
+          className={`mx-auto mb-4 max-w-3xl text-xl font-medium text-gray-700 dark:text-gray-200 sm:text-2xl md:text-3xl transition-all duration-700 delay-200 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}
+        >
+          The most advanced RAG system you can run on a single GPU
         </p>
 
-        <p className="mx-auto mb-10 max-w-3xl text-lg leading-relaxed text-gray-300 md:text-xl animate-fade-in-up animation-delay-300">
-          Production-ready RAG system with <span className="font-semibold text-white">CUDA optimization</span>,
-          adaptive retrieval strategies, and enterprise-grade deployment.
-          Built for <span className="font-semibold text-blue-300">speed</span>,{' '}
-          <span className="font-semibold text-purple-300">scale</span>, and{' '}
-          <span className="font-semibold text-green-300">precision</span>.
+        {/* Subtitle */}
+        <p
+          className={`mx-auto mb-10 max-w-2xl text-base text-gray-500 dark:text-gray-400 sm:text-lg md:text-xl transition-all duration-700 delay-300 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}
+        >
+          14 cutting-edge techniques. Agentic retrieval. Self-verifying answers.
         </p>
 
         {/* CTA Buttons */}
-        <div className="flex flex-wrap justify-center gap-4 animate-fade-in-up animation-delay-400">
-          <a
-            href="/interactive-demos"
-            className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-4 font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:scale-105 hover:shadow-xl hover:shadow-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+        <div
+          className={`mb-16 flex flex-col items-center gap-4 sm:flex-row sm:justify-center transition-all duration-700 delay-[400ms] ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}
+        >
+          <Link
+            href="/getting-started/quick-start"
+            className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] dark:shadow-blue-500/20"
           >
-            View Demo
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </a>
-
-          <a
-            href="/api-reference"
-            className="group inline-flex items-center gap-2 rounded-xl border-2 border-gray-700 bg-gray-900/50 px-8 py-4 font-semibold text-white backdrop-blur-sm transition-all hover:border-gray-600 hover:bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+            Get Started
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </Link>
+          <Link
+            href="/architecture/overview"
+            className="group inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white/80 px-8 py-3.5 text-base font-semibold text-gray-700 backdrop-blur-sm transition-all hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-700 active:scale-[0.98] dark:border-gray-700 dark:bg-gray-900/80 dark:text-gray-300 dark:hover:border-blue-700 dark:hover:bg-blue-950/30 dark:hover:text-blue-300"
           >
-            API Reference
-            <ArrowRight className="h-5 w-5 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-1" />
-          </a>
-
-          <a
-            href="https://github.com/zhadyz/tactical-rag-system"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-2 rounded-xl border-2 border-gray-700 bg-gray-900/50 px-8 py-4 font-semibold text-white backdrop-blur-sm transition-all hover:border-gray-600 hover:bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-950"
-          >
-            <Github className="h-5 w-5" />
-            GitHub
-          </a>
+            <Play className="h-4 w-4" />
+            View Architecture
+          </Link>
         </div>
 
-        {/* Quick stats */}
-        <div className="mt-16 grid grid-cols-1 gap-6 border-t border-gray-800 pt-12 animate-fade-in-up animation-delay-500 sm:grid-cols-3 sm:gap-8">
-          <div className="text-center">
-            <div className="mb-2 text-4xl font-bold text-white">127<span className="text-xl text-gray-400">ms</span></div>
-            <div className="text-sm text-gray-400">P95 Latency</div>
-          </div>
-          <div className="text-center">
-            <div className="mb-2 text-4xl font-bold text-white">450<span className="text-xl text-gray-400">q/s</span></div>
-            <div className="text-sm text-gray-400">Throughput</div>
-          </div>
-          <div className="text-center">
-            <div className="mb-2 text-4xl font-bold text-white">94.2<span className="text-xl text-gray-400">%</span></div>
-            <div className="text-sm text-gray-400">Accuracy</div>
+        {/* Stats bar */}
+        <div
+          className={`mx-auto max-w-3xl rounded-2xl border border-gray-200/60 bg-white/70 p-6 backdrop-blur-md dark:border-gray-800/60 dark:bg-gray-900/70 transition-all duration-700 delay-500 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}
+        >
+          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+            {stats.map((stat, i) => (
+              <div key={stat.label} className="text-center">
+                <div className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
+                  {stat.value}
+                </div>
+                <div className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
+                  {stat.label}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Bottom fade */}
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-gray-950" />
+    </section>
   )
 }

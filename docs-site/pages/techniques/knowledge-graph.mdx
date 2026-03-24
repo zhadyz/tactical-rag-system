@@ -1,0 +1,287 @@
+---
+title: Knowledge Graph
+description: How Forge extracts entities and relationships from documents to answer structural and relationship queries.
+---
+
+import { Callout } from '../../components/Callout'
+
+# Knowledge Graph
+
+Forge builds a knowledge graph from your documents by extracting **entities** (people, organizations, concepts) and **relationships** (authored_by, references, part_of) using the LLM. This enables a class of queries that pure vector search can't handle — relationship queries, traversal queries, and entity-centric lookups.
+
+## Why a Knowledge Graph?
+
+Vector search excels at semantic similarity but fails at structural queries:
+
+```
+Query: "Who authored the security audit and what did they recommend?"
+
+Vector search returns:
+  1. "The security audit identified 3 critical vulnerabilities..."
+  2. "Best practices for security audits include..."
+  3. "John Chen, Lead Security Architect, conducted the review..."
+
+The answer requires connecting chunk 3 (who) to chunk 1 (what).
+Vector search finds both but doesn't know they're related.
+```
+
+A knowledge graph stores:
+
+```
+John Chen  ──AUTHORED──▶  Security Audit Report
+John Chen  ──HAS_ROLE──▶  Lead Security Architect
+Security Audit  ──IDENTIFIED──▶  3 Critical Vulnerabilities
+Security Audit  ──RECOMMENDED──▶  Multi-Factor Authentication
+Security Audit  ──RECOMMENDED──▶  Network Segmentation
+```
+
+Now the agent can traverse the graph: start at "security audit", follow AUTHORED_BY to find John Chen, follow RECOMMENDED to find all recommendations.
+
+## Entity and Relationship Extraction
+
+During ingestion, the LLM extracts entities and relationships from each chunk:
+
+```python
+# forge/ingestion/graph_extractor.py
+class GraphExtractor:
+    """Extracts entities and relationships from document chunks."""
+
+    EXTRACTION_PROMPT = """Extract all entities and relationships from this text.
+
+Entity types: PERSON, ORGANIZATION, CONCEPT, DOCUMENT, TECHNOLOGY, LOCATION, DATE
+Relationship types: AUTHORED_BY, REFERENCES, PART_OF, RELATED_TO, LOCATED_IN, OCCURRED_ON
+
+Output as JSON:
+{{
+  "entities": [
+    {{"name": "...", "type": "...", "description": "..."}}
+  ],
+  "relationships": [
+    {{"source": "...", "target": "...", "type": "...", "description": "..."}}
+  ]
+}}
+
+Text:
+{chunk_text}"""
+
+    async def extract(self, chunk: DocumentChunk) -> GraphExtractionResult:
+        response = await self.llm.generate(
+            self.EXTRACTION_PROMPT.format(chunk_text=chunk.text),
+            max_tokens=500,
+            temperature=0.0,
+        )
+        return self._parse_response(response, chunk)
+```
+
+### Example Extraction
+
+**Input chunk:**
+> "Dr. Sarah Kim from MIT published the RAPTOR framework in their 2024 NeurIPS paper. RAPTOR uses recursive summarization to build hierarchical document representations, improving retrieval accuracy by 20% on multi-hop benchmarks."
+
+**Extracted entities:**
+
+| Name | Type | Description |
+|---|---|---|
+| Dr. Sarah Kim | PERSON | Researcher at MIT |
+| MIT | ORGANIZATION | Research university |
+| RAPTOR | CONCEPT | Recursive summarization framework for retrieval |
+| NeurIPS 2024 | DOCUMENT | Conference paper |
+
+**Extracted relationships:**
+
+| Source | Relationship | Target |
+|---|---|---|
+| Dr. Sarah Kim | AUTHORED | RAPTOR |
+| Dr. Sarah Kim | AFFILIATED_WITH | MIT |
+| RAPTOR | PUBLISHED_IN | NeurIPS 2024 |
+| RAPTOR | RELATED_TO | hierarchical document representations |
+| RAPTOR | RELATED_TO | recursive summarization |
+
+## Dual Storage Architecture
+
+Forge stores graph data in two places for optimal query performance:
+
+### 1. Qdrant Payload (Entity Search)
+
+Each entity is stored as metadata in Qdrant, embedded alongside its source chunk. This enables **semantic search** over entities:
+
+```python
+# Entity stored in Qdrant point payload
+payload = {
+    "text": chunk.text,
+    "level": "L2",
+    "entities": [
+        {"name": "Dr. Sarah Kim", "type": "PERSON"},
+        {"name": "RAPTOR", "type": "CONCEPT"},
+        {"name": "MIT", "type": "ORGANIZATION"},
+    ],
+    "relationships": [
+        {"source": "Dr. Sarah Kim", "target": "RAPTOR", "type": "AUTHORED"},
+    ]
+}
+```
+
+### 2. Redis Adjacency List (Graph Traversal)
+
+Relationships are stored as adjacency lists in Redis for fast graph traversal:
+
+```python
+# forge/retrieval/graph.py
+class GraphStore:
+    """Redis-backed adjacency list for knowledge graph traversal."""
+
+    async def store_relationship(self, rel: Relationship):
+        """Store a relationship in Redis adjacency list."""
+        # Forward edge
+        await self.redis.sadd(
+            f"graph:out:{rel.source_id}",
+            json.dumps({
+                "target": rel.target_id,
+                "type": rel.type,
+                "chunk_id": rel.source_chunk_id,
+            })
+        )
+        # Reverse edge
+        await self.redis.sadd(
+            f"graph:in:{rel.target_id}",
+            json.dumps({
+                "source": rel.source_id,
+                "type": rel.type,
+                "chunk_id": rel.source_chunk_id,
+            })
+        )
+
+    async def traverse(
+        self,
+        start_entity: str,
+        max_hops: int = 2,
+        relationship_filter: list[str] | None = None,
+    ) -> list[GraphPath]:
+        """BFS traversal from a starting entity."""
+        visited = set()
+        queue = [(start_entity, 0, [])]
+        paths = []
+
+        while queue:
+            entity, depth, path = queue.pop(0)
+            if entity in visited or depth > max_hops:
+                continue
+            visited.add(entity)
+
+            edges = await self.redis.smembers(f"graph:out:{entity}")
+            for edge_json in edges:
+                edge = json.loads(edge_json)
+                if relationship_filter and edge["type"] not in relationship_filter:
+                    continue
+                new_path = path + [(entity, edge["type"], edge["target"])]
+                paths.append(GraphPath(path=new_path, chunk_ids=[edge["chunk_id"]]))
+                queue.append((edge["target"], depth + 1, new_path))
+
+        return paths
+```
+
+## Agent Graph Tool
+
+The `graph_traverse` tool lets the agent explore relationships:
+
+```python
+@tool
+async def graph_traverse(
+    entity: str,
+    max_hops: int = 2,
+    relationship_types: list[str] | None = None,
+) -> list[GraphResult]:
+    """Traverse the knowledge graph from a starting entity.
+
+    Args:
+        entity: The entity name to start traversal from
+        max_hops: Maximum traversal depth (default: 2)
+        relationship_types: Optional filter for specific relationship types
+    """
+    # First, find the entity in Qdrant
+    entity_results = await qdrant.search(
+        collection="forge_documents",
+        query_filter=Filter(must=[
+            FieldCondition(
+                key="entities[].name",
+                match=MatchText(text=entity),
+            )
+        ]),
+        limit=5,
+    )
+
+    if not entity_results:
+        return []
+
+    # Traverse from found entity
+    paths = await graph_store.traverse(
+        start_entity=entity,
+        max_hops=max_hops,
+        relationship_filter=relationship_types,
+    )
+
+    # Fetch source chunks for each path
+    results = []
+    for path in paths:
+        chunks = await qdrant.get_batch(path.chunk_ids)
+        results.append(GraphResult(
+            path=path,
+            source_chunks=chunks,
+        ))
+
+    return results
+```
+
+### When the Agent Uses Graph Traversal
+
+The agent learns to use graph traversal for queries like:
+
+- *"Who authored this report?"* — Start at document entity, follow AUTHORED_BY
+- *"What technologies does Section 3 reference?"* — Start at section, follow REFERENCES
+- *"How are X and Y related?"* — Find both entities, look for connecting paths
+- *"What are all the recommendations?"* — Find entities of type RECOMMENDATION
+
+## Configuration
+
+```yaml
+graph:
+  enabled: true
+  extraction_model: "llm"
+  entity_types:
+    - PERSON
+    - ORGANIZATION
+    - CONCEPT
+    - DOCUMENT
+    - TECHNOLOGY
+    - LOCATION
+    - DATE
+  relationship_types:
+    - AUTHORED_BY
+    - REFERENCES
+    - PART_OF
+    - RELATED_TO
+    - LOCATED_IN
+    - OCCURRED_ON
+  max_entities_per_chunk: 15
+  max_relationships_per_chunk: 20
+  storage: "hybrid"           # Qdrant payload + Redis adjacency list
+```
+
+<Callout type="info" title="Custom entity and relationship types">
+  You can add domain-specific entity types (e.g., `DRUG`, `GENE`, `REGULATION`) and relationship types (e.g., `INHIBITS`, `COMPLIES_WITH`) by extending these lists. The LLM will extract them if they appear in the text.
+</Callout>
+
+## Trade-offs
+
+| Pro | Con |
+|---|---|
+| Enables relationship queries impossible with pure vector search | One LLM call per chunk during ingestion |
+| Graph traversal is very fast (Redis, sub-ms) | Extraction quality depends on LLM |
+| Agent can combine graph data with vector search | Adds Redis dependency |
+| Supports multi-hop reasoning naturally | Entity deduplication can be imperfect |
+
+## References
+
+- Pan et al., "Unifying Large Language Models and Knowledge Graphs: A Roadmap" (2024)
+- Forge implementation: `forge/ingestion/graph_extractor.py`, `forge/retrieval/graph.py`
+- Redis adjacency: `forge/storage/redis_graph.py`

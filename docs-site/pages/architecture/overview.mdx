@@ -1,567 +1,213 @@
 ---
-title: Architecture Overview
-description: Comprehensive guide to Forge's three-tier hybrid desktop architecture
+title: System Overview
+description: Complete architecture of Forge V5 — Tauri frontend, FastAPI + LangGraph backend, Qdrant vector search, and Redis caching.
 ---
 
 import { Callout } from '../../components/Callout'
 
-# Architecture Overview
+# System Overview
 
-Forge is built as a **GPU-accelerated, offline-capable RAG system** packaged as a modern desktop application. The architecture combines three sophisticated layers working in harmony to deliver high-performance document intelligence.
+Forge V5 is a desktop-native agentic RAG system built with four major components: a Tauri + React frontend, a FastAPI + LangGraph backend, Qdrant for vector storage, and Redis for caching and graph adjacency. Everything runs on a single machine with a 16GB VRAM GPU.
 
-<Callout type="info">
-**Key Design Goal**: Achieve 80-100 tokens/sec inference with 8-15 second query latency while maintaining production-grade reliability and security.
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              USER MACHINE                               │
+│                                                                         │
+│  ┌───────────────────────────┐          ┌─────────────────────────────┐  │
+│  │     TAURI DESKTOP APP     │          │     FASTAPI BACKEND         │  │
+│  │                           │  HTTP/   │     (Python 3.11+)          │  │
+│  │  ┌─────────────────────┐  │  SSE     │                             │  │
+│  │  │   React + TypeScript │  │◄────────│  ┌───────────────────────┐  │  │
+│  │  │                     │  │────────▶│  │  API Router            │  │  │
+│  │  │  - Chat UI          │  │         │  │  /api/query            │  │  │
+│  │  │  - Document Manager │  │         │  │  /api/documents        │  │  │
+│  │  │  - Settings Panel   │  │         │  │  /api/ingest           │  │  │
+│  │  │  - Agent Visualizer │  │         │  │  /api/settings         │  │  │
+│  │  └─────────────────────┘  │         │  └───────┬───────────────┘  │  │
+│  │                           │         │          │                   │  │
+│  │  ┌─────────────────────┐  │         │  ┌───────▼───────────────┐  │  │
+│  │  │   Rust Core (Tauri) │  │         │  │  QUERY ENGINE          │  │  │
+│  │  │  - Window Management│  │         │  │                       │  │  │
+│  │  │  - File System      │  │         │  │  ┌─────────────────┐  │  │  │
+│  │  │  - Native Dialogs   │  │         │  │  │  LangGraph Agent │  │  │  │
+│  │  └─────────────────────┘  │         │  │  │  (ForgeAgent)    │  │  │  │
+│  └───────────────────────────┘         │  │  └────────┬────────┘  │  │  │
+│                                        │  │           │           │  │  │
+│                                        │  │  ┌────────▼────────┐  │  │  │
+│                                        │  │  │  Tool Registry   │  │  │  │
+│                                        │  │  │  - search        │  │  │  │
+│                                        │  │  │  - propositions  │  │  │  │
+│                                        │  │  │  - graph         │  │  │  │
+│                                        │  │  │  - rerank        │  │  │  │
+│                                        │  │  │  - hyde          │  │  │  │
+│                                        │  │  │  - decompose     │  │  │  │
+│                                        │  │  │  - generate      │  │  │  │
+│                                        │  │  └─────────────────┘  │  │  │
+│                                        │  └───────────────────────┘  │  │
+│                                        │                             │  │
+│                                        │  ┌───────────────────────┐  │  │
+│                                        │  │  INGESTION ENGINE      │  │  │
+│                                        │  │  - Parser             │  │  │
+│                                        │  │  - HierarchyBuilder   │  │  │
+│                                        │  │  - ContextualEnricher │  │  │
+│                                        │  │  - PropositionExtract │  │  │
+│                                        │  │  - GraphExtractor     │  │  │
+│                                        │  │  - BGEm3Embedder      │  │  │
+│                                        │  └───────┬───────────────┘  │  │
+│                                        │          │                   │  │
+│                                        │  ┌───────▼───────┐  ┌─────┐  │  │
+│                                        │  │  CRAGEvaluator │  │ LLM │  │  │
+│                                        │  │  (cross-encoder│  │     │  │  │
+│                                        │  │   on CPU)      │  │llama│  │  │
+│                                        │  └───────────────┘  │.cpp │  │  │
+│                                        │                     │     │  │  │
+│                                        └─────────────────────│─────┘  │  │
+│                                                              │        │  │
+│  ┌─────────────────────┐    ┌─────────────────────┐   ┌──────▼──────┐  │
+│  │      QDRANT          │    │      REDIS           │   │    GPU      │  │
+│  │  Vector Database     │    │  Cache + Graph       │   │  10-14GB   │  │
+│  │                     │    │                     │   │  VRAM       │  │
+│  │  - Dense vectors    │    │  - Query cache      │   │             │  │
+│  │  - Sparse vectors   │    │  - Graph adjacency  │   │  LLM only   │  │
+│  │  - ColBERT vectors  │    │  - Session state    │   │  Everything │  │
+│  │  - Payload metadata │    │                     │   │  else on CPU│  │
+│  │                     │    │  Port: 6379         │   │             │  │
+│  │  Port: 6333         │    └─────────────────────┘   └─────────────┘  │
+│  └─────────────────────┘                                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Component Responsibilities
+
+### Frontend: Tauri + React
+
+| Component | File Path | Responsibility |
+|---|---|---|
+| Chat UI | `frontend/src/components/Chat.tsx` | Query input, streaming response display, source cards |
+| Document Manager | `frontend/src/components/Documents.tsx` | Upload, list, delete documents; ingestion progress |
+| Agent Visualizer | `frontend/src/components/AgentView.tsx` | Real-time view of agent tool calls, CRAG results, iterations |
+| Settings Panel | `frontend/src/components/Settings.tsx` | Model selection, technique toggles, config editing |
+| SSE Client | `frontend/src/lib/sse.ts` | Parses SSE events from backend streaming endpoint |
+| Tauri Commands | `src-tauri/src/main.rs` | File dialogs, system info, window management |
+
+### Backend: FastAPI + LangGraph
+
+| Component | File Path | Responsibility |
+|---|---|---|
+| API Router | `forge/api/router.py` | REST endpoints for query, documents, settings |
+| Streaming | `forge/api/streaming.py` | SSE event formatting and delivery |
+| ForgeAgent | `forge/retrieval/agent.py` | LangGraph StateGraph orchestrating all tools |
+| Hybrid Search | `forge/retrieval/search.py` | BGE-M3 dense + sparse search with RRF fusion |
+| ColBERT Reranker | `forge/retrieval/rerank.py` | Token-level MaxSim reranking |
+| CRAG Evaluator | `forge/retrieval/crag.py` | Cross-encoder quality gate |
+| Graph Traversal | `forge/retrieval/graph.py` | Redis-backed knowledge graph queries |
+| HyDE | `forge/retrieval/hyde.py` | Hypothetical document embedding search |
+| Generator | `forge/generation/generator.py` | LLM answer generation with context |
+| Verifier | `forge/verification/verifier.py` | Post-generation claim verification |
+| Ingestion Pipeline | `forge/ingestion/pipeline.py` | Orchestrates parse → chunk → embed → store |
+| Document Parser | `forge/ingestion/parser.py` | PDF, DOCX, TXT extraction |
+| Hierarchy Builder | `forge/ingestion/hierarchy.py` | L0-L3 level construction |
+| Contextual Enricher | `forge/ingestion/contextual.py` | LLM context prefix generation |
+| Proposition Extractor | `forge/ingestion/propositions.py` | Atomic claim extraction |
+| Graph Extractor | `forge/ingestion/graph_extractor.py` | Entity + relationship extraction |
+| BGE-M3 Embedder | `forge/ingestion/embedder.py` | Tri-modal vector generation |
+| LLM Interface | `forge/llm/llama_cpp.py` | llama.cpp Python bindings |
+| Config Manager | `forge/config.py` | config.yml parsing + env var overrides |
+
+### Data Layer
+
+| Service | Role | Port | Data |
+|---|---|---|---|
+| **Qdrant** | Vector database | 6333 | Dense, sparse, ColBERT vectors + payload metadata |
+| **Redis** | Cache + graph | 6379 | Query cache, graph adjacency lists, session state |
+
+## VRAM Budget
+
+The entire system is designed to fit in 16GB of VRAM:
+
+```
+┌──────────────────────────────────────────────────┐
+│                 16GB VRAM GPU                      │
+│                                                    │
+│  ┌──────────────────────────────────────────────┐ │
+│  │  LLM (llama.cpp, Q4_K_M)     10-14 GB       │ │
+│  │  ════════════════════════════════════════════ │ │
+│  │                                              │ │
+│  └──────────────────────────────────────────────┘ │
+│  ┌──────────────────┐                             │
+│  │  CUDA overhead   │  ~500MB                     │
+│  └──────────────────┘                             │
+│  ┌───────────┐                                    │
+│  │  KV Cache │  1-2 GB (depends on context size)  │
+│  └───────────┘                                    │
+│                                                    │
+│  Everything else runs on CPU + system RAM:         │
+│  - BGE-M3 embedding: CPU (~2GB RAM)               │
+│  - Cross-encoder (CRAG): CPU (~500MB RAM)         │
+│  - Qdrant: CPU + RAM (~2-8GB RAM for vectors)     │
+│  - Redis: CPU + RAM (~100MB-1GB RAM)              │
+└──────────────────────────────────────────────────┘
+```
+
+<Callout type="info" title="Why only LLM on GPU?">
+  The LLM is the most compute-intensive component — GPU offloading reduces generation from ~30 tokens/sec (CPU) to ~80+ tokens/sec (GPU). BGE-M3 at ~50ms per query on CPU is already fast enough. ColBERT reranking is matrix math that's efficient on CPU for the small batch sizes involved. This design maximizes the quality of the most expensive operation (generation) while keeping everything else snappy.
 </Callout>
 
-## System Overview
+## Technology Choices
 
-Forge implements a **three-tier hybrid architecture** that separates concerns while optimizing for performance:
+| Decision | Choice | Why |
+|---|---|---|
+| Desktop framework | Tauri (Rust + React) | ~10MB binary, native file system access, no Electron overhead |
+| Backend framework | FastAPI | Async Python, great SSE support, automatic OpenAPI docs |
+| Agent framework | LangGraph | Explicit state machine, tool-calling, streaming support |
+| LLM runtime | llama.cpp | Best GPU utilization for GGUF models, C++ performance |
+| Embedding model | BGE-M3 | Single model for 3 vector types, MIT license, excellent quality |
+| Vector database | Qdrant | Multi-vector support, sparse vectors, rich filtering, fast |
+| Cache + graph | Redis | Sub-ms reads, pub/sub for events, lightweight |
+| CRAG model | ms-marco-MiniLM-L-12-v2 | Fast cross-encoder, well-validated on retrieval tasks |
 
-- **Frontend Layer**: Modern React 19 UI with real-time streaming and performance optimization
-- **Desktop Bridge Layer**: Tauri 2.9 native runtime providing OS integration and IPC
-- **Backend Layer**: FastAPI-based RAG engine with GPU-accelerated inference and vector search
+## Data Flow Summary
 
-This separation enables:
-- Independent scaling and optimization of each layer
-- Hot-swappable components without full system restart
-- Clear security boundaries and type-safe communication
-- Native desktop capabilities combined with web technology flexibility
-
-## Three-Tier Architecture
+### Query Request Lifecycle
 
 ```
-+---------------------------------------------------------------+
-|                     FRONTEND LAYER                            |
-|                                                               |
-|  React 19 + TypeScript + Zustand                              |
-|  Runtime: WebView2 (Windows) / WebKit (macOS/Linux)           |
-|                                                               |
-|  Features:                                                    |
-|  * Real-time SSE streaming with 60fps token buffering         |
-|  * Performance-optimized rendering (React.memo)               |
-|  * Document management with drag-drop upload                  |
-|  * Live performance metrics dashboard                         |
-|  * Settings panel with model hot-swap UI                      |
-|  * Dark mode with localStorage persistence                    |
-|                                                               |
-+----------------+----------------------------------------------+
-                 |
-                 |  +---------------------------------------+
-                 +--| Tauri IPC (JSON-RPC)                  |
-                 |  | * Native features                     |
-                 |  | * Health monitoring                   |
-                 |  | * System notifications                |
-                 |  +---------------------------------------+
-                 |
-                 |  +---------------------------------------+
-                 +--| Direct HTTP (Fetch API)               |
-                    | * Query endpoints                     |
-                    | * Document upload                     |
-                    | * SSE streaming                       |
-                    +---------------------------------------+
-                    |
-+-------------------v---------------------------------------+
-|                DESKTOP BRIDGE LAYER                       |
-|                                                           |
-|  Tauri 2.9 (Rust Native Binary)                           |
-|  Runtime: Native system process                           |
-|                                                           |
-|  Responsibilities:                                        |
-|  * IPC command handlers (type-safe bidirectional)         |
-|  * Backend health monitoring (background task)            |
-|  * HTTP proxy to FastAPI backend                          |
-|  * Native OS integration (file dialogs, notifications)    |
-|  * WebView management and security policies               |
-|  * Application lifecycle management                       |
-|                                                           |
-+----------------+------------------------------------------+
-                 |
-                 | HTTP/REST (reqwest crate)
-                 | Target: http://localhost:8000
-                 |
-+----------------v------------------------------------------+
-|                   BACKEND LAYER                           |
-|                                                           |
-|  FastAPI + Python 3.11                                    |
-|  Runtime: Docker containers with CUDA support             |
-|                                                           |
-|  Core Components:                                         |
-|  * RAG orchestration engine (parallel initialization)     |
-|  * llama.cpp GPU inference (80-100 tokens/sec)            |
-|  * Vector database - Qdrant (dense + sparse search)       |
-|  * Multi-tier caching - Redis (L1-L5 Forge protocol)      |
-|  * Document processing pipeline (PDF/DOCX/TXT)            |
-|  * Adaptive retrieval strategies (simple/hybrid/advanced) |
-|  * Model management (hot-swappable LLMs)                  |
-|  * Confidence scoring and source citation                 |
-|                                                           |
-|  Infrastructure:                                          |
-|  * Qdrant: Vector storage and similarity search           |
-|  * Redis: Multi-level caching and session management      |
-|  * CUDA Toolkit: GPU acceleration for inference           |
-|                                                           |
-+-----------------------------------------------------------+
+1. User types query in Tauri app
+2. React sends POST to /api/query/stream
+3. FastAPI creates SSE response
+4. ForgeAgent initializes LangGraph state
+5. Agent loop:
+   a. PLAN → select tool (via LLM)
+   b. EXECUTE → run tool (search/rerank/graph/etc.)
+   c. EVALUATE → CRAG gate + evidence check
+   d. Repeat until evidence sufficient or max iterations
+6. GENERATE → LLM synthesizes answer, tokens streamed via SSE
+7. VERIFY → claim-by-claim audit
+8. SSE done event with metadata
+9. React renders response with sources and confidence
 ```
 
-<Callout type="tip">
-**Dual Communication Pattern**: Forge uses both Tauri IPC and direct HTTP for optimal performance. IPC handles lightweight native features, while HTTP handles data-intensive operations like streaming queries.
-</Callout>
-
-## Frontend Layer
-
-### Technology Stack
-
-- **Framework**: React 19.1.1 (cutting-edge concurrent features)
-- **Language**: TypeScript 5.7 with strict mode
-- **State Management**: Zustand 5.0.8 with persistence middleware
-- **Styling**: TailwindCSS 3.4.18 with custom design system
-- **Build Tool**: Vite 7.1.7 targeting ESNext
-- **Desktop Integration**: Tauri 2.9.0 API bindings
-
-### Key Features
-
-**Performance Optimizations**:
-- Token buffering with 60fps throttling prevents UI freezes during streaming
-- React.memo with custom comparison functions for efficient re-renders
-- Memoized performance store computations with checksum validation
-- Lazy loading for heavy components (PDF viewer, charts)
-
-**User Experience**:
-- Real-time SSE streaming with visual token buffering
-- Drag-and-drop document upload with validation
-- Live performance metrics and timing history
-- Comprehensive error boundaries with field operator logging
-- Offline detection with automatic recovery
-- Dark mode with system preference detection
-
-**Accessibility**:
-- Full keyboard navigation support
-- ARIA labels and semantic HTML
-- Screen reader compatibility
-- Focus management and tab order
-
-### Critical Files
-
-```typescript
-src/
-├── App.tsx                    // Main application entry with error boundary
-├── hooks/
-│   ├── useChat.ts            // Chat orchestration with token batching
-│   └── useStreamingChat.ts   // SSE streaming implementation
-├── store/
-│   ├── useStore.ts           // Main Zustand store with persistence
-│   └── performanceStore.ts   // Memoized performance calculations
-├── services/
-│   └── api.ts                // API client with retry logic
-└── components/
-    ├── Chat/
-    │   ├── ChatWindow.tsx    // Main chat interface
-    │   └── ChatMessage.tsx   // Optimized message rendering (React.memo)
-    └── ErrorBoundary/
-        └── ErrorBoundary.tsx // Production error recovery
-```
-
-## Desktop Bridge Layer
-
-### Technology Stack
-
-- **Framework**: Tauri 2.9.0 (stable)
-- **Language**: Rust 2021 edition with tokio async runtime
-- **HTTP Client**: reqwest 0.11 with connection pooling
-- **Plugins**:
-  - `tauri-plugin-fs` - File system access
-  - `tauri-plugin-dialog` - Native dialogs
-  - `tauri-plugin-store` - Key-value storage
-  - `tauri-plugin-shell` - System integration
-  - `tauri-plugin-log` - Structured logging
-
-### Responsibilities
-
-**IPC Bridge**:
-- Type-safe command handlers with serde serialization
-- Bidirectional communication (Frontend ↔ Rust ↔ Backend)
-- Async/await support for non-blocking operations
-- Error propagation with detailed context
-
-**Backend Management**:
-- Health monitoring with 10-second polling interval
-- HTTP proxy for backend API calls
-- Connection pooling and retry logic
-- Status tracking (running, healthy, error states)
-
-**Native Integration**:
-- File picker dialogs
-- System notifications
-- URL opening in default browser
-- Window management and lifecycle
-
-### Security Model
-
-```rust
-// Command allowlisting prevents arbitrary Rust execution
-#[tauri::command]
-async fn check_forge_health(
-    state: State<'_, Arc<tokio::sync::Mutex<AppState>>>
-) -> Result<HealthStatus, String> {
-    // Type-safe, validated, allowlisted command
-}
-```
-
-**Security Boundaries**:
-- Command allowlisting (only explicitly registered functions)
-- HTTP client isolated from frontend (prevents SSRF)
-- Shell access restricted to `open::that()` for URLs only
-- State management via IPC prevents direct access
-- WebView sandboxing with capability system
-
-### Distribution
-
-**Packaging**:
-- Windows: NSIS installer with WebView2 bootstrapper (~25-30MB)
-- macOS: DMG with code signing
-- Linux: AppImage with required dependencies bundled
-
-**Build Process**:
-- Vite builds React frontend → `dist/`
-- Cargo compiles Rust binary → native executable
-- Tauri packages frontend + binary + resources
-- Platform-specific installer creation
-
-## Backend Layer
-
-### Technology Stack
-
-- **Framework**: FastAPI 0.115.6 with async/await
-- **Language**: Python 3.11 with type hints
-- **LLM Backend**: llama.cpp 0.3.2 with CUDA 12.1
-- **Vector Database**: Qdrant 1.15.0 (production)
-- **Cache Layer**: Redis 7.2 with LRU eviction
-- **Document Processing**: PyPDF2, python-docx, unstructured
-- **Embeddings**: sentence-transformers (BAAI/bge-large-en-v1.5)
-- **Reranking**: BGE reranker (GPU-accelerated)
-
-### Core Architecture
-
-Forge's backend implements **8 architectural layers**:
-
-- **API Layer**: REST endpoints with rate limiting, CORS, validation
-- **RAG Engine**: Master orchestrator with parallel initialization
-- **Inference Engine**: llama.cpp with thread-safe executor
-- **Retrieval Engine**: Adaptive strategies (simple/hybrid/advanced)
-- **Vector Stores**: Qdrant (dense + sparse search)
-- **Document Processor**: Multi-format support with semantic chunking
-- **Caching System**: L1-L5 Forge protocol
-- **Model Manager**: Hot-swappable LLM runtime
-
-### Performance Characteristics
-
-```yaml
-Startup Time: 20-30 seconds (optimized from 78s via parallel init)
-
-Query Latency:
-  Cache Hit: less than 1ms (98% reduction from 50-100ms)
-  Simple Mode: 8-15 seconds
-  Adaptive Mode: 10-25 seconds
-
-Inference Speed: 80-100 tokens/sec (RTX 5080, Q5_K_M quantization)
-
-Cache Hit Rate: 60-80% in production workloads
-
-Resource Usage:
-  RAM: 8GB idle, 12GB active, 20GB during reindexing
-  VRAM: 6GB loaded model, 10GB with reranker
-  CPU: less than 5% idle, 100% single-core during generation
-```
-
-### Critical Innovations
-
-**Parallel Component Initialization**
-```python
-# Groups independent components for concurrent loading
-# Speedup: 3.4x (78s → 23s)
-async def initialize():
-    # GROUP 1: Fully independent
-    await asyncio.gather(
-        init_embedding_cache(),
-        init_embeddings(),
-        load_bm25_data(),
-        init_llm()
-    )
-
-    # GROUP 2: Depends on GROUP 1
-    await asyncio.gather(
-        init_cache_manager(),
-        init_vectorstore(),
-        init_bm25_retriever(),
-        llm_warmup()
-    )
-
-    # GROUP 3: Final components
-    await asyncio.gather(
-        load_metadata(),
-        init_conversation_memory(),
-        init_confidence_scorer()
-    )
-```
-
-**Multi-Level Caching (Forge)**
-- **L1 - Query Cache**: Exact → Normalized → Semantic matching (Redis hash)
-- **L2 - Embedding Cache**: 98% latency reduction (50ms → less than 1ms)
-- **L3 - Conversation Memory**: Ring buffer with automatic summarization
-- **L4 - Model Cache**: Pre-cached in Docker image (15-20s saved)
-- **L5 - Query Prefetcher**: Predictive pattern-based prefetching
-
-**KV Cache Preservation**
-```python
-# Trade-off: Minor context bleed for 40-60% speedup
-# Does NOT clear cache between requests
-def generate(self, prompt, **kwargs):
-    response = self.llm(prompt, max_tokens=kwargs.get('max_tokens', 512))
-    return response['choices'][0]['text']
-```
-
-**Hot Model Swapping**
-
-**Workflow**:
-- POST /api/models/switch with model_id
-- Validate and acquire switching lock (blocks queries)
-- Unload current model + VRAM cleanup (torch.cuda.empty_cache())
-- Load new model from /models/ directory
-- Test generation (5 tokens)
-- Sync RAGEngine LLM reference
-- Clear cache (old model answers incompatible)
-- Release lock
-
-**Timing**: 15-30 seconds total downtime
-**Safety**: Mutex prevents concurrent switches, automatic fallback on failure
-
-## Communication Patterns
-
-### Dual Communication Architecture
-
-Forge uses **two parallel communication channels** for optimization:
-
-**Tauri IPC (JSON-RPC)**:
-- **Use Case**: Native features, health checks, system integration
-- **Protocol**: JSON serialization over IPC bridge
-- **Latency**: less than 10ms for lightweight operations
-- **Examples**: `check_forge_health()`, `switch_model()`, `show_notification()`
-
-**Direct HTTP (Fetch API)**:
-- **Use Case**: Data-intensive operations, streaming
-- **Protocol**: REST + Server-Sent Events
-- **Latency**: Varies by operation (ms for health, seconds for queries)
-- **Examples**: `/api/query/stream`, `/api/documents/upload`
-
-<Callout type="warning">
-**Why Dual Channels?** IPC adds serialization overhead. For high-throughput operations like streaming tokens (100+/sec), direct HTTP bypasses IPC, reducing latency by 40-60%.
-</Callout>
-
-### IPC Bridge Pattern
-
-```typescript
-// Frontend: Type-safe Tauri invoke
-import { invoke } from '@tauri-apps/api/core';
-
-interface HealthStatus {
-  status: 'healthy' | 'unhealthy' | 'degraded';
-  components: {
-    vectorstore: 'ready' | 'error';
-    llm: 'ready' | 'error';
-    cache: 'ready' | 'error';
-  };
-}
-
-export const checkHealth = async (): Promise<HealthStatus> => {
-  return await invoke<HealthStatus>('check_forge_health');
-};
-```
-
-```rust
-// Backend: Rust command handler
-#[tauri::command]
-async fn check_forge_health(
-    state: State<'_, Arc<tokio::sync::Mutex<AppState>>>
-) -> Result<HealthStatus, String> {
-    let app_state = state.lock().await;
-
-    let response = app_state.http_client
-        .get(format!("{}/api/health", app_state.backend_url))
-        .timeout(Duration::from_secs(5))
-        .send()
-        .await
-        .map_err(|e| format!("Health check failed: {}", e))?;
-
-    response.json().await.map_err(|e| format!("Parse error: {}", e))
-}
-```
-
-## Data Flow Overview
-
-### Query Processing Pipeline (High-Level)
+### Document Upload Lifecycle
 
 ```
-User Query --> Frontend Validation --> Cache Lookup (L1-L2)
-    |
-    +--> [Cache Hit] --> Return cached result (<1ms)
-    |
-    +--> [Cache Miss] --> Continue to retrieval
-                |
-                v
-        Security Checks (rate limit, injection detection)
-                |
-                v
-        Query Classification (simple/moderate/complex)
-                |
-                v
-        Document Retrieval (mode-specific strategy)
-                |
-                v
-        Answer Generation (llama.cpp GPU)
-                |
-                v
-        Confidence Scoring (parallel)
-                |
-                v
-        Response Formatting
-                |
-                v
-        Background Tasks (cache update, prefetch)
+1. User selects file in Tauri native dialog
+2. Tauri reads file, sends to /api/documents/upload
+3. Backend queues ingestion job
+4. Pipeline runs:
+   a. Parse → raw text
+   b. Hierarchy → L0 summary, L1 sections, L2 chunks
+   c. Contextual enrichment → context prefix per L2 chunk
+   d. Proposition extraction → L3 atomic claims
+   e. Graph extraction → entities + relationships
+   f. BGE-M3 embedding → dense + sparse + ColBERT per point
+   g. Qdrant upsert → all vectors + payload
+   h. Redis store → graph adjacency lists
+5. Status streamed to frontend via polling
 ```
 
-**Timing Breakdown**:
-- Security checks: 5ms
-- Classification (if adaptive): 200ms
-- Embedding generation: 50ms (CPU) or less than 1ms (cache hit)
-- Vector search: 100ms (Qdrant HNSW @ 1M documents)
-- Reranking (if advanced): 60ms (BGE GPU)
-- LLM generation: 8-12s (simple) or 10-15s (adaptive)
-- Confidence scoring: 500ms (parallel with generation)
+## Next Steps
 
-### Document Upload Pipeline (High-Level)
-
-```
-File Selection --> Frontend Validation (size, type)
-    |
-    v
-POST multipart/form-data --> Backend /api/documents/upload
-    |
-    v
-Filename sanitization --> SHA256 hash --> Duplicate check
-    |
-    v
-Save to documents/ directory
-    |
-    v
-User triggers reindexing
-    |
-    v
-Acquire mutex lock (prevent concurrent reindex)
-    |
-    v
-Text extraction --> Semantic chunking (1024/128)
-    |
-    v
-Generate embeddings (BGE-large on CPU)
-    |
-    v
-Index in Qdrant (dense + sparse BM25)
-    |
-    v
-Atomic swap (temp --> production)
-    |
-    v
-Release lock --> Return stats
-```
-
-**Timing**: 15-25 seconds for typical document (depending on size and complexity)
-
-## Technology Stack Summary
-
-### Layer-by-Layer Breakdown
-
-| Layer | Component | Technology | Purpose |
-|-------|-----------|------------|---------|
-| **Frontend** | UI Framework | React 19.1.1 | Modern concurrent rendering |
-| | Language | TypeScript 5.7 | Type-safe development |
-| | State | Zustand 5.0.8 | Lightweight state management |
-| | Styling | TailwindCSS 3.4.18 | Utility-first CSS |
-| | Build | Vite 7.1.7 | Fast HMR and bundling |
-| **Bridge** | Runtime | Tauri 2.9.0 | Native desktop capabilities |
-| | Language | Rust 2021 | Performance and safety |
-| | HTTP Client | reqwest 0.11 | Async HTTP requests |
-| | Serialization | serde + serde_json | Type-safe IPC |
-| **Backend** | Framework | FastAPI 0.115.6 | Async REST API |
-| | Language | Python 3.11 | ML/AI ecosystem |
-| | LLM | llama.cpp 0.3.2 | GPU inference |
-| | Embeddings | sentence-transformers | Dense vectors |
-| | Vector DB | Qdrant 1.15.0 | Similarity search |
-| | Cache | Redis 7.2 | Multi-tier caching |
-| | Queue | asyncio | Background tasks |
-
-### Infrastructure
-
-| Component | Version | Configuration | Purpose |
-|-----------|---------|---------------|---------|
-| Docker | 24+ | Compose v2 | Container orchestration |
-| CUDA Toolkit | 12.1 | cuBLAS, cuDNN | GPU acceleration |
-| Qdrant | 1.15.0 | 4 CPU, 16GB RAM | Vector storage |
-| Redis | 7.2 | 8GB maxmemory, LRU | Caching layer |
-| WebView2 | Latest | Embedded bootstrapper | Desktop rendering |
-
-## Design Principles
-
-Forge's architecture is guided by several core principles:
-
-### Performance First
-- **Parallel initialization**: 3.4x speedup through concurrent component loading
-- **Multi-tier caching**: 60-80% cache hit rate reduces latency by 98%
-- **Token buffering**: 60fps cap prevents UI freezes during streaming
-- **KV cache preservation**: 40-60% speedup in exchange for minor context bleed
-
-### Type Safety Everywhere
-- **TypeScript**: Strict mode with no implicit any
-- **Pydantic**: Request/response validation with auto-documentation
-- **Rust**: Compile-time guarantees and memory safety
-- **serde**: Type-safe serialization across language boundaries
-
-### Graceful Degradation
-- **Try preferred method → fallback → log**: Every component has error handling
-- **Offline detection**: Automatic recovery when connectivity returns
-- **Component isolation**: Failures don't cascade across layers
-- **Health monitoring**: Background checks with automatic restart on failure
-
-### Security by Default
-- **Command allowlisting**: Only registered Tauri commands can execute
-- **Input sanitization**: Multi-layer validation (rate limit → injection → schema)
-- **Path validation**: Prevent directory traversal in file operations
-- **WebView sandboxing**: Isolated execution environment with capability system
-
-### Developer Ergonomics
-- **Hot reload**: Frontend and Tauri changes reflected instantly
-- **Type-safe APIs**: IntelliSense and compile-time validation
-- **Comprehensive logging**: Structured logs with field operator export
-- **Clear separation**: Each layer can be developed independently
-
-### Production Readiness
-- **Error boundaries**: Catch and recover from React errors
-- **Resource limits**: Docker memory/CPU constraints prevent OOM
-- **Health checks**: Automatic restart on failure
-- **Atomic operations**: Prevent corruption during updates
-
-<Callout type="success">
-**Architecture Philosophy**: Forge prioritizes performance and reliability over simplicity. Every optimization is documented with its trade-offs, and every component is designed for production use.
-</Callout>
-
-## Next Steps: Deep Dives
-
-Now that you understand the high-level architecture, explore each layer in detail:
-
-- **[Backend Layer](/architecture/backend)**: RAG engine, caching, retrieval strategies
-- **[Frontend Layer](/architecture/frontend)**: React patterns, state management, streaming
-- **[Desktop Bridge](/architecture/desktop-bridge)**: Tauri IPC, security model, native integration
-- **[Integration Layer](/architecture/integration)**: Cross-layer communication and data flow
-
----
-
-**Architecture Diagram Note**: This overview uses ASCII art for universal compatibility. For interactive Mermaid diagrams and detailed component flows, see the deep-dive pages.
+- **[Ingestion Pipeline](/architecture/ingestion-pipeline)** — Deep dive into document processing
+- **[Query Pipeline](/architecture/query-pipeline)** — Full agentic and direct mode flows
+- **[Streaming Protocol](/architecture/streaming-protocol)** — SSE event types and handling

@@ -1,106 +1,110 @@
 ---
-title: About Forge - Why We Named It After a Workshop
-description: The story behind Forge and what we're building
+title: About Forge
+description: Why the name, what drives the project, and the technology behind the most complete single-GPU RAG system.
 ---
-
-import { motion } from 'motion/react'
 
 # About Forge
 
-<div className="my-12 space-y-8 text-lg leading-relaxed">
+## Why "Forge"?
 
-<motion.div
-  initial={{ opacity: 0, y: 20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6 }}
-  className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-amber-50/80 to-yellow-100/50 p-8 backdrop-blur-xl dark:from-amber-950/30 dark:to-amber-900/20"
->
+A forge is where raw metal becomes precision tools. You start with shapeless ore — heat it, hammer it, fold it, quench it — and what comes out is sharp, strong, and purpose-built.
 
-## Why Forge?
+That's what Forge does with documents.
 
-Picture this: you're drowning in a sea of PDFs, technical docs, and meeting notes. You need *one* answer. Traditional search gives you 10,000 results. RAG systems hallucinate. Vector databases return vaguely related nonsense.
+Raw PDFs, messy DOCXes, walls of unstructured text — Forge takes them through a pipeline of 14 techniques that parse, chunk, enrich, decompose, embed, graph-link, and index every useful fact. What comes out the other side is a precision instrument: an indexed knowledge base where an autonomous agent can find, verify, and synthesize answers to questions you didn't even know the document could answer.
 
-We called this Forge because that's exactly what it does — takes raw material and **hammers it into something useful**.
+The 14 techniques are the tools of the forge:
+- **Contextual Retrieval** is the furnace — it heats raw chunks until their true meaning is visible
+- **Hierarchical Indexing** is the layering — document, section, chunk, proposition, each level for a different purpose
+- **BGE-M3** is the alloy — dense, sparse, and ColBERT vectors fused into one
+- **CRAG** is the quality inspector — nothing substandard leaves the forge
+- **The Agent** is the blacksmith — deciding which tool to reach for next
 
-</motion.div>
+The metaphor works because building a great RAG system is, genuinely, a craft. There are dozens of techniques in the literature, each with their own strengths and failure modes. The hard part isn't implementing any one of them — it's making 14 of them compose into a coherent pipeline that runs on hardware you actually own.
 
-<motion.div
-  initial={{ opacity: 0, y: 20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6, delay: 0.2 }}
-  className="space-y-6"
->
+## What This Proves
 
-### The Anvil
+No open-source RAG system combines all 14 of these techniques:
 
-A forge starts with the anvil — the solid foundation where raw metal meets precision force. That's your document corpus. Messy PDFs, sprawling manuals, scattered knowledge bases. Unrefined ore.
+1. Agentic RAG (LangGraph ReAct loop)
+2. CRAG Quality Gate (cross-encoder classification)
+3. Multi-Hop Reasoning (query decomposition + iterative retrieval)
+4. Contextual Retrieval (Anthropic's context prefix technique)
+5. Proposition Indexing (Dense-X atomic claims)
+6. Hierarchical 4-Level Indexing (RAPTOR-inspired L0-L3)
+7. BGE-M3 Tri-Modal Vectors (dense + sparse + ColBERT)
+8. ColBERT Late Interaction Reranking (MaxSim scoring)
+9. Knowledge Graph (LLM extraction + Redis adjacency)
+10. Self-Verification (claim-by-claim audit)
+11. Confidence Scoring (weighted retrieval signals)
+12. Query Decomposition (complex → atomic sub-queries)
+13. HyDE (hypothetical document embeddings)
+14. Parent Expansion (retrieve child, return parent for context)
 
-When you ask a question, you shouldn't get back "here's 47 possibly relevant chunks." You should get the *right answer*, shaped from the *right document*, at the *right level of detail*. Like a blacksmith striking exactly where it matters, not flailing at hot metal and hoping for the best.
+Most systems implement 3-5. Some research prototypes demonstrate 6-8. Forge is the only system I'm aware of that integrates all 14 into a single, working pipeline that fits on a 16GB GPU.
 
-Precision matters when you're dealing with enterprise knowledge, legal docs, or technical specifications. Close enough isn't good enough.
+That's the portfolio statement: **theory implemented as a system**, not just a paper or a demo.
 
-### The Hammer
+## The Constraint That Drives Everything
 
-The hammer is where the real work happens — 14 techniques working in concert to beat raw information into shape. Hybrid search. Neural reranking. HyDE. Multi-query expansion. Semantic chunking. Confidence scoring. Each one a different strike, a different angle.
+**16GB VRAM.** That's the budget. An RTX 4080, a consumer card you can buy for under $1,000.
 
-Modern embeddings and neural reranking let us understand *intent*, not just keywords. You can ask "how do I prevent memory leaks in the inference pipeline?" and get actual answers about memory management — not every doc that mentions the word "pipeline."
+This constraint is the most important design decision in Forge. It forces real trade-offs:
 
-14 tools in the forge. Every one of them earns its place.
+- The LLM gets 10-14GB of VRAM. Everything else runs on CPU.
+- BGE-M3 embeddings are computed on CPU at ~50ms per query — fast enough.
+- The cross-encoder for CRAG runs on CPU — 200ms for 10 documents.
+- Qdrant and Redis use system RAM, not VRAM.
 
-### The Fire
+The result is a system that runs on hardware real people own, not a $50K A100 cluster. If you have a gaming PC with an RTX 4080 or better, you can run the full 14-technique pipeline at production quality.
 
-Every forge needs heat. Ours is GPU acceleration — CUDA-powered inference running at 80-100 tokens per second, turning cold queries into white-hot answers.
+## Tech Stack
 
-Ever tried finding a specific detail in a 500-page compliance manual at 2 AM? That's raw ore sitting in the dark. Forge brings the heat. Melts through the noise. Extracts exactly what you need, when you need it. No more ctrl+F through endless pages. No more "I know we documented this somewhere..."
+| Layer | Technology | Why |
+|---|---|---|
+| Desktop App | Tauri (Rust + React) | ~10MB binary, native feel, no Electron bloat |
+| Frontend | React + TypeScript + Tailwind | Type-safe, fast iteration, responsive |
+| Backend | FastAPI (Python 3.11+) | Async, SSE streaming, automatic API docs |
+| Agent | LangGraph | Explicit state machines, tool calling, streaming |
+| LLM Runtime | llama.cpp | Best GGUF performance, C++ speed, full GPU offload |
+| Embeddings | BGE-M3 (FlagEmbedding) | One model, three vector types, MIT license |
+| Vector DB | Qdrant | Multi-vector support, sparse vectors, rich filtering |
+| Cache + Graph | Redis | Sub-ms reads, lightweight, ubiquitous |
+| CRAG Model | ms-marco-MiniLM-L-12-v2 | Fast cross-encoder, well-validated |
+| Docs | Next.js + Nextra + Tailwind | The site you're reading right now |
 
-Speed isn't a feature. It's the fire that makes everything else possible.
+## Who Built This
 
-</motion.div>
+Built by **Zhady Zahorodniuk** as a portfolio project demonstrating deep expertise in:
 
-<motion.div
-  initial={{ opacity: 0, y: 20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6, delay: 0.4 }}
-  className="rounded-3xl border border-blue-500/30 bg-gradient-to-br from-blue-50/80 to-blue-100/50 p-8 backdrop-blur-xl dark:from-blue-950/30 dark:to-blue-900/20"
->
+- Retrieval-Augmented Generation (RAG) systems
+- LLM application architecture
+- Vector search and embedding models
+- Agent-based reasoning systems
+- GPU-optimized inference
+- Full-stack desktop application development (Tauri/React/FastAPI)
 
-### The Temper — "Bend, don't break"
-
-The best blades aren't just hard — they're *tempered*. Heated, cooled, stressed, and tested until they flex without snapping. That's the philosophy here.
-
-When naive retrieval fails, when semantic search drifts, when GPU memory runs out — Forge adapts. Hybrid search with neural reranking. Intelligent chunking. Memory-efficient inference. Query expansion. Graceful degradation at every layer. Five levels of caching so the same question never costs you twice.
-
-**The best tools don't just work. They work when everything else doesn't.**
-
-</motion.div>
-
-<motion.div
-  initial={{ opacity: 0, y: 20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6, delay: 0.6 }}
-  className="border-l-4 border-amber-500 pl-6 text-gray-700 dark:text-gray-300"
->
-
-**TL;DR:** We built a RAG system that actually works. Called it Forge because it takes raw documents and hammers them into precise answers — 14 techniques, GPU-accelerated, no nonsense. Marketing is half the battle.
-
-Ships with real-time inference, hybrid search, and a docs site that doesn't make you want to cry.
-
-</motion.div>
-
-</div>
+This is not a wrapper around an API. Every component — the agent, the CRAG gate, the hierarchical indexer, the graph extractor, the streaming protocol — is implemented from the ground up, integrated into a coherent system, and documented like you'd expect from a production codebase.
 
 ---
 
-## The Mission
-
-Look, RAG is everywhere now. But most implementations are... let's be diplomatic and say "suboptimal."
-
-We wanted to build something that:
-- **Actually retrieves the right documents** (not just semantically similar ones)
-- **Runs fast enough to feel instant** (GPU acceleration, optimized inference)
-- **Doesn't hallucinate** (proper grounding, source attribution)
-- **Scales to real workloads** (thousands of documents, concurrent users)
-
-Forge is what happens when you stop accepting "good enough" and start demanding "actually good."
-
-This is what information retrieval should have been all along.
+<div className="mt-12 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-8 text-center dark:border-gray-800 dark:from-gray-900 dark:to-gray-950">
+  <h3 className="mb-3 text-xl font-bold text-gray-900 dark:text-gray-100">Want to see it in action?</h3>
+  <p className="mb-6 text-gray-600 dark:text-gray-400">Clone the repo, upload a document, and ask a hard question. The agent will show you what 14 techniques working together looks like.</p>
+  <div className="flex flex-wrap items-center justify-center gap-4">
+    <a
+      href="/getting-started/quick-start"
+      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:bg-blue-700"
+    >
+      Quick Start Guide
+    </a>
+    <a
+      href="https://github.com/zhadyz/tactical-rag-system"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+    >
+      GitHub Repository
+    </a>
+  </div>
+</div>

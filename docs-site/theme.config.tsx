@@ -2,14 +2,17 @@ import React from 'react'
 import { DocsThemeConfig } from 'nextra-theme-docs'
 import { useRouter } from 'next/router'
 import { useConfig } from 'nextra-theme-docs'
-import { Zap, Github, Twitter } from 'lucide-react'
-import { CustomNavbar } from './components/CustomNavbar'
 import { Callout } from './components/Callout'
 
 const config: DocsThemeConfig = {
   logo: (
-    <div className="flex items-center gap-3 font-bold">
-      <img src="/forge-logo.png" alt="Forge" className="h-16 w-16" />
+    <div className="flex items-center gap-2 font-extrabold text-xl">
+      <span className="bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent">
+        Forge
+      </span>
+      <span className="rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+        V5
+      </span>
     </div>
   ),
   project: {
@@ -17,7 +20,12 @@ const config: DocsThemeConfig = {
   },
   docsRepositoryBase: 'https://github.com/zhadyz/tactical-rag-system/tree/v4.2-production/docs-site',
   footer: {
-    text: null
+    text: (
+      <div className="flex w-full flex-col items-center gap-2 text-sm text-gray-500 dark:text-gray-400 sm:flex-row sm:justify-between">
+        <span>Forge V5 — Agentic RAG with 14 cutting-edge techniques</span>
+        <span>&copy; {new Date().getFullYear()} Forge. Built with Next.js &amp; Nextra.</span>
+      </div>
+    )
   },
   head: () => {
     const { asPath, defaultLocale, locale } = useRouter()
@@ -29,10 +37,10 @@ const config: DocsThemeConfig = {
     return (
       <>
         <meta property="og:url" content={url} />
-        <meta property="og:title" content={frontMatter.title || 'Forge'} />
+        <meta property="og:title" content={frontMatter.title || 'Forge V5'} />
         <meta
           property="og:description"
-          content={frontMatter.description || 'GPU-Accelerated Document Intelligence Platform'}
+          content={frontMatter.description || 'The most advanced RAG system you can run on a single GPU'}
         />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#2563eb" />
@@ -54,10 +62,7 @@ const config: DocsThemeConfig = {
     ),
     loading: 'Loading...'
   },
-  // Navigation
-  navbar: {
-    extraContent: () => <CustomNavbar />
-  },
+  // Sidebar
   sidebar: {
     titleComponent({ title, type }) {
       if (type === 'separator') {
@@ -80,7 +85,7 @@ const config: DocsThemeConfig = {
             rel="noopener noreferrer"
             className="hover:text-blue-600 dark:hover:text-blue-400"
           >
-            Report an issue with this page →
+            Report an issue with this page &rarr;
           </a>
         </div>
       )
@@ -101,20 +106,20 @@ const config: DocsThemeConfig = {
   },
   // Banner
   banner: {
-    key: 'v5.0-release',
+    key: 'forge-v5-banner',
     text: (
-      <a href="/blog/v5.0-release" target="_blank" className="flex items-center justify-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
-          NEW
+      <span className="flex items-center justify-center gap-2 text-sm">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+          V5
         </span>
-        <span>Forge V5 is here! Agentic RAG with 14 cutting-edge techniques. Read more →</span>
-      </a>
+        Forge V5 &mdash; 14 cutting-edge RAG techniques in one system
+      </span>
     )
   },
   // Git timestamp - disabled
   gitTimestamp: null,
   // Favicon
-  faviconGlyph: '⚡',
+  faviconGlyph: '\u26A1',
   // MDX Components
   components: {
     Callout
