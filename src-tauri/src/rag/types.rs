@@ -1,4 +1,4 @@
-// ATLAS Protocol - Phase 1: Embedding Types
+// Forge - Phase 1: Embedding Types
 // Shared types for the embedding service
 
 use serde::{Deserialize, Serialize};

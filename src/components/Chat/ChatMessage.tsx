@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { User, Bot, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { User, Bot, ChevronDown, ChevronUp, Clock, Brain } from 'lucide-react';
 import type { Message } from '../../types';
 import { SourceCitation } from './SourceCitation';
+import { AgentReasoningPanel } from '../Agent/AgentReasoningPanel';
+import { VerificationBadge } from '../Agent/VerificationBadge';
 
 interface ChatMessageProps {
   message: Message;
@@ -29,6 +31,10 @@ const arePropsEqual = (prevProps: ChatMessageProps, nextProps: ChatMessageProps)
 
   // If metadata changed (shallow comparison for processing time)
   if (prevMsg.metadata?.processing_time_ms !== nextMsg.metadata?.processing_time_ms) return false;
+
+  // If agent data changed, re-render
+  if (prevMsg.agentSteps?.length !== nextMsg.agentSteps?.length) return false;
+  if (prevMsg.verificationResults?.length !== nextMsg.verificationResults?.length) return false;
 
   // Props are equal - skip re-render for performance
   return true;
@@ -180,12 +186,32 @@ export const ChatMessage = React.memo<ChatMessageProps>(({ message }) => {
 
             {showSources && (
               <div className="space-y-2 animate-slide-up" role="region" aria-label="Source citations">
-                {message.sources.filter(s => s && s.metadata).map((source, index) => (
-                  <SourceCitation key={source.metadata.source + index} source={source} index={index} />
-                ))}
+                {message.sources.filter(s => s && s.metadata).map((source, index) => {
+                  const cragEval = message.cragEvaluations?.find(
+                    (e) => e.source === source.metadata.source || e.documentId === source.metadata.source
+                  );
+                  return (
+                    <SourceCitation
+                      key={source.metadata.source + index}
+                      source={source}
+                      index={index}
+                      cragEvaluation={cragEval}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
+        )}
+
+        {/* Agent reasoning (collapsed, on completed messages) */}
+        {!isUser && !message.isStreaming && message.agentSteps && message.agentSteps.length > 0 && (
+          <AgentReasoningPanel steps={message.agentSteps} isActive={false} collapsed={true} />
+        )}
+
+        {/* Verification results */}
+        {!isUser && !message.isStreaming && message.verificationResults && message.verificationResults.length > 0 && (
+          <VerificationBadge results={message.verificationResults} />
         )}
       </div>
     </div>

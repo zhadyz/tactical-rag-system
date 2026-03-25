@@ -1,4 +1,4 @@
-// ATLAS Protocol - Phase 1: Embedding Engine
+// Forge - Phase 1: Embedding Engine
 // GPU-accelerated embedding generation using ONNX Runtime with CUDA
 
 use std::time::Instant;

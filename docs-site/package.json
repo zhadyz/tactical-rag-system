@@ -1,7 +1,7 @@
 {
-  "name": "apollo-docs",
-  "version": "4.2.0",
-  "description": "Apollo RAG Documentation - GPU-Accelerated Intelligence",
+  "name": "forge-docs",
+  "version": "5.0.0",
+  "description": "Forge Documentation - Agentic Document Intelligence",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,56 +1,192 @@
 ---
 title: Quick Start
-description: Get Apollo RAG running in 5 minutes
+description: Get Forge V5 running and answering questions in under 5 minutes.
 ---
+
+import { Callout } from '../../components/Callout'
 
 # Quick Start
 
-Get Apollo RAG up and running in under 5 minutes.
+Get Forge running, upload a document, and ask your first question — all in under 5 minutes.
 
 ## Prerequisites
 
-- **Docker** 20.10+ and Docker Compose 2.0+
-- **8GB RAM minimum** (16GB recommended)
-- **(Optional) NVIDIA GPU** with CUDA 11.8+ for 10x faster performance
+Before you begin, make sure you have:
 
-## Clone the Repository
+| Requirement | Minimum | Recommended |
+|---|---|---|
+| **GPU** | NVIDIA GPU with 16GB VRAM (RTX 4080, A4000) | RTX 4090 / A6000 (24GB) |
+| **RAM** | 16GB | 32GB+ |
+| **Docker** | Docker Desktop 4.x with GPU support | Latest stable |
+| **NVIDIA Driver** | 535+ with CUDA 12.x | 545+ |
+| **Disk** | 20GB free | 50GB+ (model storage) |
 
-```bash
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
-```
+<Callout type="info" title="No GPU? No problem (sort of).">
+  Forge can run in CPU-only mode with `FORGE_CPU_ONLY=true`, but expect 10-30x slower inference.
+  Useful for development, not for production queries.
+</Callout>
 
-## Configure Environment
-
-Create a `.env` file:
-
-```bash
-cp .env.example .env
-```
-
-Essential variables:
+## Step 1: Clone and Launch
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-VECTOR_STORE=chroma
-```
+# Clone the repository
+git clone https://github.com/zhadyz/tactical-rag-system.git
+cd tactical-rag-system
 
-## Launch Apollo
-
-```bash
+# Start all services (FastAPI backend, Qdrant, Redis)
 docker compose up -d
 ```
 
-## Make Your First Query
+Docker Compose will start three containers:
+
+- **forge-api** — FastAPI backend on port `8000`
+- **forge-qdrant** — Qdrant vector database on port `6333`
+- **forge-redis** — Redis cache + graph adjacency on port `6379`
+
+On first launch, the backend will automatically download required models:
+- **BGE-M3** (~2.4GB) — tri-modal embedding model
+- **LLM GGUF** (~8-12GB) — your configured language model for llama.cpp
+
+<Callout type="warning" title="First launch takes 5-10 minutes.">
+  Model downloads happen once. Subsequent starts take under 30 seconds.
+</Callout>
+
+Verify everything is running:
 
 ```bash
-curl -X POST http://localhost:8000/api/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is Apollo RAG?", "mode": "simple"}'
+# Health check
+curl http://localhost:8000/api/health
 ```
 
-## Next Steps
+Expected response:
 
-- [API Reference](/api-reference) - Complete endpoint documentation
-- [Architecture](/architecture/overview) - How Apollo works
+```json
+{
+  "status": "healthy",
+  "version": "5.0.0",
+  "services": {
+    "qdrant": "connected",
+    "redis": "connected",
+    "llm": "loaded",
+    "bge_m3": "loaded"
+  },
+  "gpu": {
+    "available": true,
+    "name": "NVIDIA GeForce RTX 4080",
+    "vram_total_gb": 16.0,
+    "vram_used_gb": 11.2
+  }
+}
+```
+
+## Step 2: Upload a Document
+
+```bash
+# Upload a PDF, DOCX, or TXT file
+curl -X POST http://localhost:8000/api/documents/upload \
+  -F "file=@my-document.pdf"
+```
+
+Response:
+
+```json
+{
+  "document_id": "doc_a1b2c3d4",
+  "filename": "my-document.pdf",
+  "status": "queued",
+  "pages": 42
+}
+```
+
+The document enters the ingestion pipeline automatically. Check progress:
+
+```bash
+curl http://localhost:8000/api/ingest/status
+```
+
+```json
+{
+  "active": [{
+    "document_id": "doc_a1b2c3d4",
+    "stage": "contextual_enrichment",
+    "progress": 0.65,
+    "chunks_processed": 128,
+    "chunks_total": 197
+  }],
+  "completed": [],
+  "failed": []
+}
+```
+
+<Callout type="info" title="What happens during ingestion?">
+  The full pipeline: Parse → Semantic Chunk → Hierarchical Levels (L0-L3) → Contextual Enrichment → Proposition Extraction → Knowledge Graph Extraction → BGE-M3 Embedding → Qdrant Storage. A 40-page PDF takes roughly 2-5 minutes depending on GPU speed.
+</Callout>
+
+## Step 3: Ask Your First Question
+
+### Direct Mode (pipeline RAG)
+
+Fast, single-pass retrieval and generation:
+
+```bash
+curl -X POST http://localhost:8000/api/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the main findings of the study?", "mode": "direct"}'
+```
+
+### Agentic Mode (recommended)
+
+The agent autonomously decides which tools to use, iterates, and verifies:
+
+```bash
+curl -N http://localhost:8000/api/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the main findings of the study?", "mode": "agentic"}'
+```
+
+### Expected SSE Stream Output
+
+The stream delivers real-time events as the agent works:
+
+```
+event: query_analysis
+data: {"type":"query_analysis","query":"What are the main findings of the study?","complexity":"moderate","decomposed":false}
+
+event: retrieval_start
+data: {"type":"retrieval_start","tool":"semantic_search","query":"main findings of the study"}
+
+event: retrieval_result
+data: {"type":"retrieval_result","tool":"semantic_search","chunks_found":8,"top_score":0.847}
+
+event: crag_evaluation
+data: {"type":"crag_evaluation","correct":5,"ambiguous":2,"incorrect":1,"action":"proceed"}
+
+event: rerank_result
+data: {"type":"rerank_result","method":"colbert","input_count":7,"output_count":5}
+
+event: generation_start
+data: {"type":"generation_start","context_chunks":5,"total_tokens":3420}
+
+event: token
+data: {"type":"token","content":"The study identifies three primary findings"}
+
+event: token
+data: {"type":"token","content":": (1) the correlation between..."}
+
+event: verification
+data: {"type":"verification","claims_checked":4,"claims_supported":4,"claims_unsupported":0,"confidence":0.94}
+
+event: done
+data: {"type":"done","total_time_ms":7240,"tokens_generated":312,"sources":5}
+```
+
+<Callout type="success" title="You're up and running!">
+  That's it. You have a fully operational agentic RAG system with 14 techniques running on your local GPU. Upload more documents, try complex multi-hop questions, and watch the agent reason through them in real time.
+</Callout>
+
+## What's Next?
+
+- **[Installation Guide](/getting-started/installation)** — Local development setup without Docker, model configuration
+- **[Configuration](/getting-started/configuration)** — Tune every parameter in `config.yml`
+- **[Techniques Overview](/techniques/overview)** — Understand all 14 techniques and how they compose
+- **[API Reference](/api-reference)** — Full endpoint documentation with schemas

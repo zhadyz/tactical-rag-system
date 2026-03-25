@@ -1,0 +1,287 @@
+---
+title: BGE-M3 Vectors
+description: How Forge uses a single BGE-M3 model to produce dense, sparse, and ColBERT vectors — replacing separate embedding and BM25 pipelines.
+---
+
+import { Callout } from '../../components/Callout'
+
+# BGE-M3 Tri-Modal Vectors
+
+BGE-M3 (BAAI General Embedding - Multi-Functionality, Multi-Linguality, Multi-Granularity) is the embedding backbone of Forge. A single model produces **three types of vectors** from one forward pass, replacing what traditionally required separate embedding models, BM25 indices, and reranking models.
+
+## Three Vector Types, One Model
+
+| Vector Type | Dimension | What It Captures | Traditional Equivalent |
+|---|---|---|---|
+| **Dense** | 1024 | Semantic meaning | Sentence-BERT, E5, etc. |
+| **Sparse** | Variable (lexical) | Exact keyword matching | BM25, SPLADE |
+| **ColBERT** | N x 1024 (per-token) | Token-level interactions | Separate ColBERT model |
+
+```python
+from FlagEmbedding import BGEM3FlagModel
+
+model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=False)
+
+output = model.encode(
+    ["What was the Q3 2024 revenue?"],
+    return_dense=True,
+    return_sparse=True,
+    return_colbert_vecs=True,
+)
+
+dense_vector = output["dense_vecs"][0]       # Shape: (1024,)
+sparse_vector = output["lexical_weights"][0]  # Dict: {token_id: weight}
+colbert_vectors = output["colbert_vecs"][0]   # Shape: (N, 1024)
+```
+
+## Why This Matters
+
+### Before BGE-M3 (Typical RAG Pipeline)
+
+```
+Query → Dense Encoder (GPU, ~10ms)  → Dense Search
+     → BM25 Index (CPU)             → Keyword Search
+     → ColBERT Model (GPU, ~50ms)   → Reranking
+
+= 3 models, 3 indices, 3x the complexity
+```
+
+### With BGE-M3 (Forge Pipeline)
+
+```
+Query → BGE-M3 (CPU, ~50ms) → Dense Search
+                             → Sparse Search
+                             → ColBERT Reranking
+
+= 1 model, 1 collection, 1 forward pass
+```
+
+One model. One Qdrant collection. Three search modalities.
+
+<Callout type="info" title="CPU inference by design">
+  BGE-M3 runs on CPU at ~50ms per query — fast enough for real-time use. Keeping it off the GPU reserves all 16GB of VRAM for the LLM, which is where GPU memory has the greatest impact on generation quality and speed.
+</Callout>
+
+## Qdrant Named Vectors
+
+All three vector types are stored as named vectors in a single Qdrant collection:
+
+```python
+# forge/ingestion/embedder.py
+class BGEm3Embedder:
+    """Embeds text using BGE-M3 and stores in Qdrant."""
+
+    def __init__(self, config: BGEm3Config):
+        self.model = BGEM3FlagModel(
+            config.model_path,
+            use_fp16=config.use_fp16,
+        )
+
+    async def embed_and_store(self, chunk: DocumentChunk) -> str:
+        """Embed a chunk and upsert into Qdrant."""
+        output = self.model.encode(
+            [chunk.enriched_text],  # Context-enriched text
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=True,
+            max_length=self.config.max_length,
+        )
+
+        point = PointStruct(
+            id=chunk.id,
+            vector={
+                "dense": output["dense_vecs"][0].tolist(),
+                "sparse": SparseVector(
+                    indices=list(output["lexical_weights"][0].keys()),
+                    values=list(output["lexical_weights"][0].values()),
+                ),
+                "colbert": output["colbert_vecs"][0].tolist(),
+            },
+            payload={
+                "text": chunk.enriched_text,
+                "original_text": chunk.original_text,
+                "level": chunk.level,
+                "document_id": chunk.document_id,
+                "parent_id": chunk.parent_id,
+                # ... additional metadata
+            },
+        )
+
+        await self.qdrant.upsert(
+            collection_name="forge_documents",
+            points=[point],
+        )
+        return chunk.id
+```
+
+### Qdrant Collection Schema
+
+```python
+# forge/storage/qdrant_setup.py
+async def create_collection():
+    await qdrant.create_collection(
+        collection_name="forge_documents",
+        vectors_config={
+            "dense": VectorParams(
+                size=1024,
+                distance=Distance.COSINE,
+            ),
+            "colbert": VectorParams(
+                size=1024,
+                distance=Distance.COSINE,
+                multivector_config=MultiVectorConfig(
+                    comparator=MultiVectorComparator.MAX_SIM,
+                ),
+            ),
+        },
+        sparse_vectors_config={
+            "sparse": SparseVectorParams(
+                index=SparseIndexParams(on_disk=False),
+            ),
+        },
+    )
+```
+
+## Search Strategies
+
+### Dense Search (Semantic)
+
+Best for: broad topical queries, "find me something about X"
+
+```python
+results = await qdrant.search(
+    collection_name="forge_documents",
+    query_vector=NamedVector(name="dense", vector=dense_vec),
+    limit=20,
+)
+```
+
+### Sparse Search (Keyword)
+
+Best for: exact terms, names, acronyms, specific jargon
+
+```python
+results = await qdrant.search(
+    collection_name="forge_documents",
+    query_vector=NamedSparseVector(
+        name="sparse",
+        vector=SparseVector(
+            indices=sparse_indices,
+            values=sparse_values,
+        ),
+    ),
+    limit=20,
+)
+```
+
+### Hybrid Search (Dense + Sparse)
+
+Forge combines both for first-stage retrieval using Reciprocal Rank Fusion:
+
+```python
+# forge/retrieval/search.py
+class HybridSearcher:
+    async def search(
+        self,
+        query: str,
+        top_k: int = 20,
+    ) -> list[ScoredChunk]:
+        """Combined dense + sparse search with RRF fusion."""
+        # Encode query once, get both vector types
+        output = self.bge_m3.encode(
+            [query],
+            return_dense=True,
+            return_sparse=True,
+        )
+
+        # Parallel search
+        dense_results, sparse_results = await asyncio.gather(
+            self.qdrant.search(
+                query_vector=NamedVector(name="dense", vector=output["dense_vecs"][0]),
+                limit=top_k,
+            ),
+            self.qdrant.search(
+                query_vector=NamedSparseVector(name="sparse", vector=sparse_vec),
+                limit=top_k,
+            ),
+        )
+
+        # Reciprocal Rank Fusion
+        return self._rrf_fusion(dense_results, sparse_results, k=60)
+
+    def _rrf_fusion(self, *result_lists, k=60):
+        """Combine multiple result lists using RRF."""
+        scores = defaultdict(float)
+        for results in result_lists:
+            for rank, result in enumerate(results):
+                scores[result.id] += 1.0 / (k + rank + 1)
+
+        combined = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return [self._get_chunk(chunk_id) for chunk_id, _ in combined]
+```
+
+### ColBERT Reranking
+
+Applied to the top candidates after hybrid search + CRAG filtering. See [ColBERT Reranking](/techniques/colbert) for details.
+
+## Performance
+
+All benchmarks on AMD Ryzen 9 7950X (16 cores, CPU inference):
+
+| Operation | Latency | Throughput |
+|---|---|---|
+| Encode 1 query | ~50ms | 20 queries/sec |
+| Encode 1 document chunk (512 tokens) | ~80ms | 12 chunks/sec |
+| Encode batch of 32 chunks | ~1.2s | ~27 chunks/sec |
+| Qdrant dense search (100K points) | ~5ms | 200 queries/sec |
+| Qdrant sparse search (100K points) | ~8ms | 125 queries/sec |
+| Qdrant hybrid search (100K points) | ~12ms | 80 queries/sec |
+
+The BGE-M3 encoding is the bottleneck during ingestion (80ms per chunk). During query time, it's a single 50ms call — negligible.
+
+## Configuration
+
+```yaml
+bge_m3:
+  model_path: "models/bge-m3"
+  max_length: 8192          # Max token length (BGE-M3 supports up to 8192)
+  batch_size: 32            # Batch size for ingestion embedding
+  use_fp16: false           # CPU doesn't benefit from fp16
+  return_dense: true
+  return_sparse: true
+  return_colbert: true
+```
+
+### Disabling Vector Types
+
+You can disable sparse or ColBERT vectors to reduce storage:
+
+```yaml
+bge_m3:
+  return_dense: true
+  return_sparse: false     # Saves ~20% storage, lose keyword matching
+  return_colbert: false    # Saves ~70% storage, lose token-level reranking
+```
+
+<Callout type="warning" title="Don't disable dense vectors">
+  Dense vectors are the primary search mechanism. Disabling them breaks the entire pipeline. Sparse and ColBERT are additive improvements that can be individually toggled.
+</Callout>
+
+## Model Details
+
+| Property | Value |
+|---|---|
+| Model | BAAI/bge-m3 |
+| Parameters | 568M |
+| Dense dimension | 1024 |
+| Max tokens | 8,192 |
+| Languages | 100+ (multilingual) |
+| License | MIT |
+| Model size | ~2.4GB |
+
+## References
+
+- Chen et al., "BGE M3-Embedding: Multi-Lingual, Multi-Functionality, Multi-Granularity Text Embeddings Through Self-Knowledge Distillation" (2024)
+- [BAAI/bge-m3 on Hugging Face](https://huggingface.co/BAAI/bge-m3)
+- [FlagEmbedding library](https://github.com/FlagOpen/FlagEmbedding)
+- Forge implementation: `forge/ingestion/embedder.py`, `forge/retrieval/search.py`

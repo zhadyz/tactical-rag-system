@@ -1,0 +1,222 @@
+---
+title: CRAG Quality Gate
+description: How Forge's Corrective RAG gate evaluates every retrieved document before generation, preventing hallucination from irrelevant context.
+---
+
+import { Callout } from '../../components/Callout'
+
+# CRAG Quality Gate
+
+CRAG (Corrective Retrieval-Augmented Generation) is Forge's defense against the most common RAG failure: **generating answers from irrelevant retrievals**. Before any retrieved document reaches the LLM for generation, it must pass through a cross-encoder quality gate.
+
+## The Problem It Solves
+
+In standard RAG, the top-k most similar documents are passed directly to the LLM. But vector similarity is not the same as relevance:
+
+- A document about "Python snake species" might score highly for a query about "Python programming"
+- A document from the wrong year might be semantically similar but factually misleading
+- Two documents might be about the same topic but contradict each other
+
+Without a quality gate, the LLM dutifully generates an answer from whatever context it receives — even if that context is irrelevant, outdated, or wrong.
+
+## How CRAG Works
+
+CRAG evaluates each retrieved document using a **cross-encoder model** that jointly encodes the query and document to produce a relevance score:
+
+```
+Retrieved Docs           Cross-Encoder             Classification
+─────────────      ─────────────────────      ──────────────────────
+
+Doc A (0.92)  ──▶  score(query, Doc A) = 0.87  ──▶  CORRECT ✓
+Doc B (0.85)  ──▶  score(query, Doc B) = 0.62  ──▶  AMBIGUOUS ~
+Doc C (0.81)  ──▶  score(query, Doc C) = 0.35  ──▶  AMBIGUOUS ~
+Doc D (0.78)  ──▶  score(query, Doc D) = 0.22  ──▶  INCORRECT ✗
+Doc E (0.74)  ──▶  score(query, Doc E) = 0.81  ──▶  CORRECT ✓
+```
+
+The cross-encoder (ms-marco-MiniLM-L-12-v2) is far more accurate than cosine similarity because it sees both query and document tokens simultaneously, enabling cross-attention between them.
+
+### The Three Classifications
+
+| Classification | Score Range | Action |
+|---|---|---|
+| **CORRECT** | >= 0.7 | Pass directly to generation |
+| **AMBIGUOUS** | >= 0.4, < 0.7 | Expand to parent chunk, re-evaluate |
+| **INCORRECT** | < 0.4 | Discard entirely |
+
+## The Re-Retrieval Loop
+
+When too few documents pass the CORRECT threshold, CRAG triggers a re-retrieval:
+
+```
+Initial retrieval: 8 documents
+  ├── 2 CORRECT
+  ├── 4 AMBIGUOUS
+  └── 2 INCORRECT
+
+CRAG action: "Only 2 correct documents — insufficient for reliable generation"
+
+Step 1: Expand AMBIGUOUS documents
+  └── Fetch parent section (L1) for each ambiguous chunk
+  └── Re-score parent sections
+  └── 2 additional pass as CORRECT
+
+Step 2: If still insufficient, re-retrieve
+  └── Reformulate query (drop specifics, broaden scope)
+  └── New retrieval: 6 more documents
+  └── Score and classify again
+
+Final context: 5 CORRECT documents → proceed to generation
+```
+
+## Implementation
+
+The CRAG evaluator lives in `forge/retrieval/crag.py`:
+
+```python
+class CRAGEvaluator:
+    """Corrective RAG quality gate for retrieved documents."""
+
+    def __init__(self, config: CRAGConfig):
+        self.cross_encoder = CrossEncoder(config.model)
+        self.threshold_correct = config.threshold_correct    # 0.7
+        self.threshold_ambiguous = config.threshold_ambiguous  # 0.4
+        self.max_retries = config.max_retries                # 2
+
+    async def evaluate(
+        self,
+        query: str,
+        chunks: list[ScoredChunk],
+    ) -> CRAGResult:
+        """Evaluate retrieved chunks and classify each."""
+
+        # Score all chunks with cross-encoder
+        pairs = [(query, chunk.text) for chunk in chunks]
+        scores = self.cross_encoder.predict(pairs)
+
+        results = []
+        for chunk, score in zip(chunks, scores):
+            if score >= self.threshold_correct:
+                classification = "CORRECT"
+            elif score >= self.threshold_ambiguous:
+                classification = "AMBIGUOUS"
+            else:
+                classification = "INCORRECT"
+
+            results.append(CRAGResult(
+                chunk=chunk,
+                score=float(score),
+                classification=classification,
+            ))
+
+        return self._apply_corrections(query, results)
+
+    async def _apply_corrections(
+        self,
+        query: str,
+        results: list[CRAGResult],
+    ) -> list[CRAGResult]:
+        """Apply parent expansion and re-retrieval if needed."""
+
+        correct = [r for r in results if r.classification == "CORRECT"]
+        ambiguous = [r for r in results if r.classification == "AMBIGUOUS"]
+
+        # Expand ambiguous documents to parent sections
+        if ambiguous and self.config.expand_ambiguous:
+            for result in ambiguous:
+                parent = await self._fetch_parent(result.chunk)
+                if parent:
+                    parent_score = self.cross_encoder.predict(
+                        [(query, parent.text)]
+                    )[0]
+                    if parent_score >= self.threshold_correct:
+                        result.classification = "CORRECT"
+                        result.chunk = parent
+                        result.score = parent_score
+
+        # Re-count after expansion
+        correct = [r for r in results if r.classification == "CORRECT"]
+
+        if len(correct) < 2 and self.max_retries > 0:
+            # Trigger re-retrieval with broader query
+            additional = await self._re_retrieve(query)
+            results.extend(additional)
+
+        return results
+```
+
+### Parent Expansion for Ambiguous Documents
+
+When a chunk scores as AMBIGUOUS, it might be relevant but too narrow. The parent expansion strategy:
+
+1. Look up the chunk's parent in the hierarchy (`chunk.parent_id`)
+2. Fetch the parent section (L1 level) from Qdrant
+3. Re-score the parent against the query
+4. If the parent scores as CORRECT, use it instead
+
+This works because a chunk like "the rate was 15%" might be ambiguous in isolation, but its parent section titled "Interest Rate Analysis for Q3" makes the relevance clear.
+
+## Event Streaming
+
+CRAG results are streamed to the frontend in real time:
+
+```json
+{
+  "type": "crag_evaluation",
+  "correct": 5,
+  "ambiguous": 2,
+  "incorrect": 1,
+  "action": "proceed",
+  "details": [
+    {"chunk_id": "c_1a2b", "score": 0.87, "classification": "CORRECT"},
+    {"chunk_id": "c_3c4d", "score": 0.81, "classification": "CORRECT"},
+    {"chunk_id": "c_5e6f", "score": 0.62, "classification": "AMBIGUOUS"},
+    {"chunk_id": "c_7g8h", "score": 0.22, "classification": "INCORRECT"}
+  ]
+}
+```
+
+The frontend displays this as a quality indicator, showing users that their answer is grounded in verified-relevant sources.
+
+## Configuration
+
+```yaml
+crag:
+  enabled: true
+  model: "cross-encoder/ms-marco-MiniLM-L-12-v2"
+  threshold_correct: 0.7
+  threshold_ambiguous: 0.4
+  max_retries: 2
+  expand_ambiguous: true
+```
+
+### Tuning the Thresholds
+
+| Scenario | `threshold_correct` | `threshold_ambiguous` | Effect |
+|---|---|---|---|
+| High precision | 0.8 | 0.5 | Fewer docs pass, more re-retrievals, higher quality |
+| Balanced (default) | 0.7 | 0.4 | Good balance of quality and speed |
+| High recall | 0.6 | 0.3 | More docs pass, faster, slightly lower precision |
+
+<Callout type="tip" title="When to adjust thresholds">
+  If you're seeing too many re-retrieval loops (visible in the SSE stream as repeated `retrieval_start` events), lower `threshold_correct` to 0.6. If the agent is generating answers from clearly irrelevant context, raise it to 0.8.
+</Callout>
+
+## Performance
+
+The cross-encoder runs on CPU and adds minimal latency:
+
+| Operation | Latency |
+|---|---|
+| Score 10 documents | ~120ms |
+| Score 20 documents | ~200ms |
+| Parent expansion (per doc) | ~30ms (Qdrant lookup) |
+| Full CRAG pass (typical) | ~200-400ms |
+
+This is one of the best quality-to-latency ratios in the entire pipeline.
+
+## References
+
+- Yan et al., "Corrective Retrieval Augmented Generation" (2024)
+- Cross-Encoder model: [ms-marco-MiniLM-L-12-v2](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-12-v2)
+- Forge implementation: `forge/retrieval/crag.py`

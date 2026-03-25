@@ -1,8 +1,8 @@
-// ATLAS Protocol - Tauri Commands
-// ================================
+// Forge - Tauri Commands
+// ======================
 //
-// Backend integration commands for V4.0 desktop application.
-// Connects React frontend to ATLAS FastAPI backend.
+// Backend integration commands for Forge desktop application.
+// Connects React frontend to Forge FastAPI backend.
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -50,9 +50,9 @@ impl AppState {
     }
 }
 
-/// Check ATLAS backend health
+/// Check Forge backend health
 #[tauri::command]
-pub async fn check_atlas_health(
+pub async fn check_forge_health(
     state: State<'_, Arc<Mutex<AppState>>>
 ) -> Result<HealthStatus, String> {
     let state = state.lock().await;

@@ -1,0 +1,174 @@
+---
+title: Contextual Retrieval
+description: How Forge uses Anthropic's contextual retrieval technique to prepend chunk-specific context before embedding, reducing retrieval failures by 49%.
+---
+
+import { Callout } from '../../components/Callout'
+
+# Contextual Retrieval
+
+Contextual Retrieval is the single most impactful indexing technique in Forge. Introduced by [Anthropic in September 2024](https://www.anthropic.com/news/contextual-retrieval), it addresses a fundamental weakness of chunked retrieval: **chunks lose their context when separated from the document**.
+
+## The Problem
+
+Standard RAG pipelines split documents into chunks and embed them independently. This creates a critical failure mode:
+
+Consider a chunk that reads:
+
+> "The revenue increased by 23% compared to the previous quarter, driven primarily by the new enterprise tier."
+
+Which company? Which quarter? Which enterprise tier? The chunk doesn't say. When a user asks "What was Acme Corp's Q3 2024 revenue growth?", this chunk might not rank highly because it never mentions "Acme Corp" or "Q3 2024" — even though it's the exact answer.
+
+## The Solution
+
+Before embedding each chunk, Forge uses the LLM to generate a short context prefix that situates the chunk within the broader document:
+
+```
+[Context: This chunk is from Acme Corp's Q3 2024 Earnings Report,
+specifically from the "Financial Highlights" section discussing
+quarterly revenue performance.]
+
+The revenue increased by 23% compared to the previous quarter,
+driven primarily by the new enterprise tier.
+```
+
+The context prefix is prepended to the chunk text **before** BGE-M3 generates embeddings. Now the dense, sparse, and ColBERT vectors all encode "Acme Corp", "Q3 2024", and "revenue performance" — even though those terms never appeared in the original chunk.
+
+## Impact
+
+From Anthropic's research:
+
+| Configuration | Retrieval Failure Rate Reduction |
+|---|---|
+| Contextual Retrieval alone | **49% fewer failures** |
+| Contextual Retrieval + BM25 | **67% fewer failures** |
+| Contextual Retrieval + reranking | **67% fewer failures** |
+
+Forge gets both improvements simultaneously because BGE-M3 provides BM25-equivalent sparse vectors and ColBERT reranking in addition to dense search.
+
+## Implementation
+
+The contextual enrichment happens during ingestion, inside `forge/ingestion/contextual.py`:
+
+```python
+class ContextualEnricher:
+    """Generates context prefixes for document chunks."""
+
+    CONTEXT_PROMPT = """You are given a document and a specific chunk from that document.
+Your task is to provide a short context (2-3 sentences) that situates this chunk
+within the overall document. Include:
+- What document this is from
+- What section or topic area
+- Any key entities or timeframes relevant to interpreting the chunk
+
+<document_summary>
+{document_summary}
+</document_summary>
+
+<chunk>
+{chunk_text}
+</chunk>
+
+Provide ONLY the context prefix, nothing else."""
+
+    async def enrich(
+        self,
+        chunk: DocumentChunk,
+        document_summary: str,
+    ) -> str:
+        """Generate context prefix for a single chunk."""
+        context = await self.llm.generate(
+            self.CONTEXT_PROMPT.format(
+                document_summary=document_summary,
+                chunk_text=chunk.text,
+            ),
+            max_tokens=200,
+            temperature=0.0,
+        )
+        return f"[Context: {context.strip()}]\n\n{chunk.text}"
+```
+
+### Ingestion Flow
+
+1. **Parse** the document into raw text
+2. **Generate L0 summary** of the entire document
+3. **Chunk** into L1 sections and L2 semantic chunks
+4. **For each L2 chunk**, call `ContextualEnricher.enrich()` with the L0 summary
+5. **Embed** the enriched chunk text (context prefix + original text) with BGE-M3
+6. **Store** in Qdrant with both the enriched embedding and the original text in the payload
+
+<Callout type="info" title="Why store the original text separately?">
+  The context prefix improves retrieval but shouldn't appear in the generated answer. The Qdrant payload stores both `enriched_text` (used for embedding) and `original_text` (used in the LLM prompt during generation). This way, the LLM sees clean source text without artificial prefixes.
+</Callout>
+
+### Before vs. After
+
+**Without contextual retrieval:**
+
+```
+Query: "What was the Phase 2 clinical trial success rate?"
+
+Retrieved chunks (by cosine similarity):
+  1. "The success rate was 73% across all participants..." (score: 0.71)
+  2. "Phase 2 trials typically last 6-12 months..."       (score: 0.68)
+  3. "Our trial enrolled 340 participants in 12 sites..."  (score: 0.65)
+
+Problem: Chunk 1 is from a DIFFERENT trial. Chunk 3 is the right trial
+but doesn't mention "success rate". The actual answer chunk scores 0.58
+because it says "efficacy endpoint" not "success rate".
+```
+
+**With contextual retrieval:**
+
+```
+Query: "What was the Phase 2 clinical trial success rate?"
+
+Retrieved chunks (by cosine similarity):
+  1. "[Context: From BioTech Inc Phase 2 Clinical Trial Report,
+      Results section, discussing primary efficacy endpoint.]
+      The primary endpoint was met with 81% of patients..."  (score: 0.89)
+  2. "[Context: From BioTech Inc Phase 2 Clinical Trial Report,
+      Methods section, describing patient enrollment.]
+      Our trial enrolled 340 participants in 12 sites..."    (score: 0.82)
+  3. "The success rate was 73% across all participants..."    (score: 0.69)
+
+Now the right chunks rank first because the context prefix encodes
+"Phase 2", "Clinical Trial", "Results" — matching the query semantics.
+```
+
+## Configuration
+
+In `config.yml`:
+
+```yaml
+contextual_retrieval:
+  enabled: true
+  context_prompt: "default"       # Or path to custom prompt file
+  max_context_length: 200         # Max tokens for the context prefix
+```
+
+To disable (not recommended):
+
+```yaml
+contextual_retrieval:
+  enabled: false
+```
+
+<Callout type="warning" title="Ingestion cost">
+  Contextual retrieval adds one LLM call per chunk during ingestion. For a 100-page document with ~400 chunks, that's 400 additional LLM calls. On a local GPU, this typically adds 5-15 minutes to ingestion time. The quality improvement is worth it — but if you need fast ingestion for a large corpus, consider processing in batches.
+</Callout>
+
+## Trade-offs
+
+| Pro | Con |
+|---|---|
+| 49% fewer retrieval failures | Adds LLM calls during ingestion |
+| Works with any embedding model | Increases ingestion time 2-5x |
+| Composable with all other techniques | Context prefix quality depends on LLM quality |
+| Zero query-time cost | Requires document-level summary (L0) first |
+
+## References
+
+- [Anthropic: Introducing Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) (September 2024)
+- Forge implementation: `forge/ingestion/contextual.py`
+- Configuration: `config.yml` → `contextual_retrieval` section

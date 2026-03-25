@@ -1,0 +1,206 @@
+---
+title: ColBERT Reranking
+description: How Forge uses ColBERT late interaction with MaxSim scoring to catch specific facts that dense vectors miss.
+---
+
+import { Callout } from '../../components/Callout'
+
+# ColBERT Reranking
+
+ColBERT (Contextualized Late Interaction over BERT) preserves **token-level matching** that standard dense vectors collapse into a single embedding. Forge uses it as a precision reranking step — not for first-stage retrieval, but to re-score candidate chunks with fine-grained token-level similarity.
+
+## Why Dense Vectors Aren't Enough
+
+Standard dense embeddings compress an entire text into a single vector (e.g., 1024 dimensions for BGE-M3). This is great for broad semantic matching but terrible for specific details:
+
+```
+Query: "What was the Q3 2024 revenue figure for the Enterprise segment?"
+
+Dense similarity scores both of these highly:
+  ✓ "Enterprise segment Q3 2024 revenue reached $42.3M" (correct)
+  ✗ "Consumer segment Q3 2024 revenue reached $28.1M"   (wrong segment!)
+
+Both chunks are about "revenue", "Q3 2024", and a "segment" — the dense
+vectors are nearly identical. But the user asked specifically about
+"Enterprise", and a single-vector embedding can't distinguish these.
+```
+
+ColBERT solves this by keeping one vector per token and computing fine-grained token matches.
+
+## How ColBERT Works
+
+### Standard Dense Embedding
+
+```
+"Enterprise segment Q3 revenue" → [0.12, -0.45, 0.78, ...] (1 vector)
+```
+
+### ColBERT Multi-Vector Embedding
+
+```
+"Enterprise segment Q3 revenue" → [
+  [0.12, -0.45, ...],  ← "Enterprise"
+  [0.34, 0.21, ...],   ← "segment"
+  [-0.18, 0.67, ...],  ← "Q3"
+  [0.56, -0.33, ...],  ← "revenue"
+]  (N vectors, one per token)
+```
+
+### MaxSim Scoring
+
+For each query token, find the maximum similarity to any document token, then sum:
+
+```
+Score = Σ max(sim(q_i, d_j)) for all query tokens q_i
+        j
+
+Query tokens:     "Enterprise"  "segment"  "Q3"    "revenue"
+                       │            │         │          │
+                       ▼            ▼         ▼          ▼
+Doc A tokens:     Enterprise   segment    Q3      revenue
+MaxSim per token:    0.98        0.97     0.96      0.99    → Total: 3.90
+
+Doc B tokens:     Consumer     segment    Q3      revenue
+MaxSim per token:    0.52        0.97     0.96      0.99    → Total: 3.44
+
+"Enterprise" matches "Consumer" poorly (0.52 vs 0.98) — that's the signal
+dense vectors miss. ColBERT catches it.
+```
+
+## Implementation in Forge
+
+Forge doesn't use a separate ColBERT model. BGE-M3 produces ColBERT multi-vectors alongside dense and sparse vectors, all from a single forward pass. These are stored as Qdrant multi-vectors.
+
+### Qdrant Storage
+
+```python
+# During ingestion (forge/ingestion/embedder.py)
+vectors = bge_m3.encode(chunk_text, return_colbert=True)
+
+qdrant.upsert(
+    collection="forge_documents",
+    points=[PointStruct(
+        id=chunk_id,
+        vector={
+            "dense": vectors["dense"],        # 1024-dim
+            "sparse": vectors["sparse"],       # Sparse indices + values
+            "colbert": vectors["colbert"],     # N x 1024 multi-vector
+        },
+        payload={
+            "text": chunk_text,
+            "original_text": original_text,
+            "level": "L2",
+            "document_id": doc_id,
+            # ...
+        }
+    )]
+)
+```
+
+### Reranking Step
+
+ColBERT reranking happens **after** first-stage retrieval (dense + sparse) and **after** CRAG evaluation. It reranks only the documents that passed the CRAG quality gate:
+
+```python
+# forge/retrieval/rerank.py
+class ColBERTReranker:
+    """Reranks chunks using ColBERT MaxSim scoring from Qdrant."""
+
+    async def rerank(
+        self,
+        query: str,
+        chunks: list[ScoredChunk],
+        top_k: int = 5,
+    ) -> list[ScoredChunk]:
+        # Encode query into per-token vectors
+        query_vectors = await self.bge_m3.encode_colbert(query)
+
+        scored = []
+        for chunk in chunks:
+            # Retrieve stored ColBERT vectors from Qdrant
+            colbert_vectors = await self.qdrant.get_colbert_vectors(chunk.id)
+
+            # MaxSim: for each query token, find best matching doc token
+            score = self._maxsim(query_vectors, colbert_vectors)
+            scored.append((chunk, score))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [chunk for chunk, _ in scored[:top_k]]
+
+    def _maxsim(self, query_vecs, doc_vecs):
+        """Compute MaxSim score between query and document token vectors."""
+        # query_vecs: (Q, D) — Q query tokens, D dimensions
+        # doc_vecs: (N, D) — N document tokens, D dimensions
+        sim_matrix = np.dot(query_vecs, doc_vecs.T)  # (Q, N)
+        max_per_query_token = sim_matrix.max(axis=1)   # (Q,)
+        return float(max_per_query_token.sum())
+```
+
+<Callout type="info" title="Qdrant native MaxSim">
+  Qdrant supports multi-vector MaxSim natively with `multivector.comparator: "max_sim"`. For first-stage retrieval, you can use Qdrant's built-in multi-vector search. Forge uses it for reranking because the ColBERT step is applied selectively to CRAG-filtered candidates, not the entire collection.
+</Callout>
+
+## When ColBERT Is Used
+
+ColBERT reranking is **not** a first-stage retrieval method in Forge. It's applied as a precision refinement:
+
+```
+Query
+  │
+  ▼
+BGE-M3 Dense + Sparse Search  ──▶  ~20 candidate chunks
+  │
+  ▼
+CRAG Quality Gate              ──▶  ~10-15 pass
+  │
+  ▼
+ColBERT MaxSim Reranking       ──▶  Top 5 most precise    ← HERE
+  │
+  ▼
+LLM Generation (with top 5 as context)
+```
+
+This layered approach is key: dense search for recall (find anything relevant), CRAG for quality (filter out noise), ColBERT for precision (rank the best matches to the top).
+
+## Performance
+
+| Operation | Latency |
+|---|---|
+| Encode query (ColBERT tokens) | ~30ms |
+| Rerank 10 candidates | ~50ms |
+| Rerank 20 candidates | ~100ms |
+| Rerank 40 candidates | ~180ms |
+
+All on CPU. ColBERT reranking adds roughly 50-100ms to the query pipeline — negligible compared to LLM generation time.
+
+## Configuration
+
+```yaml
+colbert:
+  enabled: true
+  top_k: 20           # Candidates to consider for reranking
+  final_k: 5          # How many to keep after reranking
+  score_threshold: 0.35  # Minimum MaxSim score to include
+```
+
+Disable ColBERT for maximum speed (sacrificing precision on specific-fact queries):
+
+```yaml
+colbert:
+  enabled: false
+```
+
+## Trade-offs
+
+| Pro | Con |
+|---|---|
+| Catches specific-fact matches dense vectors miss | Adds ~100ms to query pipeline |
+| Works with existing BGE-M3 vectors (no extra model) | ColBERT vectors increase storage ~3-5x per point |
+| Dramatically improves precision for entity-specific queries | Less impactful for broad topical queries |
+
+## References
+
+- Khattab & Zaharia, "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" (2020)
+- BGE-M3 ColBERT integration: [FlagEmbedding docs](https://github.com/FlagOpen/FlagEmbedding)
+- Qdrant multi-vector support: [Qdrant documentation](https://qdrant.tech/documentation/concepts/vectors/#multivectors)
+- Forge implementation: `forge/retrieval/rerank.py`

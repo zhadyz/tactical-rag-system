@@ -1,256 +1,295 @@
 ---
 title: Installation
-description: Install Apollo RAG and set up your development environment
+description: System requirements, Docker and local development setup, model downloads, and environment configuration for Forge V5.
 ---
 
-import { Callout } from '@/components/Callout'
+import { Callout } from '../../components/Callout'
 
 # Installation
 
-Apollo RAG supports multiple installation methods depending on your use case and infrastructure.
+Forge V5 can run via Docker (recommended) or as a local development setup. This guide covers both.
 
 ## System Requirements
 
-### Minimum Requirements
+### Hardware
 
-- **OS**: Linux (Ubuntu 20.04+), macOS (12+), or Windows 10/11 with WSL2
-- **Python**: 3.9 or higher
-- **RAM**: 8GB minimum, 16GB recommended
-- **Storage**: 10GB for models and dependencies
+| Component | Minimum | Recommended | Notes |
+|---|---|---|---|
+| **GPU** | 16GB VRAM | 24GB VRAM | RTX 4080/4090, A4000/A6000, or equivalent |
+| **RAM** | 16GB | 32GB+ | Qdrant and Redis run in memory |
+| **CPU** | 8 cores | 16+ cores | BGE-M3 embedding runs on CPU |
+| **Storage** | 20GB | 50GB+ | Models + vector indices + document cache |
+| **OS** | Linux (Ubuntu 22.04+) | Linux | Windows via WSL2 also supported |
 
-### GPU Requirements (Optional but Recommended)
+### VRAM Budget
 
-For optimal performance with GPU acceleration:
+Forge is designed to fit in 16GB. Here's how VRAM is allocated:
 
-- **NVIDIA GPU**: Compute Capability 7.0+ (RTX 2000 series or newer)
-- **VRAM**: 6GB minimum, 12GB+ recommended
-- **CUDA**: 11.8 or higher
-- **cuDNN**: 8.6 or higher
+| Component | VRAM | Device |
+|---|---|---|
+| LLM (llama.cpp, Q4_K_M quantization) | 10-14GB | GPU |
+| BGE-M3 embedding model | ~0 | CPU |
+| ColBERT vectors | ~0 | CPU (via BGE-M3) |
+| CRAG cross-encoder | ~0 | CPU |
+| Qdrant vector search | ~0 | CPU + RAM |
+| Redis cache + graph | ~0 | CPU + RAM |
 
-<Callout type="info">
-  Apollo works on CPU-only systems but GPU acceleration provides **10x faster** retrieval and
-  embedding operations.
+<Callout type="info" title="Why CPU for embeddings?">
+  BGE-M3 runs at ~50ms per query on CPU, which is fast enough for real-time use. Keeping it off the GPU reserves all VRAM for the LLM, where it matters most for generation quality.
 </Callout>
 
-## Installation Methods
+### Software
 
-### Docker Installation (Recommended)
+- **Docker** 24.x+ with NVIDIA Container Toolkit (for Docker install)
+- **NVIDIA Driver** 535+ with CUDA 12.x
+- **Python** 3.11+ (for local development)
+- **Node.js** 18+ and npm 9+ (for Tauri frontend development)
+- **Rust** 1.75+ (for Tauri desktop builds)
 
-The fastest way to get Apollo running is with Docker Compose:
+## Option A: Docker Installation (Recommended)
+
+### 1. Install NVIDIA Container Toolkit
+
+If you haven't already configured Docker for GPU access:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
+# Ubuntu/Debian
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 
-# Launch with Docker Compose (includes GPU support)
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Verify GPU access in Docker:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
+```
+
+### 2. Clone and Launch
+
+```bash
+git clone https://github.com/zhadyz/tactical-rag-system.git
+cd tactical-rag-system
+
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env with your preferred LLM model path (see Model Downloads below)
+# Then launch:
 docker compose up -d
-
-# Verify the installation
-curl http://localhost:8000/health
 ```
 
-The Docker setup includes:
-- ✅ FastAPI backend with GPU support
-- ✅ Vector database (FAISS)
-- ✅ Monitoring stack (Prometheus + Grafana)
-- ✅ Redis cache
-- ✅ Pre-configured models
+### 3. Verify
 
-<Callout type="success">
-  Docker Compose automatically detects NVIDIA GPUs and enables GPU acceleration if available.
+```bash
+# Check all containers are running
+docker compose ps
+
+# Expected output:
+# forge-api      running   0.0.0.0:8000->8000/tcp
+# forge-qdrant   running   0.0.0.0:6333->6333/tcp
+# forge-redis    running   0.0.0.0:6379->6379/tcp
+
+# Health check
+curl http://localhost:8000/api/health
+```
+
+## Option B: Local Development Setup
+
+For contributors or those who want to run services individually.
+
+### 1. Backend (Python)
+
+```bash
+cd tactical-rag-system
+
+# Create virtual environment
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install llama-cpp-python with CUDA support
+CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+```
+
+### 2. Vector Database (Qdrant)
+
+```bash
+# Run Qdrant via Docker (even for local dev, this is easiest)
+docker run -d --name forge-qdrant \
+  -p 6333:6333 -p 6334:6334 \
+  -v $(pwd)/qdrant_data:/qdrant/storage \
+  qdrant/qdrant:latest
+```
+
+### 3. Cache (Redis)
+
+```bash
+docker run -d --name forge-redis \
+  -p 6379:6379 \
+  redis:7-alpine
+```
+
+### 4. Start the Backend
+
+```bash
+# From project root with .venv activated
+cp .env.example .env
+# Edit .env as needed
+
+python -m uvicorn forge.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 5. Frontend (Tauri + React)
+
+```bash
+cd frontend
+
+# Install Node dependencies
+npm install
+
+# Development mode (opens Tauri window)
+npm run tauri dev
+
+# Or just the web UI:
+npm run dev
+```
+
+## Model Downloads
+
+Forge requires two models. The backend auto-downloads them on first launch, but you can pre-download for air-gapped environments.
+
+### BGE-M3 (Embedding Model)
+
+Downloaded automatically via the `FlagEmbedding` library. Manual download:
+
+```bash
+# Using huggingface-cli
+huggingface-cli download BAAI/bge-m3 --local-dir models/bge-m3
+
+# Or with git
+git lfs install
+git clone https://huggingface.co/BAAI/bge-m3 models/bge-m3
+```
+
+Set in your `.env`:
+
+```
+BGE_M3_MODEL_PATH=models/bge-m3
+```
+
+### LLM (GGUF Format for llama.cpp)
+
+Forge uses llama.cpp for GPU-accelerated LLM inference. Download a GGUF quantized model:
+
+```bash
+# Recommended: Mistral 7B Q4_K_M (~4.4GB, fits easily in 16GB VRAM)
+huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.2-GGUF \
+  mistral-7b-instruct-v0.2.Q4_K_M.gguf \
+  --local-dir models/
+
+# Alternative: Llama 3.1 8B Q4_K_M (~4.9GB)
+huggingface-cli download bartowski/Meta-Llama-3.1-8B-Instruct-GGUF \
+  Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
+  --local-dir models/
+```
+
+Set in your `.env`:
+
+```
+LLM_MODEL_PATH=models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+LLM_GPU_LAYERS=-1
+LLM_CONTEXT_SIZE=8192
+```
+
+<Callout type="tip" title="Choosing a model">
+  For 16GB VRAM: use Q4_K_M quantization of a 7-8B parameter model. For 24GB VRAM: you can run 13B models or use Q5_K_M / Q6_K quantization for better quality. The `LLM_GPU_LAYERS=-1` setting offloads all layers to GPU.
 </Callout>
 
-### pip Installation
+## Environment Variables
 
-Install Apollo as a Python package:
-
-```bash
-# Create a virtual environment
-python -m venv apollo-env
-source apollo-env/bin/activate  # On Windows: apollo-env\Scripts\activate
-
-# Install Apollo with GPU support
-pip install apollo-rag[gpu]
-
-# Or CPU-only version
-pip install apollo-rag
-
-# Verify installation
-apollo --version
-```
-
-**Optional Dependencies:**
+Create a `.env` file in the project root. Here are all available variables:
 
 ```bash
-# For PDF processing
-pip install apollo-rag[pdf]
+# === Core ===
+FORGE_ENV=production          # production | development
+FORGE_PORT=8000               # API server port
+FORGE_HOST=0.0.0.0            # API server host
+FORGE_LOG_LEVEL=info          # debug | info | warning | error
 
-# For advanced monitoring
-pip install apollo-rag[monitoring]
+# === LLM (llama.cpp) ===
+LLM_MODEL_PATH=models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+LLM_GPU_LAYERS=-1             # -1 = all layers on GPU
+LLM_CONTEXT_SIZE=8192         # Context window size
+LLM_MAX_TOKENS=2048           # Max generation tokens
+LLM_TEMPERATURE=0.1           # Generation temperature
+LLM_THREADS=8                 # CPU threads for non-GPU ops
 
-# Install all extras
-pip install apollo-rag[all]
+# === BGE-M3 ===
+BGE_M3_MODEL_PATH=models/bge-m3
+BGE_M3_MAX_LENGTH=8192        # Max token length for embeddings
+BGE_M3_BATCH_SIZE=32          # Embedding batch size
+
+# === Qdrant ===
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION=forge_documents
+
+# === Redis ===
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+
+# === Features ===
+FORGE_MODE=agentic             # agentic | direct
+FORGE_CRAG_ENABLED=true
+FORGE_PROPOSITIONS_ENABLED=true
+FORGE_GRAPH_ENABLED=true
+FORGE_VERIFICATION_ENABLED=true
+FORGE_CACHE_ENABLED=true
+FORGE_CACHE_TTL=3600           # Cache TTL in seconds
+
+# === CPU-Only Mode ===
+FORGE_CPU_ONLY=false           # Set true for no-GPU environments
 ```
 
-### Build from Source
+## Verifying Your Installation
 
-For development or customization:
+Run the built-in integration test suite to confirm everything works:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/apollo-rag.git
-cd apollo-rag
-
-# Install in development mode
-pip install -e ".[dev,gpu]"
-
-# Run tests to verify
-pytest tests/
-
-# Start the development server
-python -m apollo.server --dev
-```
-
-**Development Dependencies:**
-
-```bash
-# Install pre-commit hooks
-pre-commit install
-
-# Install all development tools
-pip install -e ".[dev,test,docs]"
-```
-
-## GPU Setup
-
-### CUDA Installation
-
-If you have an NVIDIA GPU, install CUDA for optimal performance.
-
-#### Ubuntu/Debian
-
-```bash
-# Add NVIDIA package repositories
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb
-sudo dpkg -i cuda-keyring_1.0-1_all.deb
-sudo apt-get update
-
-# Install CUDA Toolkit
-sudo apt-get install cuda-toolkit-11-8
-
-# Install cuDNN
-sudo apt-get install libcudnn8
-
-# Verify installation
-nvidia-smi
-nvcc --version
-```
-
-#### Windows
-
-- Download [CUDA Toolkit 11.8](https://developer.nvidia.com/cuda-11-8-0-download-archive)
-- Download [cuDNN 8.6](https://developer.nvidia.com/cudnn)
-- Install both following the NVIDIA documentation
-- Verify with PowerShell:
-
-```powershell
-nvidia-smi
-nvcc --version
-```
-
-#### macOS
-
-<Callout type="warning">
-  NVIDIA GPUs are not supported on modern macOS. Apollo can run on CPU or you can use Docker with
-  GPU passthrough on a Linux host.
-</Callout>
-
-For Metal GPU acceleration (experimental):
-
-```bash
-pip install apollo-rag[metal]
-```
-
-## Verify Installation
-
-After installation, verify everything is working:
-
-```bash
-# Check Apollo version
-apollo --version
-
-# Run diagnostics
-apollo diagnose
-
-# Check GPU availability
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-
-# Test with a simple query
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "test query"}'
+# From project root
+python -m pytest tests/integration/ -v
 ```
 
 Expected output:
 
-```json
-{
-  "status": "success",
-  "version": "4.1.0",
-  "gpu_enabled": true,
-  "gpu_count": 1,
-  "gpu_name": "NVIDIA RTX 4090"
-}
 ```
+tests/integration/test_health.py::test_health_endpoint PASSED
+tests/integration/test_embedding.py::test_bge_m3_dense PASSED
+tests/integration/test_embedding.py::test_bge_m3_sparse PASSED
+tests/integration/test_embedding.py::test_bge_m3_colbert PASSED
+tests/integration/test_ingestion.py::test_document_upload PASSED
+tests/integration/test_ingestion.py::test_full_pipeline PASSED
+tests/integration/test_query.py::test_direct_query PASSED
+tests/integration/test_query.py::test_agentic_query PASSED
+tests/integration/test_query.py::test_streaming PASSED
+tests/integration/test_query.py::test_crag_evaluation PASSED
 
-## Troubleshooting
-
-### GPU Not Detected
-
-If CUDA is installed but Apollo doesn't detect it:
-
-```bash
-# Check CUDA environment variables
-echo $CUDA_HOME
-echo $LD_LIBRARY_PATH
-
-# Reinstall PyTorch with CUDA support
-pip uninstall torch torchvision
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-```
-
-### Permission Errors (Docker)
-
-If you get permission errors with Docker:
-
-```bash
-# Add your user to the docker group
-sudo usermod -aG docker $USER
-
-# Log out and back in, then restart Docker
-sudo systemctl restart docker
-```
-
-### Import Errors
-
-If you encounter import errors:
-
-```bash
-# Clear pip cache and reinstall
-pip cache purge
-pip install --force-reinstall apollo-rag[gpu]
+10 passed in 45.23s
 ```
 
 ## Next Steps
 
-Now that Apollo is installed:
-
-- [Configure](/getting-started/configuration) your deployment
-- [Upload your first document](/getting-started/first-query)
-- [Explore the API](/api-reference)
-
-<Callout type="info">
-  Need help? Join our [Discord community](https://discord.gg/apollo-rag) or check the
-  [troubleshooting guide](/advanced/troubleshooting).
-</Callout>
+- **[Configuration](/getting-started/configuration)** — Fine-tune every parameter
+- **[Quick Start](/getting-started/quick-start)** — Upload your first document and query
+- **[Architecture](/architecture/overview)** — Understand how the pieces fit together

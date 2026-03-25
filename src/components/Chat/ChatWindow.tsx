@@ -3,6 +3,7 @@ import { AlertCircle, MessageSquare, Sparkles, BookOpen, FileSearch } from 'luci
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ErrorBoundary } from '../ErrorBoundary/ErrorBoundary';
+import { AgentReasoningPanel } from '../Agent/AgentReasoningPanel';
 import useStore from '../../store/useStore';
 import { useChat } from '../../hooks/useChat';
 
@@ -12,6 +13,8 @@ export const ChatWindow: React.FC = () => {
   const isLoading = useStore((state) => state.isLoading);
   const isStreaming = useStore((state) => state.isStreaming);
   const error = useStore((state) => state.error);
+  const isAgentActive = useStore((state) => state.isAgentActive);
+  const currentSteps = useStore((state) => state.currentSteps);
 
   const { sendMessage, cancelStream, isOnline } = useChat();
 
@@ -39,7 +42,7 @@ export const ChatWindow: React.FC = () => {
               {/* Heading */}
               <div className="space-y-3">
                 <h1 className="text-4xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-                  Welcome to Tactical RAG
+                  Welcome to Forge
                 </h1>
                 <p className="text-lg text-neutral-600 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
                   Ask questions about your documents and get intelligent, context-aware answers
@@ -102,6 +105,13 @@ export const ChatWindow: React.FC = () => {
             ))}
             <div ref={messagesEndRef} />
           </div>
+        )}
+
+        {/* Agent Reasoning Panel - shown during agentic streaming */}
+        {(isAgentActive || currentSteps.length > 0) && isStreaming && (
+          <ErrorBoundary componentName="AgentReasoningPanel">
+            <AgentReasoningPanel />
+          </ErrorBoundary>
         )}
 
         {/* Error message - Enterprise styling with helpful suggestions */}

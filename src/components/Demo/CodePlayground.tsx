@@ -28,11 +28,11 @@ const examples: CodeExample[] = [
     code: `import requests
 import json
 
-# Apollo RAG API endpoint
+# Forge RAG API endpoint
 API_URL = "http://localhost:8000/api/query"
 
-def query_apollo(question: str, mode: str = "adaptive") -> dict:
-    """Query Apollo RAG system"""
+def query_forge(question: str, mode: str = "agentic") -> dict:
+    """Query Forge RAG system"""
     payload = {
         "question": question,
         "mode": mode,
@@ -47,9 +47,9 @@ def query_apollo(question: str, mode: str = "adaptive") -> dict:
 
 # Example usage
 if __name__ == "__main__":
-    result = query_apollo(
+    result = query_forge(
         "What are the key principles of Air Force leadership?",
-        mode="adaptive"
+        mode="agentic"
     )
 
     print("Answer:", result["answer"])
@@ -85,7 +85,7 @@ async function streamQuery(question, onToken) {
     API_URL,
     {
       question: question,
-      mode: 'adaptive',
+      mode: 'agentic',
       use_context: true,
       rerank_preset: 'quality'
     },
@@ -142,7 +142,7 @@ Sources: [
 Metadata: {
   processing_time_ms: 1847,
   confidence: 0.89,
-  mode_used: "adaptive"
+  mode_used: "agentic"
 }
 
 Streaming complete!`,
@@ -175,7 +175,7 @@ curl -X POST http://localhost:8000/api/query \\
   -H "Content-Type: application/json" \\
   -d '{
     "question": "What are the leadership competencies?",
-    "mode": "adaptive",
+    "mode": "agentic",
     "use_context": true,
     "rerank_preset": "deep"
   }'`,
@@ -219,7 +219,7 @@ def batch_query(questions: List[str], max_workers: int = 5) -> List[Dict]:
     def query_single(question: str) -> Dict:
         payload = {
             "question": question,
-            "mode": "adaptive",
+            "mode": "agentic",
             "use_context": True,
             "rerank_preset": "quality"
         }
@@ -302,7 +302,7 @@ export default function CodePlayground({ className = '' }: CodePlaygroundProps) 
           </div>
           <div>
             <h2 className="text-2xl font-bold text-white">Live Code Playground</h2>
-            <p className="text-slate-400">Pre-configured Apollo examples across frameworks</p>
+            <p className="text-slate-400">Pre-configured Forge examples across frameworks</p>
           </div>
         </div>
       </div>
@@ -421,7 +421,7 @@ export default function CodePlayground({ className = '' }: CodePlaygroundProps) 
           <div>
             <h4 className="font-semibold text-white mb-1">Want to run this locally?</h4>
             <p className="text-sm text-slate-300 mb-2">
-              Start the Apollo backend with GPU acceleration and run these examples yourself.
+              Start the Forge backend with GPU acceleration and run these examples yourself.
             </p>
             <a
               href="http://localhost:8000/docs"

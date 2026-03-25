@@ -1,4 +1,4 @@
-// ATLAS Protocol - Phase 1: Unit Tests
+// Forge - Phase 1: Unit Tests
 // Comprehensive tests for the embedding service
 
 #[cfg(test)]

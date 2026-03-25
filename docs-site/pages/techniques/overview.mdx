@@ -1,0 +1,213 @@
+---
+title: Techniques Overview
+description: All 14 RAG techniques in Forge V5 — what they do, why they matter, and how they compose into a unified pipeline.
+---
+
+import { Callout } from '../../components/Callout'
+
+# Techniques Overview
+
+Forge V5 integrates 14 retrieval-augmented generation techniques into a single pipeline. Each one solves a specific failure mode that simpler RAG systems hit.
+
+## The Full Technique Table
+
+| # | Technique | What It Does | Quality Impact | Latency Impact | Stage |
+|---|---|---|---|---|---|
+| 1 | [Agentic RAG](/techniques/agentic-rag) | LLM-driven retrieval loop with tool selection | Very High | +3-8s | Query |
+| 2 | [CRAG Quality Gate](/techniques/crag) | Cross-encoder filters irrelevant retrievals | High | +200ms | Query |
+| 3 | Multi-Hop Reasoning | Decomposes complex queries into sub-queries | High | +2-5s | Query |
+| 4 | [Contextual Retrieval](/techniques/contextual-retrieval) | LLM-generated context prefix per chunk | Very High | +0ms (query) | Ingestion |
+| 5 | [Proposition Indexing](/techniques/proposition-indexing) | Atomic claims extracted and indexed | High | +0ms (query) | Ingestion |
+| 6 | [Hierarchical 4-Level](/techniques/hierarchical-indexing) | L0-L3 document hierarchy with parent expansion | High | +0ms (query) | Ingestion |
+| 7 | [BGE-M3 Tri-Modal](/techniques/bge-m3) | Dense + sparse + ColBERT vectors from one model | Very High | ~50ms | Both |
+| 8 | [ColBERT Reranking](/techniques/colbert) | Token-level MaxSim reranking | High | +100ms | Query |
+| 9 | [Knowledge Graph](/techniques/knowledge-graph) | Entity/relationship extraction and traversal | Medium-High | +100ms | Both |
+| 10 | [Self-Verification](/techniques/self-verification) | Claim-by-claim audit against sources | High | +500ms | Query |
+| 11 | Confidence Scoring | Weighted retrieval confidence signals | Medium | +0ms | Query |
+| 12 | Query Decomposition | Complex questions split into atomic sub-queries | High | +200ms | Query |
+| 13 | HyDE | Hypothetical document embeddings for better recall | Medium | +300ms | Query |
+| 14 | Parent Expansion | Return parent section when child chunk matches | Medium | +0ms | Query |
+
+<Callout type="info" title="Ingestion vs. Query cost">
+  Techniques 4, 5, 6, and 9 add cost at ingestion time (when documents are uploaded), not at query time. This is a deliberate design choice: invest compute once during ingestion so every subsequent query is faster and more accurate.
+</Callout>
+
+## Why 14 Techniques?
+
+Each technique addresses a specific failure mode:
+
+| Failure Mode | What Goes Wrong | Technique That Fixes It |
+|---|---|---|
+| Semantic gap | Query and relevant chunk use different words | HyDE, BGE-M3 sparse vectors |
+| Lost in the middle | Relevant info buried in a long chunk | Proposition Indexing |
+| No context | Chunk is ambiguous without surrounding text | Contextual Retrieval, Parent Expansion |
+| Wrong granularity | Query needs a section but search returns a sentence | Hierarchical 4-Level |
+| Irrelevant retrieval | Top-k results don't actually answer the question | CRAG Quality Gate, ColBERT Reranking |
+| Single-hop limit | Answer requires combining info from multiple places | Multi-Hop Reasoning, Agentic RAG |
+| Hallucination | LLM generates claims not in the sources | Self-Verification |
+| Keyword miss | Dense vectors miss exact terms and names | BGE-M3 sparse vectors |
+| Relationship queries | "Who authorizes X?" needs graph structure | Knowledge Graph |
+| Static pipeline | One-size-fits-all retrieval strategy | Agentic RAG (adaptive tool selection) |
+
+No single technique fixes all of these. That's why Forge combines them.
+
+## How They Compose: The Pipeline
+
+### Ingestion Pipeline (Document Upload)
+
+```
+Document Upload
+      │
+      ▼
+  ┌──────────┐
+  │  Parse    │  PDF/DOCX/TXT → raw text
+  └────┬─────┘
+       │
+       ▼
+  ┌──────────────────┐
+  │  Hierarchical     │  Split into L0 (doc) → L1 (section) → L2 (chunk)
+  │  Chunking         │
+  └────┬─────────────┘
+       │
+       ├──────────────────────────────┐
+       ▼                              ▼
+  ┌──────────────────┐    ┌───────────────────────┐
+  │  Contextual       │    │  Proposition           │
+  │  Enrichment       │    │  Extraction (L3)       │
+  │  (per chunk)      │    │  (Dense-X)             │
+  └────┬─────────────┘    └────┬──────────────────┘
+       │                       │
+       ├───────────────────────┘
+       │
+       ├──────────────────────────────┐
+       ▼                              ▼
+  ┌──────────────────┐    ┌───────────────────────┐
+  │  Knowledge Graph  │    │  BGE-M3 Embedding      │
+  │  Extraction       │    │  (dense + sparse +     │
+  │  (entities +      │    │   ColBERT vectors)     │
+  │   relationships)  │    └────┬──────────────────┘
+  └────┬─────────────┘         │
+       │                       │
+       ▼                       ▼
+  ┌──────────┐         ┌──────────┐
+  │  Redis   │         │  Qdrant  │
+  │  (graph  │         │  (all    │
+  │  adj.)   │         │  vectors)│
+  └──────────┘         └──────────┘
+```
+
+### Query Pipeline (Agentic Mode)
+
+```
+User Query
+      │
+      ▼
+  ┌─────────────────┐
+  │  Query Analysis  │  Classify complexity, detect multi-hop needs
+  └────┬────────────┘
+       │
+       ▼
+  ┌─────────────────────────────────────────┐
+  │            LangGraph Agent Loop          │
+  │                                         │
+  │   Iteration 1:                          │
+  │   ┌──────────────┐                      │
+  │   │ Select Tool   │ → semantic_search   │
+  │   └──────┬───────┘                      │
+  │          ▼                              │
+  │   ┌──────────────┐                      │
+  │   │ Execute Tool  │ → 8 chunks found    │
+  │   └──────┬───────┘                      │
+  │          ▼                              │
+  │   ┌──────────────┐                      │
+  │   │ CRAG Gate    │ → 5 correct,         │
+  │   │              │   2 ambiguous,       │
+  │   │              │   1 incorrect        │
+  │   └──────┬───────┘                      │
+  │          ▼                              │
+  │   ┌──────────────┐                      │
+  │   │ ColBERT       │ → Rerank to top 5   │
+  │   │ Rerank        │                     │
+  │   └──────┬───────┘                      │
+  │          ▼                              │
+  │   ┌──────────────┐                      │
+  │   │ Reflect       │ → "Need more info   │
+  │   │              │    on methodology"   │
+  │   └──────┬───────┘                      │
+  │          │                              │
+  │   Iteration 2:                          │
+  │   ┌──────────────┐                      │
+  │   │ Select Tool   │ → proposition_search│
+  │   └──────┬───────┘                      │
+  │          ▼                              │
+  │         ...                             │
+  │                                         │
+  │   Final: "Evidence sufficient"          │
+  └────┬────────────────────────────────────┘
+       │
+       ▼
+  ┌─────────────────┐
+  │  Generate Answer │  LLM synthesizes from all gathered evidence
+  └────┬────────────┘
+       │
+       ▼
+  ┌─────────────────┐
+  │  Self-Verify     │  Claim-by-claim audit against source chunks
+  └────┬────────────┘
+       │
+       ▼
+  ┌─────────────────┐
+  │  Stream to UI    │  SSE events: tokens, sources, confidence
+  └─────────────────┘
+```
+
+### Direct Mode (Simplified)
+
+Direct mode skips the agent loop for faster responses:
+
+```
+Query → BGE-M3 Embed → Qdrant Search → CRAG Gate → ColBERT Rerank → Generate → Stream
+```
+
+No iteration, no tool selection, no reflection. Useful for simple factual queries where a single retrieval pass is sufficient.
+
+## Technique Dependencies
+
+Some techniques depend on others:
+
+```
+Contextual Retrieval  →  requires LLM (during ingestion)
+Proposition Indexing  →  requires LLM (during ingestion)
+Knowledge Graph       →  requires LLM (during ingestion)
+ColBERT Reranking     →  requires BGE-M3 ColBERT vectors
+Parent Expansion      →  requires Hierarchical Indexing
+Agentic RAG           →  orchestrates all other query-time techniques
+CRAG Quality Gate     →  requires cross-encoder model (separate from LLM)
+Self-Verification     →  requires LLM (during query)
+HyDE                  →  requires LLM + BGE-M3 (during query)
+```
+
+Disabling a technique in `config.yml` automatically disables anything that depends on it. The system degrades gracefully — you can run Forge with just BGE-M3 + direct mode and still get good results, then enable techniques incrementally.
+
+## Performance Impact
+
+Benchmarked on a 500-page technical manual, RTX 4080 (16GB):
+
+| Configuration | Query Latency (p50) | Answer Quality (human eval) |
+|---|---|---|
+| BGE-M3 only (no techniques) | 1.2s | 6.2/10 |
+| + CRAG + ColBERT | 1.8s | 7.5/10 |
+| + Contextual + Propositions | 1.9s | 8.3/10 |
+| + Hierarchical + Graph | 2.1s | 8.7/10 |
+| Full agentic (all 14) | 7.4s | 9.4/10 |
+
+The agentic mode is slower but dramatically more accurate, especially for complex questions that require evidence from multiple document sections.
+
+## Next Steps
+
+Dive into individual techniques:
+
+- **[Contextual Retrieval](/techniques/contextual-retrieval)** — Anthropic's breakthrough for chunk contextualization
+- **[Agentic RAG](/techniques/agentic-rag)** — The LangGraph agent that ties everything together
+- **[CRAG Quality Gate](/techniques/crag)** — How irrelevant retrievals get caught before generation
+- **[BGE-M3 Vectors](/techniques/bge-m3)** — The tri-modal embedding model that powers search

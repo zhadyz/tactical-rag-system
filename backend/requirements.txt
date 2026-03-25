@@ -23,6 +23,9 @@ langchain-community==0.3.30
 langchain-ollama==0.3.10
 langchain-text-splitters==0.3.11
 
+# LangGraph agentic orchestration
+langgraph>=0.2.0
+
 # Ollama Python SDK
 ollama==0.6.0
 
@@ -41,33 +44,34 @@ pdf2image>=1.16.0
 pytesseract>=0.3.10
 Pillow>=10.1.0
 
-# Vector Stores - BOTH ChromaDB and Qdrant for migration support
-chromadb>=0.4.22
-langchain-chroma
-qdrant-client>=1.12.0  # NEW: Qdrant client with hybrid search support
-fastembed>=0.3.0  # NEW: Fast embeddings for Qdrant (optional, better perf)
+# Vector Store - Qdrant with hybrid search + multi-vector
+qdrant-client>=1.12.0
+fastembed>=0.4.0
+
+# BGE-M3 embeddings (dense + sparse + ColBERT multi-vector)
+FlagEmbedding>=1.3.0
 
 # Utilities
 numpy>=1.26.0
-PyYAML>=6.0  # NEW: Configuration file parsing for config.yml
+PyYAML>=6.0
 
-# Redis caching - ATLAS Protocol L4 Embedding Cache
-redis[hiredis]>=5.0.0  # Async Redis with hiredis C parser for performance
+# Redis caching - multi-layer cache (L1-L4)
+redis[hiredis]>=5.0.0
 
 # Advanced RAG features
 rank-bm25>=0.2.2
 sentence-transformers>=3.0.0
 scikit-learn>=1.3.0
 
-# PyTorch for SOTA reranker and embeddings
+# PyTorch for reranker and embeddings
 torch>=2.1.0
 transformers>=4.35.0
 
 # Production logging
 python-json-logger>=2.0.7
-psutil>=5.9.0  # System metrics monitoring
+psutil>=5.9.0
 
-# Async file I/O (for Phase 1 security fixes)
+# Async file I/O
 aiofiles>=23.1.0
 
 # Testing dependencies (development only)

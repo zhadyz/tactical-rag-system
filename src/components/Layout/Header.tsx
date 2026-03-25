@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-              Tactical RAG
+              Forge
             </h1>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
               Intelligent Document Q&A

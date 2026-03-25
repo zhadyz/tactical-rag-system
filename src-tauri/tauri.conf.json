@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Tactical RAG Desktop",
-  "version": "4.0.0",
-  "identifier": "com.tactical-rag.desktop",
+  "productName": "Forge Desktop",
+  "version": "5.0.0",
+  "identifier": "com.forge-rag.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Tactical RAG - Document Intelligence",
+        "title": "Forge - Document Intelligence",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
@@ -37,7 +37,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "Tactical RAG Team",
+    "publisher": "Forge Team",
     "category": "Productivity",
     "icon": [
       "icons/32x32.png",

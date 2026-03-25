@@ -1,8 +1,8 @@
 [package]
-name = "tactical-rag-desktop"
-version = "4.0.0"
-description = "Tactical RAG Desktop - Document Intelligence System"
-authors = ["Tactical RAG Team"]
+name = "forge-desktop"
+version = "5.0.0"
+description = "Forge Desktop - Agentic Document Intelligence System"
+authors = ["Forge Team"]
 license = "MIT"
 repository = ""
 edition = "2021"
@@ -32,8 +32,8 @@ tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 open = "5.0"
 
-# ATLAS Protocol - Phase 1: Embedding Service Dependencies
-# Commented out: Backend handles embeddings via Python (llama-cpp-python with CUDA)
+# Forge - Embedding Service Dependencies
+# Commented out: Backend handles embeddings via Python (BGE-M3 on CPU)
 # ort = { version = "2.0.0-rc.10", features = ["cuda", "download-binaries"] }
 # tokenizers = "0.15"
 # rayon = "1.8"

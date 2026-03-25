@@ -1,61 +1,24 @@
 ---
-title: Apollo RAG - GPU-Accelerated Document Intelligence
-description: Production-grade RAG platform with CUDA optimization, adaptive retrieval, and enterprise deployment
+title: Forge — The Most Advanced RAG System You Can Run on a Single GPU
+description: 14 cutting-edge retrieval techniques. Agentic reasoning. Self-verifying answers. Built for 16GB VRAM.
 ---
 
-import { Card, FeatureCard } from '@/components/Card'
-import { Callout } from '@/components/Callout'
-import { MetricCard } from '@/components/MetricCard'
-import { HeroSection } from '@/components/HeroSection'
-import { KeyFeatures } from '@/components/KeyFeatures'
-import { ArchitectureOverview } from '@/components/ArchitectureOverview'
-import { WhyApollo } from '@/components/WhyApollo'
-import { BenchmarksTable } from '@/components/BenchmarksTable'
-import { CommunitySection } from '@/components/CommunitySection'
-import { Footer } from '@/components/Footer'
-import { Zap, Cpu, Database, Lock, Gauge, Box, ArrowRight, Github, Sparkles } from 'lucide-react'
+import { HeroSection } from '../components/HeroSection'
+import { DemoSection } from '../components/DemoSection'
+import { TechniqueShowcase } from '../components/TechniqueShowcase'
+import { ComparisonSection } from '../components/ComparisonSection'
+import { CTASection } from '../components/CTASection'
+
+<div style={{ background: '#050507', margin: '-1rem -1.5rem', padding: 0 }}>
 
 <HeroSection />
 
-<KeyFeatures />
+<DemoSection />
 
-<div className="mx-auto max-w-4xl">
+<TechniqueShowcase />
 
-## Quick Start
+<ComparisonSection />
 
-Get Apollo running in under 5 minutes:
-
-```bash
-# Clone the repository
-git clone https://github.com/zhadyz/tactical-rag-system.git
-cd tactical-rag-system
-
-# Launch with Docker Compose (includes GPU support)
-docker compose up -d
-
-# Upload your first document
-curl -X POST http://localhost:8000/upload \
-  -F "file=@document.pdf" \
-  -H "Authorization: Bearer your-api-key"
-
-# Ask a question
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the main topic?"}'
-```
-
-See the [Getting Started](/getting-started/quick-start) guide for detailed instructions.
+<CTASection />
 
 </div>
-
-<ArchitectureOverview />
-
-<WhyApollo />
-
-<BenchmarksTable />
-
-<CommunitySection />
-
----
-
-<Footer />
