@@ -47,8 +47,8 @@ export function CTASection() {
       <div className="relative mt-24 border-t border-white/[0.06] pt-8 text-center">
         <p className="text-xs text-zinc-600">
           Built by{' '}
-          <a href="https://github.com/zhadyz" className="text-zinc-500 hover:text-zinc-300 transition-colors">
-            Zhady Zahorodniuk
+          <a href="https://github.com/hollowed_eyes" className="text-zinc-500 hover:text-zinc-300 transition-colors">
+            hollowed_eyes
           </a>{' '}
           &middot; Forge V5 is a portfolio project demonstrating world-class RAG engineering.
         </p>
